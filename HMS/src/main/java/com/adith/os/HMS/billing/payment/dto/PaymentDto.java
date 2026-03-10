@@ -1,0 +1,47 @@
+package com.adith.os.HMS.billing.payment.dto;
+
+import com.adith.os.HMS.billing.folio.ChargeCategory;
+import com.adith.os.HMS.billing.payment.PaymentMethod;
+import com.adith.os.HMS.billing.payment.PaymentStatus;
+import jakarta.validation.constraints.NotNull;
+
+import java.math.BigDecimal;
+import java.time.OffsetDateTime;
+import java.util.UUID;
+
+public record PaymentDto(
+        UUID id,
+        String paymentNumber,
+        UUID folioId,
+        String folioNumber,
+        BigDecimal amount,
+        String currency,
+        PaymentMethod paymentMethod,
+        PaymentStatus paymentStatus,
+
+        ChargeCategory targetCategory,
+
+        // Card details (masked)
+        String transactionId,
+        String cardLastFour,
+        String cardType,
+
+        // Bank transfer details
+        String referenceNumber,
+
+        // UPI details
+        String upiId,
+
+        // Refund info
+        BigDecimal refundedAmount,
+        boolean isRefundable,
+        BigDecimal refundableAmount,
+        String refundReason,
+        OffsetDateTime refundedAt,
+
+        // Metadata
+        String processedBy,
+        OffsetDateTime paymentDate,
+        OffsetDateTime createdAt,
+        String notes
+) {}

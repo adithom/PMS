@@ -1,0 +1,205 @@
+package com.adith.os.HMS.booking;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import java.time.LocalDate;
+import java.util.List;
+import java.util.UUID;
+
+public interface BookingRepository extends JpaRepository<Booking, UUID> {
+
+    @Query("SELECT b FROM Booking b WHERE b.property.id = :propertyId ORDER BY b.checkIn DESC")
+    List<Booking> findByPropertyIdOrderByCheckInDesc(UUID propertyId);
+
+    List<Booking> findByPropertyIdAndStatus(UUID propertyId, String status);
+
+    @Query("SELECT b FROM Booking b WHERE b.property.id = :propertyId " +
+            "AND b.checkIn >= :checkInFrom AND b.checkIn <= :checkInTo " +
+            "ORDER BY b.checkIn ASC")
+    List<Booking> findByPropertyIdAndCheckInBetween(
+            @Param("propertyId") UUID propertyId,
+            @Param("checkInFrom") LocalDate checkInFrom,
+            @Param("checkInTo") LocalDate checkInTo);
+
+    @Query("SELECT b FROM Booking b WHERE b.property.id = :propertyId " +
+            "AND b.guest.id = :guestId ORDER BY b.checkIn DESC")
+    List<Booking> findByPropertyIdAndGuestIdOrderByCheckInDesc(UUID propertyId, UUID guestId);
+
+    @Query("SELECT b FROM Booking b WHERE b.room.id = :roomId ORDER BY b.checkIn DESC")
+    List<Booking> findByRoomIdOrderByCheckInDesc(UUID roomId);
+
+    @Query("SELECT b FROM Booking b WHERE b.unit.id = :unitId ORDER BY b.checkIn DESC")
+    List<Booking> findByUnitIdOrderByCheckInDesc(UUID unitId);
+
+    @Query("SELECT CASE WHEN COUNT(b) > 0 THEN true ELSE false END FROM Booking b " +
+            "WHERE b.room.id = :roomId " +
+            "AND b.status NOT IN ('CANCELLED', 'CHECKED_OUT') " +
+            "AND ((b.checkIn <= :checkOut AND b.checkOut >= :checkIn))")
+    boolean existsOverlappingBooking(
+            @Param("roomId") UUID roomId,
+            @Param("checkIn") LocalDate checkIn,
+            @Param("checkOut") LocalDate checkOut);
+
+    @Query("SELECT CASE WHEN COUNT(b) > 0 THEN true ELSE false END FROM Booking b " +
+            "WHERE b.room.id = :roomId " +
+            "AND b.id != :currentBookingId " +
+            "AND b.status NOT IN ('CANCELLED', 'CHECKED_OUT') " +
+            "AND ((b.checkIn <= :checkOut AND b.checkOut >= :checkIn))")
+    boolean existsOverlappingBookingExcludingCurrent(
+            @Param("roomId") UUID roomId,
+            @Param("checkIn") LocalDate checkIn,
+            @Param("checkOut") LocalDate checkOut,
+            @Param("currentBookingId") UUID currentBookingId);
+
+    @Query("SELECT COUNT(b) FROM Booking b " +
+            "WHERE b.unit.id = :unitId " +
+            "AND b.room IS NULL " +
+            "AND b.status NOT IN ('CANCELLED', 'CHECKED_OUT') " +
+            "AND ((b.checkIn <= :checkOut AND b.checkOut >= :checkIn))")
+    long countOverlappingUnitBookings(
+            @Param("unitId") UUID unitId,
+            @Param("checkIn") LocalDate checkIn,
+            @Param("checkOut") LocalDate checkOut);
+
+    // NEW: Count overlapping bookings excluding current booking
+    @Query("SELECT COUNT(b) FROM Booking b " +
+            "WHERE b.unit.id = :unitId " +
+            "AND b.room IS NULL " +
+            "AND b.id != :currentBookingId " +
+            "AND b.status NOT IN ('CANCELLED', 'CHECKED_OUT') " +
+            "AND ((b.checkIn <= :checkOut AND b.checkOut >= :checkIn))")
+    long countOverlappingUnitBookingsExcludingCurrent(
+            @Param("unitId") UUID unitId,
+            @Param("checkIn") LocalDate checkIn,
+            @Param("checkOut") LocalDate checkOut,
+            @Param("currentBookingId") UUID currentBookingId);
+
+    @Query("SELECT COUNT(b) FROM Booking b " +
+            "WHERE b.unit.id = :unitId " +
+            "AND b.room IS NOT NULL " +
+            "AND b.status NOT IN ('CANCELLED', 'CHECKED_OUT') " +
+            "AND ((b.checkIn <= :checkOut AND b.checkOut >= :checkIn))")
+    long countOverlappingRoomBookingsInUnit(
+            @Param("unitId") UUID unitId,
+            @Param("checkIn") LocalDate checkIn,
+            @Param("checkOut") LocalDate checkOut);
+
+    // NEW: Count overlapping room bookings excluding current
+    @Query("SELECT COUNT(b) FROM Booking b " +
+            "WHERE b.unit.id = :unitId " +
+            "AND b.room IS NOT NULL " +
+            "AND b.id != :currentBookingId " +
+            "AND b.status NOT IN ('CANCELLED', 'CHECKED_OUT') " +
+            "AND ((b.checkIn <= :checkOut AND b.checkOut >= :checkIn))")
+    long countOverlappingRoomBookingsInUnitExcludingCurrent(
+            @Param("unitId") UUID unitId,
+            @Param("checkIn") LocalDate checkIn,
+            @Param("checkOut") LocalDate checkOut,
+            @Param("currentBookingId") UUID currentBookingId);
+
+    // NEW: Count total rooms in a unit
+    @Query("SELECT COUNT(r) FROM Room r WHERE r.unit.id = :unitId")
+    long countRoomsInUnit(@Param("unitId") UUID unitId);
+
+    /**
+     * Find all bookings for a property that conflict with the given date range
+     * A booking conflicts if it overlaps with [checkIn, checkOut)
+     * Booking overlap logic: booking.checkIn < checkOut AND booking.checkOut > checkIn
+     */
+    @Query("SELECT b FROM Booking b " +
+            "WHERE b.room.property.id = :propertyId " +
+            "AND b.checkIn <= :checkOut " +
+            "AND b.checkOut >= :checkIn " +
+            "AND b.status IN :statuses")
+    List<Booking> findConflictingBookings(
+            @Param("propertyId") UUID propertyId,
+            @Param("checkIn") LocalDate checkIn,
+            @Param("checkOut") LocalDate checkOut,
+            @Param("statuses") List<BookingStatus> statuses
+    );
+
+    /**
+     * Find all bookings for a specific room that conflict with the given date range
+     */
+    @Query("SELECT b FROM Booking b " +
+            "WHERE b.room.id = :roomId " +
+            "AND b.checkIn <= :checkOut " +
+            "AND b.checkOut >= :checkIn " +
+            "AND b.status IN :statuses")
+    List<Booking> findConflictingBookingsForRoom(
+            @Param("roomId") UUID roomId,
+            @Param("checkIn") LocalDate checkIn,
+            @Param("checkOut") LocalDate checkOut,
+            @Param("statuses") List<BookingStatus> statuses
+    );
+
+    /**
+     * Find all bookings for a specific unit that conflict with the given date range
+     */
+    @Query("SELECT b FROM Booking b " +
+            "WHERE b.room.unit.id = :unitId " +
+            "AND b.checkIn <= :checkOut " +
+            "AND b.checkOut >= :checkIn " +
+            "AND b.status IN :statuses")
+    List<Booking> findConflictingBookingsForUnit(
+            @Param("unitId") UUID unitId,
+            @Param("checkIn") LocalDate checkIn,
+            @Param("checkOut") LocalDate checkOut,
+            @Param("statuses") List<BookingStatus> statuses
+    );
+
+    /**
+     * Find bookings by property
+     */
+    @Query("SELECT b FROM Booking b WHERE b.room.property.id = :propertyId")
+    List<Booking> findByPropertyId(@Param("propertyId") UUID propertyId);
+
+    /**
+     * Find bookings by room
+     */
+    List<Booking> findByRoomId(UUID roomId);
+
+    /**
+     * Find bookings by status
+     */
+    List<Booking> findByStatus(BookingStatus status);
+
+    @Query("SELECT b FROM Booking b WHERE " +
+            "LOWER(CONCAT(b.guest.firstName, ' ', b.guest.lastName)) LIKE LOWER(CONCAT('%', :guestName, '%')) " +
+            "OR LOWER(b.guest.firstName) LIKE LOWER(CONCAT('%', :guestName, '%')) " +
+            "OR LOWER(b.guest.lastName) LIKE LOWER(CONCAT('%', :guestName, '%'))")
+    List<Booking> findByGuestNameContainingIgnoreCase(@Param("guestName") String guestName);
+
+    /**
+     * Find all bookings for a property that are active on a specific date
+     * A booking is active on a date if: checkIn <= date < checkOut
+     */
+    @Query("SELECT b FROM Booking b " +
+            "WHERE b.property.id = :propertyId " +
+            "AND b.checkIn <= :date " +
+            "AND b.checkOut >= :date " +
+            "ORDER BY b.checkIn ASC")
+    List<Booking> findByPropertyIdAndDate(
+            @Param("propertyId") UUID propertyId,
+            @Param("date") LocalDate date
+    );
+
+    /**
+     * Find all bookings for a property that are active on a specific date with specific statuses
+     */
+    @Query("SELECT b FROM Booking b " +
+            "WHERE b.property.id = :propertyId " +
+            "AND b.checkIn <= :date " +
+            "AND b.checkOut >= :date " +
+            "AND b.status IN :statuses " +
+            "ORDER BY b.checkIn ASC")
+    List<Booking> findByPropertyIdAndDateAndStatuses(
+            @Param("propertyId") UUID propertyId,
+            @Param("date") LocalDate date,
+            @Param("statuses") List<BookingStatus> statuses
+    );
+
+
+}
