@@ -1,9 +1,10 @@
 package com.adith.os.HMS.booking;
 
-import com.adith.os.HMS.booking.dto.BookingCreationDto;
-import com.adith.os.HMS.booking.dto.BookingDto;
-import com.adith.os.HMS.booking.dto.BookingUpdateDto;
-import jakarta.validation.Valid;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.UUID;
+
+import com.adith.os.HMS.booking.dto.*;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -11,9 +12,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.time.LocalDate;
-import java.util.List;
-import java.util.UUID;
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/properties/{propertyId}/bookings")
@@ -181,4 +180,50 @@ public class BookingController {
         BookingDto booking = bookingService.checkInBooking(propertyId, id);
         return ResponseEntity.ok(booking);
     }
+
+    @PostMapping("/{bookingId}/extend")
+    public ResponseEntity<BookingDto> extendBooking(
+            @PathVariable UUID propertyId,
+            @PathVariable UUID bookingId,
+            @Valid @RequestBody ExtendBookingRequestDto requestDto) {
+
+        BookingDto updatedBooking = bookingService.extendBooking(propertyId, bookingId, requestDto);
+
+        return ResponseEntity.ok(updatedBooking);
+    }
+
+    // Check-out endpoint
+    @PostMapping("/{bookingId}/checkout")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    public ResponseEntity<BookingDto> checkoutBooking(
+            @PathVariable UUID propertyId,
+            @PathVariable UUID bookingId) {
+
+        // Assuming you have a standard checkout method in BookingService
+        // This method would normally just update the status to CHECKED_OUT and verify the folio is paid
+        BookingDto updatedBooking = bookingService.checkOutBooking(propertyId, bookingId);
+
+        return ResponseEntity.ok(updatedBooking);
+    }
+
+    // Early check-out endpoint
+    @PostMapping("/{bookingId}/checkout-early")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    public ResponseEntity<BookingDto> checkoutEarly(
+            @PathVariable UUID propertyId,
+            @PathVariable UUID bookingId,
+            @Valid @RequestBody EarlyCheckoutRequestDto requestDto) {
+
+        BookingDto updatedBooking = bookingService.checkoutEarly(
+                propertyId,
+                bookingId,
+                requestDto.newCheckOutDate(),
+                requestDto.policy(),
+                requestDto.customRoomCharge()
+        );
+
+        return ResponseEntity.ok(updatedBooking);
+    }
+
+    //
 }

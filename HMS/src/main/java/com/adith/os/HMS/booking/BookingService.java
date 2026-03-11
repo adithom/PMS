@@ -1,5 +1,23 @@
 package com.adith.os.HMS.booking;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+import com.adith.os.HMS.booking.dto.ExtendBookingRequestDto;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+
+import com.adith.os.HMS.billing.folio.ChargeCode;
+import com.adith.os.HMS.billing.folio.Folio;
+import com.adith.os.HMS.billing.folio.FolioCharge;
+import com.adith.os.HMS.billing.folio.FolioService;
+import com.adith.os.HMS.billing.folio.dto.ChargeCreationDto;
 import com.adith.os.HMS.booking.dto.BookingCreationDto;
 import com.adith.os.HMS.booking.dto.BookingDto;
 import com.adith.os.HMS.booking.dto.BookingUpdateDto;
@@ -12,20 +30,9 @@ import com.adith.os.HMS.room.RoomRepository;
 import com.adith.os.HMS.room.RoomStatus;
 import com.adith.os.HMS.unit.Unit;
 import com.adith.os.HMS.unit.UnitRepository;
-import com.adith.os.HMS.billing.folio.FolioService;
+
 import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
-
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 public class BookingService {
@@ -803,6 +810,123 @@ public class BookingService {
         return bookingMapper.toDto(savedBooking);
     }
 
+    @Transactional
+    public BookingDto extendBooking(UUID propertyId, UUID bookingId, @Valid ExtendBookingRequestDto dto) {
+        // 1. Fetch and Validate Booking
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found: " + bookingId));
+
+        if (!booking.getProperty().getId().equals(propertyId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Booking does not belong to the specified property");
+        }
+
+        LocalDate oldCheckOut = booking.getCheckOut();
+        LocalDate newCheckOut = dto.newCheckOutDate();
+
+        // 2. Validate Dates
+        if (newCheckOut == null || !newCheckOut.isAfter(oldCheckOut)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "New check-out date must be strictly after the current check-out date");
+        }
+
+        // 3. Check Availability
+        if (booking.getRoom() != null) {
+            // Room-level availability check
+            boolean conflict = bookingRepository.existsOverlappingBookingExcludingCurrent(
+                    booking.getRoom().getId(),
+                    oldCheckOut, // Start checking from the old checkout date
+                    newCheckOut,
+                    bookingId
+            );
+            if (conflict) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Cannot extend: Room " + booking.getRoom().getNumber() + " is already booked for these dates. A room move is required.");
+            }
+        } else {
+            // Unit-level capacity check
+            long overlappingBookings = bookingRepository.countOverlappingUnitBookingsExcludingCurrent(
+                    booking.getUnit().getId(), oldCheckOut, newCheckOut, bookingId);
+            int totalRooms = booking.getUnit().getTotalRooms();
+
+            if (overlappingBookings >= totalRooms) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Cannot extend: Unit category is fully booked for those dates.");
+            }
+        }
+
+        // 4. Calculate Financials
+        long originalNights = booking.getStayDuration();
+        long extraNights = ChronoUnit.DAYS.between(oldCheckOut, newCheckOut);
+
+        BigDecimal nightlyRateToApply;
+
+        if (dto.extensionNightlyRate() != null) {
+            // Use the explicit rate provided by the front desk
+            nightlyRateToApply = dto.extensionNightlyRate();
+        } else {
+            // Automatically calculate the average nightly rate from the current stay
+            Folio masterFolio = booking.getMasterFolio();
+            if (masterFolio != null && originalNights > 0) {
+                BigDecimal currentRoomTotal = masterFolio.getCharges().stream()
+                        .filter(c -> !c.isVoided() && c.getChargeCode().isRoomRent())
+                        .map(FolioCharge::getTotalAmount)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                nightlyRateToApply = currentRoomTotal.divide(
+                        BigDecimal.valueOf(originalNights),
+                        2,
+                        java.math.RoundingMode.HALF_UP
+                );
+            } else {
+                // Fallback: divide total price by nights
+                long divisor = originalNights > 0 ? originalNights : 1;
+                nightlyRateToApply = booking.getTotalPrice().divide(
+                        BigDecimal.valueOf(divisor),
+                        2,
+                        java.math.RoundingMode.HALF_UP
+                );
+            }
+        }
+
+        BigDecimal extraTotalCost = nightlyRateToApply.multiply(BigDecimal.valueOf(extraNights));
+
+        // 5. Update Booking
+        booking.setTotalPrice(booking.getTotalPrice().add(extraTotalCost));
+        booking.setCheckOut(newCheckOut);
+
+        // 6. Post Charges to Folio
+        Folio folio = booking.getMasterFolio();
+        if (folio != null) {
+            // Prevent modifying closed/posted folios
+            if (folio.getStatus() == com.adith.os.HMS.billing.folio.FolioStatus.POSTED ||
+                    folio.getStatus() == com.adith.os.HMS.billing.folio.FolioStatus.CLOSED) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Cannot extend booking automatically: Master folio is already closed or posted. Please reopen it first.");
+            }
+
+            for (int i = 0; i < extraNights; i++) {
+                LocalDate chargeDate = oldCheckOut.plusDays(i);
+
+                com.adith.os.HMS.billing.folio.dto.ChargeCreationDto chargeDto =
+                        new com.adith.os.HMS.billing.folio.dto.ChargeCreationDto(
+                                chargeDate,
+                                com.adith.os.HMS.billing.folio.ChargeCode.ROOM_RENT,
+                                "Booking Extension - Room Rent",
+                                nightlyRateToApply,
+                                BigDecimal.ONE,
+                                BigDecimal.ZERO, // Tax rate todo: global tax rate lookup
+                                BigDecimal.ZERO, // Discount rate
+                                "BOOKING",
+                                bookingId,
+                                dto.notes() != null ? dto.notes() : "Extended Stay",
+                                "SYSTEM"
+                        );
+                folioService.addCharge(propertyId, folio.getId(), chargeDto);
+            }
+        }
+
+        Booking savedBooking = bookingRepository.save(booking);
+        return bookingMapper.toDto(savedBooking);
+    }
+
     // Auto-assign room at check-in
     @Transactional
     public BookingDto checkInBooking(UUID propertyId, UUID bookingId) {
@@ -845,6 +969,102 @@ public class BookingService {
 
         Booking savedBooking = bookingRepository.save(booking);
         return bookingMapper.toDto(savedBooking);
+    }
+
+    @Transactional
+    public BookingDto checkOutBooking(UUID propertyId, UUID bookingId) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found"));
+
+        if (!booking.getProperty().getId().equals(propertyId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Booking does not belong to the specified property");
+        }
+
+        // Optional: Prevent checkout if folio has a balance
+        Folio masterFolio = booking.getMasterFolio();
+        if (masterFolio != null && !masterFolio.isFullyPaid()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Cannot check out: Folio has an outstanding balance of " + masterFolio.getBalanceDue());
+        }
+
+        booking.setStatus(BookingStatus.CHECKED_OUT);
+        Booking savedBooking = bookingRepository.save(booking);
+
+        return bookingMapper.toDto(savedBooking);
+    }
+
+    @Transactional
+    public BookingDto checkoutEarly(UUID propertyId, UUID bookingId, LocalDate newCheckOutDate, String policy, BigDecimal customRoomCharge) {
+        // 1. Update Booking Inventory
+        Booking booking = bookingRepository.findById(bookingId).orElseThrow();
+        booking.setCheckOut(newCheckOutDate);
+        booking.setStatus(BookingStatus.CHECKED_OUT);
+
+        // 2. Fetch the Master Folio
+        Folio folio = booking.getMasterFolio();
+
+        // 3. Handle Financials based on Policy
+        switch (policy) {
+            case "NO_CHANGE":
+                // Do nothing. They pay for the full original stay.
+                break;
+
+            case "REFUND_UNUSED_NIGHTS":
+                // Find all ROOM_RENT charges that are on or AFTER the new checkout date
+                List<FolioCharge> futureRoomCharges = folio.getCharges().stream()
+                        .filter(charge -> !charge.isVoided())
+                        .filter(charge -> charge.getChargeCode().isRoomRent()) // ONLY touch room rent
+                        .filter(charge -> !charge.getChargeDate().isBefore(newCheckOutDate))
+                        .collect(Collectors.toList());
+
+                // Void them or post a negative adjustment
+                for (FolioCharge charge : futureRoomCharges) {
+                    folioService.voidCharge(propertyId, folio.getId(), charge.getId(), "Early Checkout - Unused Night", "SYSTEM");
+                }
+                break;
+
+            case "CUSTOM":
+                // 1. Calculate current total of valid Room Rent charges
+                BigDecimal currentRoomRentTotal = folio.getCharges().stream()
+                        .filter(charge -> !charge.isVoided())
+                        .filter(charge -> charge.getChargeCode().isRoomRent())
+                        .map(FolioCharge::getTotalAmount)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                // --- NEW: STRICT VALIDATION ---
+                if (customRoomCharge.compareTo(BigDecimal.ZERO) < 0) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Custom room charge cannot be negative.");
+                }
+
+                if (customRoomCharge.compareTo(currentRoomRentTotal) > 0) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Custom room charge cannot exceed the original total room rent.");
+                }
+                // ------------------------------
+
+                // 2. Calculate the difference
+                BigDecimal adjustmentNeeded = currentRoomRentTotal.subtract(customRoomCharge);
+
+                if (adjustmentNeeded.compareTo(BigDecimal.ZERO) > 0) {
+                    // Create a negative charge to reduce the folio balance
+                    ChargeCreationDto adjDto = new ChargeCreationDto(
+                            LocalDate.now(),
+                            ChargeCode.ROOM_RENT,
+                            "Early Checkout Custom Adjustment",
+                            adjustmentNeeded.negate(), // Make it negative
+                            BigDecimal.ONE,
+                            BigDecimal.ZERO, BigDecimal.ZERO, null, null, "Early Checkout", "SYSTEM"
+                    );
+                    folioService.addCharge(propertyId, folio.getId(), adjDto);
+                }
+                break;
+
+            default:
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid early checkout policy");
+        }
+
+        bookingRepository.save(booking);
+        return bookingMapper.toDto(booking);
     }
 
     //Helper to find available room in unit

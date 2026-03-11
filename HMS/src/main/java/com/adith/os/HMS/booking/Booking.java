@@ -62,7 +62,6 @@ public class Booking {
     @Column(length = 3, columnDefinition = "char(3) default 'INR'")
     private String currency = "INR";
 
-
     @Column(name = "total_price", precision = 10, scale = 2, nullable = false)
     private BigDecimal totalPrice = BigDecimal.ZERO;
 
