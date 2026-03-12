@@ -76,7 +76,14 @@ public class PaymentService {
             folio.setClosedAt(OffsetDateTime.now());
         }
 
-        folioRepository.save(folio);
+        Folio savedFolio = folioRepository.save(folio);
+
+        // Bubble up recalculation to the Parent if this folio is routed
+        if (savedFolio.isRouted()) {
+            Folio parentFolio = savedFolio.getRoutedToFolio();
+            parentFolio.recalculateTotals();
+            folioRepository.save(parentFolio);
+        }
 
         return paymentMapper.toDto(savedPayment);
     }
@@ -119,7 +126,14 @@ public class PaymentService {
             // Update folio totals
             Folio folio = payment.getFolio();
             folio.recalculateTotals();
-            folioRepository.save(folio);
+            Folio savedFolio = folioRepository.save(folio);
+
+            // Bubble up recalculation to the Parent if this folio is routed
+            if (savedFolio.isRouted()) {
+                Folio parentFolio = savedFolio.getRoutedToFolio();
+                parentFolio.recalculateTotals();
+                folioRepository.save(parentFolio);
+            }
 
             return paymentMapper.toDto(savedPayment);
         } catch (IllegalStateException | IllegalArgumentException e) {
@@ -181,7 +195,14 @@ public class PaymentService {
             if (dto.paymentStatus() == PaymentStatus.COMPLETED) {
                 Folio folio = payment.getFolio();
                 folio.recalculateTotals();
-                folioRepository.save(folio);
+                Folio savedFolio = folioRepository.save(folio);
+
+                // Bubble up recalculation to the Parent if this folio is routed
+                if (savedFolio.isRouted()) {
+                    Folio parentFolio = savedFolio.getRoutedToFolio();
+                    parentFolio.recalculateTotals();
+                    folioRepository.save(parentFolio);
+                }
             }
 
             return paymentMapper.toDto(savedPayment);

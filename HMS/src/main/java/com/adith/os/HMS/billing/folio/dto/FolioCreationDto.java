@@ -15,6 +15,8 @@ public record FolioCreationDto(
 
         String notes,
 
-        String createdBy
+        String createdBy,
+
+        UUID routedToFolioId    // Optional - if set, this folio's charges roll up to the target folio
 ) {
 }

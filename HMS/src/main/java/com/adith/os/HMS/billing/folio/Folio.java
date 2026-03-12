@@ -98,6 +98,14 @@ public class Folio {
     @OneToMany(mappedBy = "folio")
     private List<Bill> bills = new ArrayList<>();
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "routed_to_folio_id")
+    private Folio routedToFolio;
+
+    // Inverse side: child folios routed TO this folio
+    @OneToMany(mappedBy = "routedToFolio", fetch = FetchType.LAZY)
+    private List<Folio> routedFolios = new ArrayList<>();
+
     public Folio() {
     }
 
@@ -118,44 +126,68 @@ public class Folio {
 
     // Business methods
     public void recalculateTotals() {
-        if (charges == null || charges.isEmpty()) {
-            this.subtotal = BigDecimal.ZERO;
-            this.taxAmount = BigDecimal.ZERO;
-            this.discountAmount = BigDecimal.ZERO;
-            this.totalAmount = BigDecimal.ZERO;
-            this.balanceDue = BigDecimal.ZERO;
-            return;
+        // 1. Totals from charges physically on THIS folio
+        BigDecimal selfSubtotal  = BigDecimal.ZERO;
+        BigDecimal selfTax       = BigDecimal.ZERO;
+        BigDecimal selfDiscount  = BigDecimal.ZERO;
+        BigDecimal selfTotal     = BigDecimal.ZERO;
+
+        if (charges != null) {
+            List<FolioCharge> valid = charges.stream().filter(c -> !c.isVoided()).toList();
+            selfSubtotal = valid.stream().map(FolioCharge::getSubtotal).reduce(BigDecimal.ZERO, BigDecimal::add);
+            selfTax      = valid.stream().map(FolioCharge::getTaxAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+            selfDiscount = valid.stream().map(FolioCharge::getDiscountAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+            selfTotal    = valid.stream().map(FolioCharge::getTotalAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
         }
 
-        this.subtotal = charges.stream()
-                .filter(c -> !c.isVoided())
-                .map(FolioCharge::getSubtotal)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        // 2. Totals from child folios routed TO this folio
+        BigDecimal routedSubtotal  = BigDecimal.ZERO;
+        BigDecimal routedTax       = BigDecimal.ZERO;
+        BigDecimal routedDiscount  = BigDecimal.ZERO;
+        BigDecimal routedTotal     = BigDecimal.ZERO;
+        BigDecimal routedPaid      = BigDecimal.ZERO;
 
-        this.taxAmount = charges.stream()
-                .filter(c -> !c.isVoided())
-                .map(FolioCharge::getTaxAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (routedFolios != null && !routedFolios.isEmpty()) {
+            for (Folio child : routedFolios) {
+                if (child.getCharges() != null) {
+                    List<FolioCharge> valid = child.getCharges().stream().filter(c -> !c.isVoided()).toList();
+                    routedSubtotal = routedSubtotal.add(valid.stream().map(FolioCharge::getSubtotal).reduce(BigDecimal.ZERO, BigDecimal::add));
+                    routedTax      = routedTax.add(valid.stream().map(FolioCharge::getTaxAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
+                    routedDiscount = routedDiscount.add(valid.stream().map(FolioCharge::getDiscountAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
+                    routedTotal    = routedTotal.add(valid.stream().map(FolioCharge::getTotalAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
+                }
 
-        this.discountAmount = charges.stream()
-                .filter(c -> !c.isVoided())
-                .map(FolioCharge::getDiscountAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                if (child.getPayments() != null) {
+                    routedPaid = routedPaid.add(child.getPayments().stream()
+                            .filter(p -> p.getPaymentStatus() == PaymentStatus.COMPLETED)
+                            .map(Payment::getAmount)
+                            .reduce(BigDecimal.ZERO, BigDecimal::add));
+                }
+            }
+        }
 
-        this.totalAmount = charges.stream()
-                .filter(c -> !c.isVoided())
-                .map(FolioCharge::getTotalAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        // 3. Combined Charges
+        this.subtotal       = selfSubtotal.add(routedSubtotal);
+        this.taxAmount      = selfTax.add(routedTax);
+        this.discountAmount = selfDiscount.add(routedDiscount);
+        this.totalAmount    = selfTotal.add(routedTotal);
 
-        BigDecimal totalPaid = payments != null ?
-                payments.stream()
-                        .filter(p -> p.getPaymentStatus() == PaymentStatus.COMPLETED)
-                        .map(Payment::getAmount)
-                        .reduce(BigDecimal.ZERO, BigDecimal::add)
+        // 4. Combined Payments
+        BigDecimal selfPaid = payments != null
+                ? payments.stream()
+                .filter(p -> p.getPaymentStatus() == PaymentStatus.COMPLETED)
+                .map(Payment::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
                 : BigDecimal.ZERO;
 
-        this.paidAmount = totalPaid;
-        this.balanceDue = this.totalAmount.subtract(this.paidAmount);
+        this.paidAmount = selfPaid.add(routedPaid);
+
+        // 5. Balance due
+        if (this.isRouted()) {
+            this.balanceDue = BigDecimal.ZERO;
+        } else {
+            this.balanceDue = this.totalAmount.subtract(this.paidAmount).max(BigDecimal.ZERO);
+        }
     }
 
     public boolean isFullyPaid() {
@@ -359,4 +391,12 @@ public class Folio {
     public java.util.List<com.adith.os.HMS.billing.bills.Bill> getBills() { return bills; }
 
     public void setBills(java.util.List<com.adith.os.HMS.billing.bills.Bill> bills) { this.bills = bills; }
+
+    public Folio getRoutedToFolio() { return routedToFolio; }
+    public void setRoutedToFolio(Folio routedToFolio) { this.routedToFolio = routedToFolio; }
+
+    public boolean isRouted() { return routedToFolio != null; }
+
+    public List<Folio> getRoutedFolios() { return routedFolios; }
+    public void setRoutedFolios(List<Folio> routedFolios) { this.routedFolios = routedFolios; }
 }

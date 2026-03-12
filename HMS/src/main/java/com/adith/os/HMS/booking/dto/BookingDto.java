@@ -25,10 +25,8 @@ public record BookingDto(
         @NotBlank
         String guestName,
 
-        @NotNull
         UUID unitId,
 
-        @NotBlank
         String unitName,
 
         @NotNull
@@ -70,7 +68,13 @@ public record BookingDto(
         @NotNull
         OffsetDateTime createdAt,
 
-        Double paymentProgress
+        Double paymentProgress,
+
+        UUID parentBookingId, // null if not a child booking
+
+        boolean isGroupMaster,
+
+        int childBookingCount // 0 for regular/child bookings
 ) {
     // Compact constructor for validation and defaults
     public BookingDto {

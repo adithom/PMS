@@ -172,7 +172,8 @@ public class BookingService {
                             savedBooking.getGuest().getId(),
                             com.adith.os.HMS.billing.folio.FolioType.MASTER,
                             savedBooking.getSpecialRequests(),
-                            "SYSTEM" // createdBy
+                            "SYSTEM",// createdBy
+                            null     // routedToFolioId - not set for master folio
                     );
             folioService.createFolio(propertyId, folioDto);
 

@@ -80,17 +80,32 @@ public class FolioService {
             }
         }
 
+        Folio routedToFolio = null;
+        if (dto.routedToFolioId() != null) {
+            routedToFolio = folioRepository.findById(dto.routedToFolioId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Routing target folio not found"));
+            if (!routedToFolio.getProperty().getId().equals(propertyId)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Routing target folio does not belong to this property");
+            }
+        }
+
         try {
             Folio folio = folioMapper.toEntity(dto, property, guest, booking);
             folio.setFolioNumber(generateFolioNumber(property));
             folio.setCreatedBy(dto.createdBy() != null ? dto.createdBy() : "SYSTEM");
+            if (routedToFolio != null) {
+                folio.setRoutedToFolio(routedToFolio);
+            }
 
             Folio savedFolio = folioRepository.save(folio);
             return folioMapper.toDto(savedFolio);
+        } catch (ResponseStatusException e) {
+            throw e;  // let 4xx errors pass through untouched
         } catch (Exception e) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
                     "Failed to create folio: " + e.getMessage());
         }
+
     }
 
     /**
@@ -259,6 +274,14 @@ public class FolioService {
             folio.recalculateTotals();
             Folio savedFolio = folioRepository.save(folio);
 
+            // --- NEW: Bubble up the recalculation to the Parent ---
+            if (savedFolio.isRouted()) {
+                Folio parentFolio = savedFolio.getRoutedToFolio();
+                // Re-fetch from DB or rely on the Hibernate session to ensure child lists are fresh
+                parentFolio.recalculateTotals();
+                folioRepository.save(parentFolio);
+            }
+
             return folioMapper.toDto(savedFolio);
         } catch (Exception e) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
@@ -308,6 +331,13 @@ public class FolioService {
             folio.recalculateTotals();
             Folio savedFolio = folioRepository.save(folio);
 
+            // Bubble up recalculation to the Parent if this folio is routed
+            if (savedFolio.isRouted()) {
+                Folio parentFolio = savedFolio.getRoutedToFolio();
+                parentFolio.recalculateTotals();
+                folioRepository.save(parentFolio);
+            }
+
             return folioMapper.toDto(savedFolio);
         } catch (IllegalStateException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
@@ -342,6 +372,13 @@ public class FolioService {
             folio.setUpdatedBy(closedBy != null ? closedBy : "SYSTEM");
             Folio savedFolio = folioRepository.save(folio);
 
+            // Bubble up recalculation to the Parent if this folio is routed
+            if (savedFolio.isRouted()) {
+                Folio parentFolio = savedFolio.getRoutedToFolio();
+                parentFolio.recalculateTotals();
+                folioRepository.save(parentFolio);
+            }
+
             return folioMapper.toDto(savedFolio);
         } catch (IllegalStateException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
@@ -374,6 +411,13 @@ public class FolioService {
         try {
             folio.post();
             Folio savedFolio = folioRepository.save(folio);
+
+            // Bubble up recalculation to the Parent if this folio is routed
+            if (savedFolio.isRouted()) {
+                Folio parentFolio = savedFolio.getRoutedToFolio();
+                parentFolio.recalculateTotals();
+                folioRepository.save(parentFolio);
+            }
 
             return folioMapper.toDto(savedFolio);
         } catch (IllegalStateException e) {
@@ -415,6 +459,14 @@ public class FolioService {
             folio.setUpdatedBy(reopenedBy != null ? reopenedBy : "SYSTEM");
 
             Folio savedFolio = folioRepository.save(folio);
+
+            // Bubble up recalculation to the Parent if this folio is routed
+            if (savedFolio.isRouted()) {
+                Folio parentFolio = savedFolio.getRoutedToFolio();
+                parentFolio.recalculateTotals();
+                folioRepository.save(parentFolio);
+            }
+
             return folioMapper.toDto(savedFolio);
         } catch (Exception e) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,

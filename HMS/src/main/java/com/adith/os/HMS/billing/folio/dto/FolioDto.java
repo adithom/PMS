@@ -23,5 +23,6 @@ public record FolioDto(
         BigDecimal balanceDue,
         String currency,
         OffsetDateTime createdAt,
-        OffsetDateTime closedAt
+        OffsetDateTime closedAt,
+        UUID routedToFolioId        // null if not routed
 ) {}

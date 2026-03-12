@@ -1,6 +1,7 @@
 package com.adith.os.HMS.billing.folio;
 
 import com.adith.os.HMS.billing.bills.Bill;
+import com.adith.os.HMS.billing.bills.GroupBill;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -91,6 +92,10 @@ public class FolioCharge {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "bill_id")
     private Bill bill;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "group_bill_id")
+    private GroupBill groupBill;
 
     public FolioCharge() {
     }
@@ -343,4 +348,7 @@ public class FolioCharge {
     public Bill getBill() { return bill; }
 
     public void setBill(Bill bill) { this.bill = bill; }
+
+    public GroupBill getGroupBill() { return groupBill; }
+    public void setGroupBill(GroupBill groupBill) { this.groupBill = groupBill; }
 }

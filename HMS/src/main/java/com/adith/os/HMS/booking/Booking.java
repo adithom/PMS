@@ -12,6 +12,7 @@ import jakarta.validation.constraints.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -36,7 +37,7 @@ public class Booking {
     private Guest guest;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "unit_id", nullable = false)
+    @JoinColumn(name = "unit_id")
     private Unit unit;
 
     @Enumerated(EnumType.STRING)
@@ -51,7 +52,7 @@ public class Booking {
     @Column(name = "check_out", nullable = false)
     private LocalDate checkOut;
 
-    @Positive(message = "Adults must be at least 1")
+    @PositiveOrZero(message = "Adults cannot be negative")
     @Column(nullable = false, columnDefinition = "integer default 1")
     private Integer adults = 1;
 
@@ -77,12 +78,29 @@ public class Booking {
     @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL)
     private List<Folio> folios;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_booking_id")
+    private Booking parentBooking;
+
+    @OneToMany(mappedBy = "parentBooking", cascade = CascadeType.ALL, orphanRemoval = false)
+    private List<Booking> childBookings = new ArrayList<>();
+
+    @Column(name = "is_group_master", nullable = false, columnDefinition = "boolean default false")
+    private boolean isGroupMaster = false;
+
+    @Column(name = "group_reference", length = 100)
+    private String groupReference;
+
     public Folio getMasterFolio() {
         if (folios == null || folios.isEmpty()) return null;
         return folios.stream()
                 .filter(f -> f.getFolioType() == FolioType.MASTER)
                 .findFirst()
                 .orElse(null);
+    }
+
+    public boolean isGroupChild() {
+        return parentBooking != null;
     }
 
     @PrePersist
@@ -242,6 +260,18 @@ public class Booking {
     public void setCreatedAt(OffsetDateTime createdAt) {
         this.createdAt = createdAt;
     }
+
+    public Booking getParentBooking() { return parentBooking; }
+    public void setParentBooking(Booking parentBooking) { this.parentBooking = parentBooking; }
+
+    public List<Booking> getChildBookings() { return childBookings; }
+    public void setChildBookings(List<Booking> childBookings) { this.childBookings = childBookings; }
+
+    public boolean isGroupMaster() { return isGroupMaster; }
+    public void setGroupMaster(boolean groupMaster) { isGroupMaster = groupMaster; }
+
+    public String getGroupReference() { return groupReference; }
+    public void setGroupReference(String groupReference) { this.groupReference = groupReference; }
 
     // Calculated fields - these compute values dynamically
 

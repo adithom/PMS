@@ -201,5 +201,14 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
             @Param("statuses") List<BookingStatus> statuses
     );
 
+    //Group Bookings
+
+    @Query("SELECT b FROM Booking b WHERE b.parentBooking.id = :parentBookingId ORDER BY b.createdAt ASC")
+    List<Booking> findByParentBookingId(@Param("parentBookingId") UUID parentBookingId);
+
+    // Fetch all group master bookings for a property
+    @Query("SELECT b FROM Booking b WHERE b.property.id = :propertyId AND b.isGroupMaster = true ORDER BY b.checkIn DESC")
+    List<Booking> findGroupMastersByPropertyId(@Param("propertyId") UUID propertyId);
+
 
 }

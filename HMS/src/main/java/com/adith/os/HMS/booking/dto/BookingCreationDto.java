@@ -39,7 +39,10 @@ public record BookingCreationDto(
         @PositiveOrZero(message = "Paid amount cannot be negative")
         BigDecimal paidAmount,
 
-        String specialRequests
+        String specialRequests,
+
+        UUID parentBookingId,       // Set when creating a child booking individually
+        String groupReference       // e.g. "WEDDING-SHARMA-2025", purely informational
 ) {
     public BookingCreationDto {
         if (adults == null) {

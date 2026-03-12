@@ -34,5 +34,9 @@ public interface FolioRepository extends JpaRepository<Folio, UUID> {
             "AND f.status = 'OPEN' AND f.balanceDue > 0")
     long countOpenFoliosWithBalance(@Param("propertyId") UUID propertyId);
 
+    // Finds all folios that are routing their charges to the given target folio
+    @Query("SELECT f FROM Folio f WHERE f.routedToFolio.id = :targetFolioId")
+    List<Folio> findByRoutedToFolioId(@Param("targetFolioId") UUID targetFolioId);
+
     boolean existsByFolioNumber(String folioNumber);
 }

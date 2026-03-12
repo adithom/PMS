@@ -20,7 +20,7 @@ public class BookingMapper {
         if (bookingCreationDto == null) return null;
         if (property == null) throw new IllegalArgumentException("Property is required");
         if (guest == null) throw new IllegalArgumentException("Guest is required");
-        if (unit == null) throw new IllegalArgumentException("Unit is required");
+        // REMOVED: Unit can be null for group booking creation
 
         // REMOVED: Status validation - now handled by compact constructor with default
 
@@ -51,8 +51,8 @@ public class BookingMapper {
                 booking.getRoom() != null ? booking.getRoom().getNumber() : null,  // FIXED: Was getNumber()
                 booking.getGuest().getId(),
                 booking.getGuest().getFullName(),
-                booking.getUnit().getId(),
-                booking.getUnit().getName(),
+                booking.getUnit() != null ? booking.getUnit().getId() : null,
+                booking.getUnit() != null ? booking.getUnit().getName() : null,
                 booking.getStatus(),          // CHANGED: Returns BookingStatus enum directly
                 booking.getCheckIn(),
                 booking.getCheckOut(),
@@ -66,7 +66,10 @@ public class BookingMapper {
                 booking.isFullyPaid(),        // Payment completion status
                 booking.getSpecialRequests(), // ADDED: Special requests in DTO
                 booking.getCreatedAt(),
-                booking.getPaymentProgress()
+                booking.getPaymentProgress(),
+                booking.getParentBooking() != null ? booking.getParentBooking().getId() : null,
+                booking.isGroupMaster(),
+                booking.getChildBookings() != null ? booking.getChildBookings().size() : 0
         );
     }
 
