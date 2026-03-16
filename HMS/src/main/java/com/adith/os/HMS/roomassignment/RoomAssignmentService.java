@@ -283,7 +283,7 @@ public class RoomAssignmentService {
                 .map(assignment -> {
                     BigDecimal nightlyRate = assignment.getNightlyRate() != null
                             ? assignment.getNightlyRate()
-                            : assignment.getRoom().getBaseRate();
+                            : (assignment.getRoom() != null ? assignment.getRoom().getBaseRate() : BigDecimal.ZERO);
                     long nights = ChronoUnit.DAYS.between(assignment.getStartDate(), assignment.getEndDate());
                     return nightlyRate.multiply(BigDecimal.valueOf(Math.max(nights, 0L)));
                 })

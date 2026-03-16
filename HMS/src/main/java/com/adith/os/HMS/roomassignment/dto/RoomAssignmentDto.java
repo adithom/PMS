@@ -2,6 +2,7 @@ package com.adith.os.HMS.roomassignment.dto;
 
 import com.adith.os.HMS.roomassignment.RoomAssignmentStatus;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -16,6 +17,7 @@ public record RoomAssignmentDto(
         LocalDate endDate,
         RoomAssignmentStatus status,
         OffsetDateTime createdAt,
-        String notes
+        String notes,
+        BigDecimal nightlyRate
 ) {
 }

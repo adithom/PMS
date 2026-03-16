@@ -22,7 +22,8 @@ public class RoomAssignmentMapper {
                 assignment.getEndDate(),
                 assignment.getStatus(),
                 assignment.getCreatedAt(),
-                assignment.getNotes()
+                assignment.getNotes(),
+                assignment.getNightlyRate()
         );
     }
 

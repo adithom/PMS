@@ -86,6 +86,13 @@ public class NightAuditService {
             try {
                 Booking booking = assignment.getBooking();
                 Room room = assignment.getRoom();
+
+                if (booking == null || room == null) {
+                    log.warn("Night Audit: Assignment {} has null booking or room. Skipping.", assignment.getId());
+                    chargesSkipped++;
+                    continue;
+                }
+
                 Folio masterFolio = booking.getMasterFolio();
 
                 if (masterFolio == null) {
