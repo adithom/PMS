@@ -1,0 +1,2816 @@
+{
+  "info": {
+    "name": "HMS API",
+    "_postman_id": "hms-api-collection",
+    "description": "Hotel Management System API - Complete Collection",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"password123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "pm.collectionVariables.set(\"token\", jsonData.token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"manager1\",\n  \"password\": \"password123\",\n  \"email\": \"manager@hotel.com\",\n  \"role\": \"MANAGER\",\n  \"propertyIds\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Current User",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Properties",
+      "item": [
+        {
+          "name": "Create Property",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"SpiceTree Munnar\",\n  \"code\": \"STM\",\n  \"address\": \"123 Hill Road, Munnar\",\n  \"region\": \"Kerala\",\n  \"country\": \"India\",\n  \"postalCode\": \"685612\",\n  \"phone\": \"+91-4865-123456\",\n  \"checkInTime\": \"14:00:00\",\n  \"checkOutTime\": \"11:00:00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List All Properties",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Property by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Property by Code",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/code/STM",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "code",
+                "STM"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Search Properties by Name",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/search?name=Spice",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "name",
+                  "value": "Spice"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Property",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"SpiceTree Munnar\",\n  \"code\": \"STM\",\n  \"address\": \"123 Hill Road, Munnar\",\n  \"region\": \"Kerala\",\n  \"country\": \"India\",\n  \"postalCode\": \"685612\",\n  \"phone\": \"+91-4865-123456\",\n  \"checkInTime\": \"14:00:00\",\n  \"checkOutTime\": \"11:00:00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Partial Update Property",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+91-4865-654321\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Property",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Units",
+      "item": [
+        {
+          "name": "Create Unit",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/units",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "units"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Deluxe Suite\",\n  \"sortOrder\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List All Units",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/units",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "units"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Unit by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/units/{{unitId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "units",
+                "{{unitId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Unit by Name",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/units/name/Deluxe Suite",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "units",
+                "name",
+                "Deluxe Suite"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Unit",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/units/{{unitId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "units",
+                "{{unitId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Premium Suite\",\n  \"sortOrder\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Partial Update Unit",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/units/{{unitId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "units",
+                "{{unitId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sortOrder\": 3\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Unit",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/units/{{unitId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "units",
+                "{{unitId}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Rooms",
+      "item": [
+        {
+          "name": "Create Room",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/rooms",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "rooms"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"unitId\": \"{{unitId}}\",\n  \"number\": \"101\",\n  \"type\": \"King\",\n  \"capacity\": 2,\n  \"baseRate\": 5000.0,\n  \"status\": \"ACTIVE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List All Rooms",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/rooms",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "rooms"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Room by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/rooms/{{roomId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "rooms",
+                "{{roomId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Room by Number",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/rooms/number/101",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "rooms",
+                "number",
+                "101"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Rooms by Unit",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/rooms/unit/{{unitId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "rooms",
+                "unit",
+                "{{unitId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Rooms by Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/rooms/status/ACTIVE",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "rooms",
+                "status",
+                "ACTIVE"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Room",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/rooms/{{roomId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "rooms",
+                "{{roomId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"unitId\": \"{{unitId}}\",\n  \"number\": \"101\",\n  \"type\": \"King\",\n  \"capacity\": 2,\n  \"baseRate\": 5500.0,\n  \"status\": \"ACTIVE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Partial Update Room",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/rooms/{{roomId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "rooms",
+                "{{roomId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"baseRate\": 5500.0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Room",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/rooms/{{roomId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "rooms",
+                "{{roomId}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Guests",
+      "item": [
+        {
+          "name": "Create Guest",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/guests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "guests"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"John\",\n  \"lastName\": \"Doe\",\n  \"email\": \"john.doe@email.com\",\n  \"phone\": \"+91-9876543210\",\n  \"idNumber\": \"AB1234567\",\n  \"guestIdType\": \"PASSPORT\",\n  \"preferences\": \"Non-smoking, high floor\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List All Guests",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/guests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "guests"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Guest by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/guests/{{guestId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "guests",
+                "{{guestId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Guest by Email",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/guests/email/john.doe@email.com",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "guests",
+                "email",
+                "john.doe@email.com"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Guest by Phone",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/guests/phone/+91-9876543210",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "guests",
+                "phone",
+                "+91-9876543210"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Guest by Document",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/guests/doc/AB1234567",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "guests",
+                "doc",
+                "AB1234567"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Guest",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/guests/{{guestId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "guests",
+                "{{guestId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"John\",\n  \"lastName\": \"Doe\",\n  \"email\": \"john.doe@email.com\",\n  \"phone\": \"+91-9876543210\",\n  \"idNumber\": \"AB1234567\",\n  \"guestIdType\": \"PASSPORT\",\n  \"preferences\": \"Non-smoking, high floor\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Partial Update Guest",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/guests/{{guestId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "guests",
+                "{{guestId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"preferences\": \"Sea view preferred\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Guest",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/guests/{{guestId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "guests",
+                "{{guestId}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Bookings",
+      "item": [
+        {
+          "name": "Create Booking",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/bookings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "bookings"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roomId\": \"{{roomId}}\",\n  \"guestId\": \"{{guestId}}\",\n  \"unitId\": \"{{unitId}}\",\n  \"status\": \"CONFIRMED\",\n  \"checkIn\": \"2026-04-01\",\n  \"checkOut\": \"2026-04-05\",\n  \"adults\": 2,\n  \"children\": 0,\n  \"currency\": \"INR\",\n  \"totalPrice\": 20000.0,\n  \"paidAmount\": 0,\n  \"specialRequests\": \"Late check-in\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List All Bookings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/bookings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "bookings"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Bookings with Filters",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/bookings?status=CHECKED_IN&checkInFrom=2026-04-01&checkInTo=2026-04-30",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "bookings"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "CHECKED_IN"
+                },
+                {
+                  "key": "checkInFrom",
+                  "value": "2026-04-01"
+                },
+                {
+                  "key": "checkInTo",
+                  "value": "2026-04-30"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Booking by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{bookingId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "bookings",
+                "{{bookingId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Bookings by Guest",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/guest/{{guestId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "bookings",
+                "guest",
+                "{{guestId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Bookings by Room",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/room/{{roomId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "bookings",
+                "room",
+                "{{roomId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Bookings by Unit",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/unit/{{unitId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "bookings",
+                "unit",
+                "{{unitId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Bookings by Date",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/date?date=2026-04-02&includeAll=false",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "bookings",
+                "date"
+              ],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "2026-04-02"
+                },
+                {
+                  "key": "includeAll",
+                  "value": "false"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Booking",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{bookingId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "bookings",
+                "{{bookingId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roomId\": \"{{roomId}}\",\n  \"guestId\": \"{{guestId}}\",\n  \"unitId\": \"{{unitId}}\",\n  \"status\": \"CONFIRMED\",\n  \"checkIn\": \"2026-04-01\",\n  \"checkOut\": \"2026-04-05\",\n  \"adults\": 2,\n  \"children\": 1,\n  \"currency\": \"INR\",\n  \"totalPrice\": 22000.0,\n  \"paidAmount\": 5000,\n  \"specialRequests\": \"Late check-in, extra bed\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Partial Update Booking",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{bookingId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "bookings",
+                "{{bookingId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"specialRequests\": \"Extra pillows\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Booking Status",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{bookingId}}/status/CONFIRMED",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "bookings",
+                "{{bookingId}}",
+                "status",
+                "CONFIRMED"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel Booking",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{bookingId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "bookings",
+                "{{bookingId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Assign Room to Booking",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{bookingId}}/assign-room?roomId={{roomId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "bookings",
+                "{{bookingId}}",
+                "assign-room"
+              ],
+              "query": [
+                {
+                  "key": "roomId",
+                  "value": "{{roomId}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Check In",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{bookingId}}/check-in",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "bookings",
+                "{{bookingId}}",
+                "check-in"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Extend Stay",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{bookingId}}/extend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "bookings",
+                "{{bookingId}}",
+                "extend"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newCheckOutDate\": \"2026-04-07\",\n  \"extensionNightlyRate\": 5000.0,\n  \"notes\": \"Guest requested extension\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Checkout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{bookingId}}/checkout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "bookings",
+                "{{bookingId}}",
+                "checkout"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Early Checkout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{bookingId}}/checkout-early",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "bookings",
+                "{{bookingId}}",
+                "checkout-early"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newCheckOutDate\": \"2026-04-03\",\n  \"policy\": \"REFUND_UNUSED_NIGHTS\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Group Bookings",
+      "item": [
+        {
+          "name": "Create Group Booking",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/group-bookings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "group-bookings"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organizerGuestId\": \"{{guestId}}\",\n  \"checkIn\": \"2026-04-10\",\n  \"checkOut\": \"2026-04-13\",\n  \"roomRequests\": [\n    {\n      \"unitId\": \"{{unitId}}\",\n      \"adults\": 2,\n      \"children\": 0,\n      \"totalPrice\": 15000\n    },\n    {\n      \"unitId\": \"{{unitId}}\",\n      \"adults\": 1,\n      \"children\": 1,\n      \"totalPrice\": 12000\n    }\n  ],\n  \"groupReference\": \"CORP-2026-001\",\n  \"specialRequests\": \"Conference room needed\",\n  \"currency\": \"INR\",\n  \"billingMode\": \"SEPARATE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List All Group Bookings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/group-bookings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "group-bookings"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Group Booking by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/group-bookings/{{bookingId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "group-bookings",
+                "{{bookingId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Consolidate Group Billing",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/group-bookings/{{bookingId}}/consolidate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "group-bookings",
+                "{{bookingId}}",
+                "consolidate"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Separate Group Billing",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/group-bookings/{{bookingId}}/separate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "group-bookings",
+                "{{bookingId}}",
+                "separate"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Route Child Booking to Folio",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/group-bookings/{{bookingId}}/children/:childBookingId/route?targetFolioId={{folioId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "group-bookings",
+                "{{bookingId}}",
+                "children",
+                ":childBookingId",
+                "route"
+              ],
+              "query": [
+                {
+                  "key": "targetFolioId",
+                  "value": "{{folioId}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Check In All Group Members",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/group-bookings/{{bookingId}}/check-in-all",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "group-bookings",
+                "{{bookingId}}",
+                "check-in-all"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Check In Child Booking",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/group-bookings/{{bookingId}}/children/:childBookingId/check-in",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "group-bookings",
+                "{{bookingId}}",
+                "children",
+                ":childBookingId",
+                "check-in"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Check Out Child Booking",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/group-bookings/{{bookingId}}/children/:childBookingId/check-out",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "group-bookings",
+                "{{bookingId}}",
+                "children",
+                ":childBookingId",
+                "check-out"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel Group Booking",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/group-bookings/{{bookingId}}/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "group-bookings",
+                "{{bookingId}}",
+                "cancel"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Room Assignments",
+      "item": [
+        {
+          "name": "Shift Room",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{bookingId}}/shift-room",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "bookings",
+                "{{bookingId}}",
+                "shift-room"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newRoomId\": \"{{roomId}}\",\n  \"shiftDate\": \"2026-04-03\",\n  \"newRate\": 6000.0,\n  \"notes\": \"Upgrade to suite\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Room Assignments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{bookingId}}/room-assignments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "bookings",
+                "{{bookingId}}",
+                "room-assignments"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Folios",
+      "item": [
+        {
+          "name": "Create Folio",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/folios",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "folios"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bookingId\": \"{{bookingId}}\",\n  \"guestId\": \"{{guestId}}\",\n  \"folioType\": \"MASTER\",\n  \"notes\": \"Main folio\",\n  \"createdBy\": \"frontdesk\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Folio by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/folios/{{folioId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "folios",
+                "{{folioId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Folio Details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/folios/{{folioId}}/details",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "folios",
+                "{{folioId}}",
+                "details"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Folio by Booking",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/folios/booking/{{bookingId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "folios",
+                "booking",
+                "{{bookingId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Folios by Booking",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/folios/booking/{{bookingId}}/all",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "folios",
+                "booking",
+                "{{bookingId}}",
+                "all"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Open Folios",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/folios/open",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "folios",
+                "open"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Add Charge to Folio",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/folios/{{folioId}}/charges",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "folios",
+                "{{folioId}}",
+                "charges"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chargeDate\": \"2026-04-02\",\n  \"chargeCode\": \"ROOM_RENT\",\n  \"description\": \"Room 101 - Nightly Rate\",\n  \"unitPrice\": 5000.0,\n  \"quantity\": 1,\n  \"taxRate\": 12.0,\n  \"discountRate\": 0,\n  \"referenceType\": \"ROOM\",\n  \"notes\": \"Standard rate\",\n  \"postedBy\": \"NIGHT_AUDIT\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Void Charge",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/folios/{{folioId}}/charges/:chargeId/void?reason=Incorrect%20charge&voidedBy=manager",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "folios",
+                "{{folioId}}",
+                "charges",
+                ":chargeId",
+                "void"
+              ],
+              "query": [
+                {
+                  "key": "reason",
+                  "value": "Incorrect charge"
+                },
+                {
+                  "key": "voidedBy",
+                  "value": "manager"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Close Folio",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/folios/{{folioId}}/close?closedBy=manager",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "folios",
+                "{{folioId}}",
+                "close"
+              ],
+              "query": [
+                {
+                  "key": "closedBy",
+                  "value": "manager"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Post Folio",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/folios/{{folioId}}/post",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "folios",
+                "{{folioId}}",
+                "post"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reopen Folio",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/folios/{{folioId}}/reopen?reopenedBy=manager",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "folios",
+                "{{folioId}}",
+                "reopen"
+              ],
+              "query": [
+                {
+                  "key": "reopenedBy",
+                  "value": "manager"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Bills",
+      "item": [
+        {
+          "name": "Generate Bill",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/bills/generate/{{folioId}}?guestGstNumber=29ABCDE1234F1Z5",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "bills",
+                "generate",
+                "{{folioId}}"
+              ],
+              "query": [
+                {
+                  "key": "guestGstNumber",
+                  "value": "29ABCDE1234F1Z5"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Void Bill",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/bills/:billId/void?reason=Regenerating%20bill",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "bills",
+                ":billId",
+                "void"
+              ],
+              "query": [
+                {
+                  "key": "reason",
+                  "value": "Regenerating bill"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Void Active Bill for Folio",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/bills/folio/{{folioId}}/void-active?reason=Rate%20correction",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "bills",
+                "folio",
+                "{{folioId}}",
+                "void-active"
+              ],
+              "query": [
+                {
+                  "key": "reason",
+                  "value": "Rate correction"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Group Bills",
+      "item": [
+        {
+          "name": "Generate Group Bill",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/group-bookings/{{bookingId}}/bills/generate?guestGstNumber=29ABCDE1234F1Z5",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "group-bookings",
+                "{{bookingId}}",
+                "bills",
+                "generate"
+              ],
+              "query": [
+                {
+                  "key": "guestGstNumber",
+                  "value": "29ABCDE1234F1Z5"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List All Group Bills",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/group-bookings/{{bookingId}}/bills",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "group-bookings",
+                "{{bookingId}}",
+                "bills"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Void Group Bill",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/group-bookings/{{bookingId}}/bills/:groupBillId/void?reason=Incorrect%20billing",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "group-bookings",
+                "{{bookingId}}",
+                "bills",
+                ":groupBillId",
+                "void"
+              ],
+              "query": [
+                {
+                  "key": "reason",
+                  "value": "Incorrect billing"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Void All Group Bills",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/group-bookings/{{bookingId}}/bills/void-all?reason=Re-billing%20entire%20group",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "group-bookings",
+                "{{bookingId}}",
+                "bills",
+                "void-all"
+              ],
+              "query": [
+                {
+                  "key": "reason",
+                  "value": "Re-billing entire group"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Payments",
+      "item": [
+        {
+          "name": "Record Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/folios/{{folioId}}/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "folios",
+                "{{folioId}}",
+                "payments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 5000.0,\n  \"paymentMethod\": \"CREDIT_CARD\",\n  \"targetCategory\": \"ROOM_RENT\",\n  \"transactionId\": \"TXN-2026-001\",\n  \"cardLastFour\": \"4242\",\n  \"cardType\": \"Visa\",\n  \"notes\": \"Room payment\",\n  \"processedBy\": \"frontdesk\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List All Payments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/folios/{{folioId}}/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "folios",
+                "{{folioId}}",
+                "payments"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Refund Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/folios/{{folioId}}/payments/:paymentId/refund",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "folios",
+                "{{folioId}}",
+                "payments",
+                ":paymentId",
+                "refund"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 2500.0,\n  \"reason\": \"Early checkout refund\",\n  \"processedBy\": \"manager\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Property Payments",
+      "item": [
+        {
+          "name": "List Property Payments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/payments/?startDate=2026-04-01T00:00:00Z&endDate=2026-04-30T23:59:59Z&status=COMPLETED",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}",
+                "payments",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2026-04-01T00:00:00Z"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-04-30T23:59:59Z"
+                },
+                {
+                  "key": "status",
+                  "value": "COMPLETED"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "POS",
+      "item": [
+        {
+          "name": "Create POS Location",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/pos/locations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "pos",
+                "locations"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"propertyId\": \"{{propertyId}}\",\n  \"name\": \"Spice Garden Restaurant\",\n  \"code\": \"SGR\",\n  \"locationType\": \"RESTAURANT\",\n  \"defaultTaxRate\": 5.0,\n  \"serviceChargeRate\": 10.0,\n  \"openingTime\": \"07:00:00\",\n  \"closingTime\": \"23:00:00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List POS Locations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/pos/locations?propertyId={{propertyId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "pos",
+                "locations"
+              ],
+              "query": [
+                {
+                  "key": "propertyId",
+                  "value": "{{propertyId}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create POS Product",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/pos/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "pos",
+                "products"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"locationId\": \"<locationId>\",\n  \"name\": \"Butter Chicken\",\n  \"code\": \"BC-001\",\n  \"description\": \"Creamy tomato-based curry\",\n  \"category\": \"Main Course\",\n  \"price\": 450.0,\n  \"cost\": 150.0,\n  \"taxRate\": 5.0,\n  \"isAvailable\": true,\n  \"preparationTime\": 25\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List POS Products",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/pos/products?locationId=<locationId>",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "pos",
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "locationId",
+                  "value": "<locationId>"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create POS Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/pos/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "pos",
+                "orders"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"posLocationId\": \"<locationId>\",\n  \"items\": [\n    {\n      \"posProductId\": \"<productId>\",\n      \"quantity\": 2\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Charge POS Order to Folio",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/pos/orders/:orderId/charge?folioId={{folioId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "pos",
+                "orders",
+                ":orderId",
+                "charge"
+              ],
+              "query": [
+                {
+                  "key": "folioId",
+                  "value": "{{folioId}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Availability",
+      "item": [
+        {
+          "name": "Check Property Availability",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/availability/properties/{{propertyId}}?checkIn=2026-04-01&checkOut=2026-04-05",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "availability",
+                "properties",
+                "{{propertyId}}"
+              ],
+              "query": [
+                {
+                  "key": "checkIn",
+                  "value": "2026-04-01"
+                },
+                {
+                  "key": "checkOut",
+                  "value": "2026-04-05"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Check Room Availability",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/availability/rooms/{{roomId}}?checkIn=2026-04-01&checkOut=2026-04-05",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "availability",
+                "rooms",
+                "{{roomId}}"
+              ],
+              "query": [
+                {
+                  "key": "checkIn",
+                  "value": "2026-04-01"
+                },
+                {
+                  "key": "checkOut",
+                  "value": "2026-04-05"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Daily Availability",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/availability/properties/{{propertyId}}/daily?startDate=2026-04-01&endDate=2026-04-30",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "availability",
+                "properties",
+                "{{propertyId}}",
+                "daily"
+              ],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2026-04-01"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-04-30"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Property Occupancy",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/availability/properties/{{propertyId}}/occupancy?date=2026-04-15",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "availability",
+                "properties",
+                "{{propertyId}}",
+                "occupancy"
+              ],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "2026-04-15"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Property Occupancy Period",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/availability/properties/{{propertyId}}/occupancy/period?startDate=2026-04-01&endDate=2026-04-30",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "availability",
+                "properties",
+                "{{propertyId}}",
+                "occupancy",
+                "period"
+              ],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2026-04-01"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-04-30"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Check Unit Availability",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/availability/units/{{unitId}}?checkIn=2026-04-01&checkOut=2026-04-05",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "availability",
+                "units",
+                "{{unitId}}"
+              ],
+              "query": [
+                {
+                  "key": "checkIn",
+                  "value": "2026-04-01"
+                },
+                {
+                  "key": "checkOut",
+                  "value": "2026-04-05"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Unit Occupancy",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/availability/units/{{unitId}}/occupancy?date=2026-04-15",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "availability",
+                "units",
+                "{{unitId}}",
+                "occupancy"
+              ],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "2026-04-15"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "propertyId",
+      "value": ""
+    },
+    {
+      "key": "bookingId",
+      "value": ""
+    },
+    {
+      "key": "guestId",
+      "value": ""
+    },
+    {
+      "key": "roomId",
+      "value": ""
+    },
+    {
+      "key": "unitId",
+      "value": ""
+    },
+    {
+      "key": "folioId",
+      "value": ""
+    }
+  ]
+}
