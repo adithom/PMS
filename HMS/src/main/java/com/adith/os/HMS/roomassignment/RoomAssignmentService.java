@@ -4,7 +4,6 @@ import com.adith.os.HMS.billing.folio.ChargeCode;
 import com.adith.os.HMS.billing.folio.Folio;
 import com.adith.os.HMS.billing.folio.FolioCharge;
 import com.adith.os.HMS.billing.folio.FolioService;
-import com.adith.os.HMS.billing.folio.dto.ChargeCreationDto;
 import com.adith.os.HMS.booking.Booking;
 import com.adith.os.HMS.booking.BookingRepository;
 import com.adith.os.HMS.booking.BookingStatus;
@@ -23,6 +22,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -72,7 +72,8 @@ public class RoomAssignmentService {
                 booking.getCheckIn(),
                 booking.getCheckOut(),
                 RoomAssignmentStatus.SCHEDULED,
-                "Initial room assignment"
+                "Initial room assignment",
+                booking.getRoom().getBaseRate()
         );
 
         return roomAssignmentRepository.save(assignment);
@@ -82,8 +83,9 @@ public class RoomAssignmentService {
      * Shift a guest from their current room to a new room.
      * This is the core room-shift operation.
      *
-     * Also handles folio adjustments: voids future ROOM_RENT charges at
-     * the old rate and posts new charges at the new room's base rate.
+     * Also handles folio adjustments by voiding already-posted future ROOM_RENT
+     * charges; Night Audit will post replacement charges using the new
+     * assignment's effective nightly rate.
      */
     @Transactional
     public List<RoomAssignmentDto> shiftRoom(UUID propertyId, UUID bookingId, @Valid RoomShiftRequestDto dto) {
@@ -171,6 +173,7 @@ public class RoomAssignmentService {
         }
 
         Room oldRoom = currentAssignment.getRoom();
+        BigDecimal effectiveNewRate = dto.newRate() != null ? dto.newRate() : newRoom.getBaseRate();
 
         // Truncate the current assignment's end date to the shift date
         currentAssignment.setEndDate(shiftDate);
@@ -210,16 +213,18 @@ public class RoomAssignmentService {
                 shiftDate,
                 booking.getCheckOut(),
                 newStatus,
-                dto.notes() != null ? dto.notes() : "Room shift from " + oldRoom.getNumber() + " to " + newRoom.getNumber()
+                dto.notes() != null ? dto.notes() : "Room shift from " + oldRoom.getNumber() + " to " + newRoom.getNumber(),
+                effectiveNewRate
         );
         roomAssignmentRepository.save(newAssignment);
 
-        // 7. Handle folio rate adjustments if unit/rate changed
-        adjustFolioForRoomShift(booking, oldRoom, newRoom, shiftDate);
+        // 7. Handle folio rate adjustments for already-posted future charges
+        adjustFolioForRoomShift(booking, oldRoom, newRoom, shiftDate, effectiveNewRate);
 
         // 8. Update booking's current room reference (cache)
         booking.setRoom(newRoom);
         booking.setUnit(newRoom.getUnit());
+        recalculateBookingRoomTotal(booking);
         bookingRepository.save(booking);
 
         // 9. Return all assignments for the booking
@@ -230,10 +235,15 @@ public class RoomAssignmentService {
     /**
      * Adjust folio charges when shifting to a room with a different rate.
      *
-     * Voids future ROOM_RENT charges (from shiftDate onward), then posts new
-     * replacement charges at the new room's baseRate for the remaining nights.
+     * Voids future ROOM_RENT charges (from shiftDate onward).
+     * Replacement charges will be posted by Night Audit using the destination
+     * assignment's effective nightly rate.
      */
-    private void adjustFolioForRoomShift(Booking booking, Room oldRoom, Room newRoom, LocalDate shiftDate) {
+    private void adjustFolioForRoomShift(Booking booking,
+                                         Room oldRoom,
+                                         Room newRoom,
+                                         LocalDate shiftDate,
+                                         BigDecimal newRate) {
         Folio masterFolio = booking.getMasterFolio();
         if (masterFolio == null) {
             log.warn("No master folio for booking {} — skipping rate adjustment", booking.getId());
@@ -241,7 +251,6 @@ public class RoomAssignmentService {
         }
 
         BigDecimal oldRate = oldRoom.getBaseRate();
-        BigDecimal newRate = newRoom.getBaseRate();
 
         // Void future ROOM_RENT charges (charges dated on or after shiftDate)
         if (masterFolio.getCharges() != null) {
@@ -256,49 +265,31 @@ public class RoomAssignmentService {
                         booking.getProperty().getId(),
                         masterFolio.getId(),
                         charge.getId(),
-                        "Room shift: voided old rate (was " + oldRate + "/night)",
+                        "Room shift: replacing old rate (" + oldRate + "/night) with " + newRate + "/night",
                         "SYSTEM"
                 );
             }
         }
 
-        // Post new charges at the new room's rate for remaining nights
-        LocalDate chargeDate = shiftDate;
-        while (chargeDate.isBefore(booking.getCheckOut())) {
-            ChargeCreationDto chargeDto = new ChargeCreationDto(
-                    chargeDate,
-                    ChargeCode.ROOM_RENT,
-                    "Room " + newRoom.getNumber() + " - Nightly Rate (shifted)",
-                    newRate,
-                    BigDecimal.ONE,
-                    BigDecimal.ZERO,
-                    BigDecimal.ZERO,
-                    "ROOM_ASSIGNMENT",
-                    null,
-                    "Room shift from " + oldRoom.getNumber() + " to " + newRoom.getNumber(),
-                    "SYSTEM"
-            );
-
-            folioService.addCharge(
-                    booking.getProperty().getId(),
-                    masterFolio.getId(),
-                    chargeDto
-            );
-
-            chargeDate = chargeDate.plusDays(1);
-        }
-
-        // Update booking total price
-        BigDecimal oldNightsTotal = masterFolio.getCharges().stream()
-                .filter(c -> !c.isVoided())
-                .filter(c -> c.getChargeCode() == ChargeCode.ROOM_RENT)
-                .map(FolioCharge::getTotalAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        booking.setTotalPrice(oldNightsTotal);
-
         log.info("Room shift folio adjustment: booking {}, {} → {}, old rate {}, new rate {}",
                 booking.getId(), oldRoom.getNumber(), newRoom.getNumber(), oldRate, newRate);
+    }
+
+    private void recalculateBookingRoomTotal(Booking booking) {
+        List<RoomAssignment> assignments = roomAssignmentRepository.findByBookingId(booking.getId());
+
+        BigDecimal expectedRoomTotal = assignments.stream()
+                .filter(assignment -> assignment.getStatus() != RoomAssignmentStatus.CANCELLED)
+                .map(assignment -> {
+                    BigDecimal nightlyRate = assignment.getNightlyRate() != null
+                            ? assignment.getNightlyRate()
+                            : assignment.getRoom().getBaseRate();
+                    long nights = ChronoUnit.DAYS.between(assignment.getStartDate(), assignment.getEndDate());
+                    return nightlyRate.multiply(BigDecimal.valueOf(Math.max(nights, 0L)));
+                })
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        booking.setTotalPrice(expectedRoomTotal);
     }
 
     /**

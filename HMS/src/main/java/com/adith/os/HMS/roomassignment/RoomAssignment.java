@@ -5,6 +5,7 @@ import com.adith.os.HMS.room.Room;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -45,17 +46,21 @@ public class RoomAssignment {
     @Column(columnDefinition = "TEXT")
     private String notes;
 
+    @Column(name = "nightly_rate", precision = 10, scale = 2)
+    private BigDecimal nightlyRate;
+
     public RoomAssignment() {
     }
 
     public RoomAssignment(Booking booking, Room room, LocalDate startDate, LocalDate endDate,
-                          RoomAssignmentStatus status, String notes) {
+                          RoomAssignmentStatus status, String notes, BigDecimal nightlyRate) {
         this.booking = booking;
         this.room = room;
         this.startDate = startDate;
         this.endDate = endDate;
         this.status = status != null ? status : RoomAssignmentStatus.SCHEDULED;
         this.notes = notes;
+        this.nightlyRate = nightlyRate;
     }
 
     @PrePersist
@@ -131,6 +136,14 @@ public class RoomAssignment {
         this.notes = notes;
     }
 
+    public BigDecimal getNightlyRate() {
+        return nightlyRate;
+    }
+
+    public void setNightlyRate(BigDecimal nightlyRate) {
+        this.nightlyRate = nightlyRate;
+    }
+
     @Override
     public String toString() {
         return "RoomAssignment{" +
@@ -140,6 +153,7 @@ public class RoomAssignment {
                 ", startDate=" + startDate +
                 ", endDate=" + endDate +
                 ", status=" + status +
+                ", nightlyRate=" + nightlyRate +
                 '}';
     }
 }

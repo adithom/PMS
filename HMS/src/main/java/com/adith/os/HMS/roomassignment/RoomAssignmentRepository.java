@@ -151,17 +151,17 @@ public interface RoomAssignmentRepository extends JpaRepository<RoomAssignment, 
             @Param("statuses") List<RoomAssignmentStatus> statuses);
 
     /**
-     * Find all ACTIVE assignments where a specific date falls within the range.
-     * Used by the nightly batch to post room charges.
+     * Find assignments where a specific date falls within the occupied range.
+     * Used by the nightly batch to post room charges and backfill historical stays.
      * Logic: startDate <= date AND endDate > date (the date is an occupied night)
      */
     @Query("SELECT ra FROM RoomAssignment ra " +
             "WHERE ra.startDate <= :date " +
             "AND ra.endDate > :date " +
-            "AND ra.status = :status")
+            "AND ra.status IN :statuses")
     List<RoomAssignment> findAssignmentsForDate(
             @Param("date") LocalDate date,
-            @Param("status") RoomAssignmentStatus status);
+            @Param("statuses") List<RoomAssignmentStatus> statuses);
 
     /**
      * Find active/scheduled assignments for a booking (not cancelled/completed).
