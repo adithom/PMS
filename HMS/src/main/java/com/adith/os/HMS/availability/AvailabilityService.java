@@ -35,6 +35,10 @@ public class AvailabilityService {
         private static final List<RoomAssignmentStatus> ACTIVE_ASSIGNMENT_STATUSES =
                 List.of(RoomAssignmentStatus.SCHEDULED, RoomAssignmentStatus.ACTIVE);
 
+        // Booking statuses that consume unit capacity before a room is assigned
+        private static final List<BookingStatus> CAPACITY_HOLD_BOOKING_STATUSES =
+                List.of(BookingStatus.CONFIRMED, BookingStatus.CHECKED_IN);
+
         public AvailabilityService(
                         PropertyRepository propertyRepository,
                         RoomRepository roomRepository,
@@ -161,9 +165,14 @@ public class AvailabilityService {
                                         .distinct()
                                         .count();
 
-                        int availableRoomsNumber = totalActiveRooms - bookedRooms;
+                        long unassignedBookings = bookingRepository.countUnassignedOverlappingPropertyBookings(
+                                propertyId, finalCurrentDate, finalCurrentDate.plusDays(1), CAPACITY_HOLD_BOOKING_STATUSES);
+
+                        int totalBookedCapacity = bookedRooms + (int) unassignedBookings;
+                        int availableRoomsNumber = Math.max(0, totalActiveRooms - totalBookedCapacity);
+                        
                         double occupancyRate = totalActiveRooms > 0
-                                        ? (double) bookedRooms / totalActiveRooms * 100
+                                        ? (double) totalBookedCapacity / totalActiveRooms * 100
                                         : 0.0;
 
                         Set<UUID> bookedRoomIds = assignmentsForDay.stream()
@@ -183,7 +192,7 @@ public class AvailabilityService {
                                         currentDate.getDayOfWeek().toString(),
                                         totalActiveRooms,
                                         availableRoomsNumber,
-                                        bookedRooms,
+                                        totalBookedCapacity,
                                         maintenanceRooms.size(),
                                         Math.round(occupancyRate * 100.0) / 100.0,
                                         availableRoomDtos));
@@ -221,11 +230,7 @@ public class AvailabilityService {
                 List<RoomAssignment> assignmentsForDay = roomAssignmentRepository.findConflictingAssignments(
                                 propertyId, date, nextDay, ACTIVE_ASSIGNMENT_STATUSES);
 
-                // Still need booking info for the booked room DTOs
-                List<Booking> bookingsForDay = bookingRepository.findConflictingBookings(
-                                propertyId, date, nextDay, List.of(BookingStatus.CONFIRMED, BookingStatus.CHECKED_IN));
-
-                List<BookedRoomDto> bookedRoomDtos = bookingsForDay.stream()
+                List<BookedRoomDto> bookedRoomDtos = assignmentsForDay.stream()
                                 .map(this::mapToBookedRoomDto)
                                 .collect(Collectors.toList());
 
@@ -234,9 +239,14 @@ public class AvailabilityService {
                                 .distinct()
                                 .count();
 
-                int availableCount = activeRooms.size() - bookedCount;
+                long unassignedBookings = bookingRepository.countUnassignedOverlappingPropertyBookings(
+                                propertyId, date, nextDay, CAPACITY_HOLD_BOOKING_STATUSES);
+
+                int totalBookedCapacity = bookedCount + (int) unassignedBookings;
+
+                int availableCount = Math.max(0, activeRooms.size() - totalBookedCapacity);
                 double occupancyRate = activeRooms.size() > 0
-                                ? (double) bookedCount / activeRooms.size() * 100
+                                ? (double) totalBookedCapacity / activeRooms.size() * 100
                                 : 0.0;
 
                 return new OccupancyReportDto(
@@ -245,7 +255,7 @@ public class AvailabilityService {
                                 date,
                                 allRooms.size(),
                                 activeRooms.size(),
-                                bookedCount,
+                                totalBookedCapacity,
                                 availableCount,
                                 maintenanceRooms.size(),
                                 inactiveRooms.size(),
@@ -316,8 +326,17 @@ public class AvailabilityService {
                                 .map(ra -> ra.getRoom().getId())
                                 .collect(Collectors.toSet());
 
-                return allActiveRooms.stream()
+                List<Room> physicallyEmptyRooms = allActiveRooms.stream()
                                 .filter(room -> !occupiedRoomIds.contains(room.getId()))
+                                .collect(Collectors.toList());
+
+                long unassignedHolds = bookingRepository.countUnassignedOverlappingUnitBookings(
+                                unitId, checkIn, checkOut, CAPACITY_HOLD_BOOKING_STATUSES);
+
+                int roomsToActuallyReturn = Math.max(0, physicallyEmptyRooms.size() - (int) unassignedHolds);
+
+                return physicallyEmptyRooms.stream()
+                                .limit(roomsToActuallyReturn)
                                 .map(this::mapToAvailableRoomDto)
                                 .collect(Collectors.toList());
         }
@@ -340,10 +359,7 @@ public class AvailabilityService {
                 List<RoomAssignment> assignmentsForDay = roomAssignmentRepository.findConflictingAssignmentsForUnit(
                                 unitId, date, nextDay, ACTIVE_ASSIGNMENT_STATUSES);
 
-                List<Booking> bookingsForDay = bookingRepository.findConflictingBookingsForUnit(
-                                unitId, date, nextDay, List.of(BookingStatus.CONFIRMED, BookingStatus.CHECKED_IN));
-
-                List<BookedRoomDto> bookedRoomDtos = bookingsForDay.stream()
+                List<BookedRoomDto> bookedRoomDtos = assignmentsForDay.stream()
                                 .map(this::mapToBookedRoomDto)
                                 .collect(Collectors.toList());
 
@@ -352,9 +368,14 @@ public class AvailabilityService {
                                 .distinct()
                                 .count();
 
-                int availableCount = activeRooms.size() - bookedCount;
+                long unassignedBookings = bookingRepository.countUnassignedOverlappingUnitBookings(
+                                unitId, date, nextDay, CAPACITY_HOLD_BOOKING_STATUSES);
+
+                int totalBookedCapacity = bookedCount + (int) unassignedBookings;
+
+                int availableCount = Math.max(0, activeRooms.size() - totalBookedCapacity);
                 double occupancyRate = activeRooms.size() > 0
-                                ? (double) bookedCount / activeRooms.size() * 100
+                                ? (double) totalBookedCapacity / activeRooms.size() * 100
                                 : 0.0;
 
                 return new UnitOccupancyReportDto(
@@ -363,7 +384,7 @@ public class AvailabilityService {
                                 date,
                                 allRooms.size(),
                                 activeRooms.size(),
-                                bookedCount,
+                                totalBookedCapacity,
                                 availableCount,
                                 Math.round(occupancyRate * 100.0) / 100.0,
                                 bookedRoomDtos);
@@ -391,8 +412,9 @@ public class AvailabilityService {
                                 room.getStatus().toString());
         }
 
-        private BookedRoomDto mapToBookedRoomDto(Booking booking) {
-                Room room = booking.getRoom();
+        private BookedRoomDto mapToBookedRoomDto(RoomAssignment assignment) {
+                Room room = assignment.getRoom();
+                Booking booking = assignment.getBooking();
                 return new BookedRoomDto(
                                 room.getId(),
                                 room.getNumber(),

@@ -28,7 +28,10 @@ import com.adith.os.HMS.property.PropertyRepository;
 import com.adith.os.HMS.room.Room;
 import com.adith.os.HMS.room.RoomRepository;
 import com.adith.os.HMS.room.RoomStatus;
+import com.adith.os.HMS.roomassignment.RoomAssignment;
+import com.adith.os.HMS.roomassignment.RoomAssignmentRepository;
 import com.adith.os.HMS.roomassignment.RoomAssignmentService;
+import com.adith.os.HMS.roomassignment.RoomAssignmentStatus;
 import com.adith.os.HMS.unit.Unit;
 import com.adith.os.HMS.unit.UnitRepository;
 
@@ -47,11 +50,21 @@ public class BookingService {
 
     private final FolioService folioService;
     private final RoomAssignmentService roomAssignmentService;
+    private final RoomAssignmentRepository roomAssignmentRepository;
+
+    // Active statuses for room assignments
+    private static final List<RoomAssignmentStatus> ACTIVE_ASSIGNMENT_STATUSES =
+            List.of(RoomAssignmentStatus.SCHEDULED, RoomAssignmentStatus.ACTIVE);
+
+    // Booking statuses that consume unit capacity before a room is assigned
+    private static final List<BookingStatus> CAPACITY_HOLD_BOOKING_STATUSES =
+            List.of(BookingStatus.CONFIRMED, BookingStatus.CHECKED_IN);
 
     public BookingService(PropertyRepository propertyRepository, RoomRepository roomRepository,
                           GuestRepository guestRepository, UnitRepository unitRepository,
                           BookingRepository bookingRepository, BookingMapper bookingMapper,
-                          FolioService folioService, RoomAssignmentService roomAssignmentService) {
+                          FolioService folioService, RoomAssignmentService roomAssignmentService,
+                          RoomAssignmentRepository roomAssignmentRepository) {
         this.propertyRepository = propertyRepository;
         this.roomRepository = roomRepository;
         this.guestRepository = guestRepository;
@@ -60,6 +73,7 @@ public class BookingService {
         this.bookingMapper = bookingMapper;
         this.folioService = folioService;
         this.roomAssignmentService = roomAssignmentService;
+        this.roomAssignmentRepository = roomAssignmentRepository;
     }
 
     @Transactional
@@ -116,11 +130,13 @@ public class BookingService {
                         "Room does not belong to the specified property");
             }
 
-            // Check if room is available for the dates
-            if (bookingRepository.existsOverlappingBooking(
+            // Check if room is available for the dates (using RoomAssignment table)
+            boolean hasConflict = roomAssignmentRepository.existsOverlappingAssignment(
                     room.getId(),
                     bookingCreationDto.checkIn(),
-                    bookingCreationDto.checkOut())) {
+                    bookingCreationDto.checkOut(),
+                    List.of(RoomAssignmentStatus.CANCELLED, RoomAssignmentStatus.COMPLETED));
+            if (hasConflict) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
                         "Room is not available for the selected dates");
             }
@@ -151,15 +167,13 @@ public class BookingService {
                         "Cannot create booking: Unit has no rooms");
             }
 
-            long overlappingBookings = bookingRepository.countOverlappingUnitBookings(
-                    unit.getId(),
-                    bookingCreationDto.checkIn(),
-                    bookingCreationDto.checkOut());
+            long totalOccupied = getConsumedUnitCapacity(
+                    unit.getId(), bookingCreationDto.checkIn(), bookingCreationDto.checkOut());
 
-            if (overlappingBookings >= totalAvailableRooms) {
+            if (totalOccupied >= totalAvailableRooms) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
                         String.format("Unit capacity exceeded: %d/%d rooms already booked for these dates",
-                                overlappingBookings, totalAvailableRooms));
+                                totalOccupied, totalAvailableRooms));
             }
         }
 
@@ -463,8 +477,9 @@ public class BookingService {
             if (!dto.roomId().equals(booking.getRoom() != null ? booking.getRoom().getId() : null) ||
                     !dto.checkIn().equals(booking.getCheckIn()) ||
                     !dto.checkOut().equals(booking.getCheckOut())) {
-                if (bookingRepository.existsOverlappingBookingExcludingCurrent(
-                        room.getId(), dto.checkIn(), dto.checkOut(), bookingId)) {
+                if (roomAssignmentRepository.existsOverlappingAssignmentExcludingBooking(
+                        room.getId(), dto.checkIn(), dto.checkOut(), bookingId,
+                        List.of(RoomAssignmentStatus.CANCELLED, RoomAssignmentStatus.COMPLETED))) {
                     throw new ResponseStatusException(HttpStatus.CONFLICT,
                             "Room is not available for the selected dates");
                 }
@@ -478,16 +493,13 @@ public class BookingService {
                         "Cannot update booking: Unit has no rooms");
             }
 
-            long overlappingBookings = bookingRepository.countOverlappingUnitBookingsExcludingCurrent(
-                    unit.getId(),
-                    dto.checkIn(),
-                    dto.checkOut(),
-                    bookingId);
+            long totalOccupied = getConsumedUnitCapacityExcludingBooking(
+                    unit.getId(), dto.checkIn(), dto.checkOut(), bookingId);
 
-            if (overlappingBookings >= totalRoomsInUnit) {
+            if (totalOccupied >= totalRoomsInUnit) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
                         String.format("Unit capacity exceeded: %d/%d rooms already booked for these dates",
-                                overlappingBookings, totalRoomsInUnit));
+                                totalOccupied, totalRoomsInUnit));
             }
         }
 
@@ -505,6 +517,9 @@ public class BookingService {
             booking.setTotalPrice(dto.totalPrice() != null ? dto.totalPrice() : BigDecimal.ZERO);
             booking.setPaidAmount(dto.paidAmount()!= null ? dto.paidAmount() : BigDecimal.ZERO);
             booking.setSpecialRequests(dto.specialRequests());
+
+            // Sync dates before saving
+            roomAssignmentService.syncDatesForBookingUpdate(bookingId, dto.checkIn(), dto.checkOut());
 
             Booking savedBooking = bookingRepository.save(booking);
             return bookingMapper.toDto(savedBooking);
@@ -601,8 +616,9 @@ public class BookingService {
             if (datesChanged || roomChanged) {
                 if (effectiveRoom != null) {
                     // Room-specific booking - check room availability
-                    if (bookingRepository.existsOverlappingBookingExcludingCurrent(
-                            effectiveRoom.getId(), newCheckIn, newCheckOut, bookingId)) {
+                    if (roomAssignmentRepository.existsOverlappingAssignmentExcludingBooking(
+                            effectiveRoom.getId(), newCheckIn, newCheckOut, bookingId,
+                            List.of(RoomAssignmentStatus.CANCELLED, RoomAssignmentStatus.COMPLETED))) {
                         throw new ResponseStatusException(HttpStatus.CONFLICT,
                                 "Room is not available for the selected dates");
                     }
@@ -615,24 +631,13 @@ public class BookingService {
                                 "Cannot update booking: Unit has no rooms");
                     }
 
-                    long unitLevelBookings = bookingRepository.countOverlappingUnitBookingsExcludingCurrent(
-                            effectiveUnit.getId(),
-                            newCheckIn,
-                            newCheckOut,
-                            bookingId);
+                    long totalOccupied = getConsumedUnitCapacityExcludingBooking(
+                            effectiveUnit.getId(), newCheckIn, newCheckOut, bookingId);
 
-                    long roomSpecificBookings = bookingRepository.countOverlappingRoomBookingsInUnitExcludingCurrent(
-                            effectiveUnit.getId(),
-                            newCheckIn,
-                            newCheckOut,
-                            bookingId);
-
-                    long totalOverlappingBookings = unitLevelBookings + roomSpecificBookings;
-
-                    if (totalOverlappingBookings >= totalRoomsInUnit) {
+                    if (totalOccupied >= totalRoomsInUnit) {
                         throw new ResponseStatusException(HttpStatus.CONFLICT,
                                 String.format("Unit capacity exceeded: %d/%d rooms already booked for these dates",
-                                        totalOverlappingBookings, totalRoomsInUnit));
+                                        totalOccupied, totalRoomsInUnit));
                     }
                 }
             }
@@ -675,6 +680,9 @@ public class BookingService {
                 booking.setSpecialRequests(dto.specialRequests());
             }
 
+            if (datesChanged) {
+                roomAssignmentService.syncDatesForBookingUpdate(bookingId, newCheckIn, newCheckOut);
+            }
 
             Booking savedBooking = bookingRepository.save(booking);
             return bookingMapper.toDto(savedBooking);
@@ -713,6 +721,11 @@ public class BookingService {
 
         try {
             booking.setStatus(status);
+
+            if (status == BookingStatus.CANCELLED) {
+                roomAssignmentService.cancelAssignmentsForBooking(bookingId);
+            }
+
             Booking savedBooking = bookingRepository.save(booking);
             return bookingMapper.toDto(savedBooking);
         } catch (Exception e) {
@@ -801,12 +814,13 @@ public class BookingService {
                     "Cannot assign room that is queued for maintenance. Please select another room.");
         }
 
-        // Check if room is available (no overlapping bookings)
-        if (bookingRepository.existsOverlappingBookingExcludingCurrent(
+        // Check if room is available (using RoomAssignment table)
+        boolean hasConflict = roomAssignmentRepository.existsOverlappingAssignment(
                 room.getId(),
                 booking.getCheckIn(),
                 booking.getCheckOut(),
-                bookingId)) {
+                List.of(RoomAssignmentStatus.CANCELLED, RoomAssignmentStatus.COMPLETED));
+        if (hasConflict) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Room is not available for the booking dates");
         }
@@ -839,26 +853,28 @@ public class BookingService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "New check-out date must be strictly after the current check-out date");
         }
 
-        // 3. Check Availability
+        // 3. Check Availability (using RoomAssignment table)
         if (booking.getRoom() != null) {
-            // Room-level availability check
-            boolean conflict = bookingRepository.existsOverlappingBookingExcludingCurrent(
+            // Room-level availability check via assignments
+            boolean conflict = roomAssignmentRepository.existsOverlappingAssignment(
                     booking.getRoom().getId(),
                     oldCheckOut, // Start checking from the old checkout date
                     newCheckOut,
-                    bookingId
+                    List.of(RoomAssignmentStatus.CANCELLED, RoomAssignmentStatus.COMPLETED)
             );
             if (conflict) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
                         "Cannot extend: Room " + booking.getRoom().getNumber() + " is already booked for these dates. A room move is required.");
             }
         } else {
-            // Unit-level capacity check
-            long overlappingBookings = bookingRepository.countOverlappingUnitBookingsExcludingCurrent(
-                    booking.getUnit().getId(), oldCheckOut, newCheckOut, bookingId);
+            // Unit-level capacity check via assignments
+            List<RoomAssignment> unitAssignments = roomAssignmentRepository.findConflictingAssignmentsForUnit(
+                    booking.getUnit().getId(), oldCheckOut, newCheckOut, ACTIVE_ASSIGNMENT_STATUSES);
+            long occupiedRooms = unitAssignments.stream()
+                    .map(ra -> ra.getRoom().getId()).distinct().count();
             int totalRooms = booking.getUnit().getTotalRooms();
 
-            if (overlappingBookings >= totalRooms) {
+            if (occupiedRooms >= totalRooms) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Cannot extend: Unit category is fully booked for those dates.");
             }
         }
@@ -935,6 +951,10 @@ public class BookingService {
         }
 
         Booking savedBooking = bookingRepository.save(booking);
+
+        // Sync: extend the active/scheduled RoomAssignment's endDate to match
+        roomAssignmentService.extendActiveAssignment(bookingId, newCheckOut);
+
         return bookingMapper.toDto(savedBooking);
     }
 
@@ -1081,32 +1101,30 @@ public class BookingService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid early checkout policy");
         }
 
+        // Sync: truncate active assignments and mark completed
+        roomAssignmentService.truncateAndCompleteAssignments(bookingId, newCheckOutDate);
+
         bookingRepository.save(booking);
         return bookingMapper.toDto(booking);
     }
 
-    //Helper to find available room in unit
+    //Helper to find available room in unit (uses RoomAssignment table)
     private Room findAvailableRoomInUnit(UUID unitId, LocalDate checkIn, LocalDate checkOut) {
         // Get all active rooms in unit
         List<Room> activeRooms = roomRepository.findByUnitIdAndStatus(unitId, RoomStatus.ACTIVE);
 
-        // Get all conflicting bookings in the unit
-        List<Booking> conflictingBookings = bookingRepository.findConflictingBookingsForUnit(
-                unitId,
-                checkIn,
-                checkOut,
-                List.of(BookingStatus.CONFIRMED, BookingStatus.CHECKED_IN)
-        );
+        // Get all conflicting room assignments in the unit
+        List<RoomAssignment> conflictingAssignments = roomAssignmentRepository.findConflictingAssignmentsForUnit(
+                unitId, checkIn, checkOut, ACTIVE_ASSIGNMENT_STATUSES);
 
-        // Get IDs of booked rooms
-        Set<UUID> bookedRoomIds = conflictingBookings.stream()
-                .filter(b -> b.getRoom() != null)
-                .map(b -> b.getRoom().getId())
+        // Get IDs of occupied rooms
+        Set<UUID> occupiedRoomIds = conflictingAssignments.stream()
+                .map(ra -> ra.getRoom().getId())
                 .collect(Collectors.toSet());
 
         // Find first available room
         return activeRooms.stream()
-                .filter(room -> !bookedRoomIds.contains(room.getId()))
+                .filter(room -> !occupiedRoomIds.contains(room.getId()))
                 .findFirst()
                 .orElse(null);
     }
@@ -1132,5 +1150,35 @@ public class BookingService {
                     return false;
                 })
                 .count();
+    }
+
+    /**
+     * Calculates the consumed capacity for a unit, combining two sources:
+     * 1. Occupied rooms mapped in RoomAssignment
+     * 2. Overlapping unassigned bookings holding capacity for this unit
+     */
+    private long getConsumedUnitCapacity(UUID unitId, LocalDate checkIn, LocalDate checkOut) {
+        long occupiedRooms = roomAssignmentRepository.countDistinctOccupiedRoomsForUnit(
+                unitId, checkIn, checkOut, ACTIVE_ASSIGNMENT_STATUSES);
+        
+        long unassignedBookings = bookingRepository.countUnassignedOverlappingUnitBookings(
+                unitId, checkIn, checkOut, CAPACITY_HOLD_BOOKING_STATUSES);
+
+        return occupiedRooms + unassignedBookings;
+    }
+
+    /**
+     * Calculates the consumed capacity for a unit, combining two sources (excluding a given booking):
+     * 1. Occupied rooms mapped in RoomAssignment (excluding given bookingId)
+     * 2. Overlapping unassigned bookings holding capacity for this unit (excluding given bookingId)
+     */
+    private long getConsumedUnitCapacityExcludingBooking(UUID unitId, LocalDate checkIn, LocalDate checkOut, UUID excludedBookingId) {
+        long occupiedRooms = roomAssignmentRepository.countDistinctOccupiedRoomsForUnitExcludingBooking(
+                unitId, checkIn, checkOut, excludedBookingId, ACTIVE_ASSIGNMENT_STATUSES);
+
+        long unassignedBookings = bookingRepository.countUnassignedOverlappingUnitBookingsExcludingCurrent(
+                unitId, checkIn, checkOut, excludedBookingId, CAPACITY_HOLD_BOOKING_STATUSES);
+
+        return occupiedRooms + unassignedBookings;
     }
 }

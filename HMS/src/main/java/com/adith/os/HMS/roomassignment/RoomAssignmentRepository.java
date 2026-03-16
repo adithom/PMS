@@ -46,6 +46,38 @@ public interface RoomAssignmentRepository extends JpaRepository<RoomAssignment, 
             @Param("excludedStatuses") List<RoomAssignmentStatus> excludedStatuses);
 
     /**
+     * Check if a room has any overlapping assignment, excluding a specific booking.
+     */
+    @Query("SELECT CASE WHEN COUNT(ra) > 0 THEN true ELSE false END FROM RoomAssignment ra " +
+            "WHERE ra.room.id = :roomId " +
+            "AND ra.booking.id != :bookingId " +
+            "AND ra.startDate < :endDate " +
+            "AND ra.endDate > :startDate " +
+            "AND ra.status NOT IN :excludedStatuses")
+    boolean existsOverlappingAssignmentExcludingBooking(
+            @Param("roomId") UUID roomId,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate,
+            @Param("bookingId") UUID bookingId,
+            @Param("excludedStatuses") List<RoomAssignmentStatus> excludedStatuses);
+
+    /**
+     * Find conflicting assignments for a unit, excluding a specific booking.
+     */
+    @Query("SELECT ra FROM RoomAssignment ra " +
+            "WHERE ra.room.unit.id = :unitId " +
+            "AND ra.booking.id != :bookingId " +
+            "AND ra.startDate < :endDate " +
+            "AND ra.endDate > :startDate " +
+            "AND ra.status IN :statuses")
+    List<RoomAssignment> findConflictingAssignmentsForUnitExcludingBooking(
+            @Param("unitId") UUID unitId,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate,
+            @Param("bookingId") UUID bookingId,
+            @Param("statuses") List<RoomAssignmentStatus> statuses);
+
+    /**
      * Find all conflicting assignments for a property within a date range.
      * Used by AvailabilityService for calendar views and search.
      */
@@ -86,6 +118,36 @@ public interface RoomAssignmentRepository extends JpaRepository<RoomAssignment, 
             @Param("unitId") UUID unitId,
             @Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate,
+            @Param("statuses") List<RoomAssignmentStatus> statuses);
+
+    /**
+     * Count distinct rooms with conflicting assignments for a unit.
+     */
+    @Query("SELECT COUNT(DISTINCT ra.room.id) FROM RoomAssignment ra " +
+            "WHERE ra.room.unit.id = :unitId " +
+            "AND ra.startDate < :endDate " +
+            "AND ra.endDate > :startDate " +
+            "AND ra.status IN :statuses")
+    long countDistinctOccupiedRoomsForUnit(
+            @Param("unitId") UUID unitId,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate,
+            @Param("statuses") List<RoomAssignmentStatus> statuses);
+
+    /**
+     * Count distinct rooms with conflicting assignments for a unit, excluding a specific booking.
+     */
+    @Query("SELECT COUNT(DISTINCT ra.room.id) FROM RoomAssignment ra " +
+            "WHERE ra.room.unit.id = :unitId " +
+            "AND ra.booking.id != :bookingId " +
+            "AND ra.startDate < :endDate " +
+            "AND ra.endDate > :startDate " +
+            "AND ra.status IN :statuses")
+    long countDistinctOccupiedRoomsForUnitExcludingBooking(
+            @Param("unitId") UUID unitId,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate,
+            @Param("bookingId") UUID bookingId,
             @Param("statuses") List<RoomAssignmentStatus> statuses);
 
     /**

@@ -104,6 +104,55 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
     long countRoomsInUnit(@Param("unitId") UUID unitId);
 
     /**
+     * Count unassigned bookings for a unit that overlap with a date range.
+     * These bookings consume unit capacity even though they have no room mapped yet.
+     */
+    @Query("SELECT COUNT(b) FROM Booking b " +
+            "WHERE b.unit.id = :unitId " +
+            "AND b.room IS NULL " +
+            "AND b.checkIn < :checkOut " +
+            "AND b.checkOut > :checkIn " +
+            "AND b.status IN :statuses")
+    long countUnassignedOverlappingUnitBookings(
+            @Param("unitId") UUID unitId,
+            @Param("checkIn") LocalDate checkIn,
+            @Param("checkOut") LocalDate checkOut,
+            @Param("statuses") List<BookingStatus> statuses);
+
+    /**
+     * Count unassigned bookings for a unit that overlap, excluding a specific booking.
+     */
+    @Query("SELECT COUNT(b) FROM Booking b " +
+            "WHERE b.unit.id = :unitId " +
+            "AND b.room IS NULL " +
+            "AND b.id != :bookingId " +
+            "AND b.checkIn < :checkOut " +
+            "AND b.checkOut > :checkIn " +
+            "AND b.status IN :statuses")
+    long countUnassignedOverlappingUnitBookingsExcludingCurrent(
+            @Param("unitId") UUID unitId,
+            @Param("checkIn") LocalDate checkIn,
+            @Param("checkOut") LocalDate checkOut,
+            @Param("bookingId") UUID bookingId,
+            @Param("statuses") List<BookingStatus> statuses);
+
+    /**
+     * Count unassigned bookings for a property that overlap with a date range.
+     * These bookings consume capacity even though they have no room mapped yet.
+     */
+    @Query("SELECT COUNT(b) FROM Booking b " +
+            "WHERE b.room.property.id = :propertyId " +
+            "AND b.room IS NULL " +
+            "AND b.checkIn < :checkOut " +
+            "AND b.checkOut > :checkIn " +
+            "AND b.status IN :statuses")
+    long countUnassignedOverlappingPropertyBookings(
+            @Param("propertyId") UUID propertyId,
+            @Param("checkIn") LocalDate checkIn,
+            @Param("checkOut") LocalDate checkOut,
+            @Param("statuses") List<BookingStatus> statuses);
+
+    /**
      * Find all bookings for a property that conflict with the given date range
      * A booking conflicts if it overlaps with [checkIn, checkOut)
      * Booking overlap logic: booking.checkIn < checkOut AND booking.checkOut > checkIn

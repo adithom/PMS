@@ -1,5 +1,10 @@
 package com.adith.os.HMS.roomassignment;
 
+import com.adith.os.HMS.billing.folio.ChargeCode;
+import com.adith.os.HMS.billing.folio.Folio;
+import com.adith.os.HMS.billing.folio.FolioCharge;
+import com.adith.os.HMS.billing.folio.FolioService;
+import com.adith.os.HMS.billing.folio.dto.ChargeCreationDto;
 import com.adith.os.HMS.booking.Booking;
 import com.adith.os.HMS.booking.BookingRepository;
 import com.adith.os.HMS.booking.BookingStatus;
@@ -10,30 +15,39 @@ import com.adith.os.HMS.roomassignment.dto.RoomAssignmentDto;
 import com.adith.os.HMS.roomassignment.dto.RoomShiftRequestDto;
 import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class RoomAssignmentService {
+
+    private static final Logger log = LoggerFactory.getLogger(RoomAssignmentService.class);
 
     private final RoomAssignmentRepository roomAssignmentRepository;
     private final BookingRepository bookingRepository;
     private final RoomRepository roomRepository;
     private final RoomAssignmentMapper roomAssignmentMapper;
+    private final FolioService folioService;
 
     public RoomAssignmentService(RoomAssignmentRepository roomAssignmentRepository,
                                   BookingRepository bookingRepository,
                                   RoomRepository roomRepository,
-                                  RoomAssignmentMapper roomAssignmentMapper) {
+                                  RoomAssignmentMapper roomAssignmentMapper,
+                                  FolioService folioService) {
         this.roomAssignmentRepository = roomAssignmentRepository;
         this.bookingRepository = bookingRepository;
         this.roomRepository = roomRepository;
         this.roomAssignmentMapper = roomAssignmentMapper;
+        this.folioService = folioService;
     }
 
     /**
@@ -67,6 +81,9 @@ public class RoomAssignmentService {
     /**
      * Shift a guest from their current room to a new room.
      * This is the core room-shift operation.
+     *
+     * Also handles folio adjustments: voids future ROOM_RENT charges at
+     * the old rate and posts new charges at the new room's base rate.
      */
     @Transactional
     public List<RoomAssignmentDto> shiftRoom(UUID propertyId, UUID bookingId, @Valid RoomShiftRequestDto dto) {
@@ -153,13 +170,23 @@ public class RoomAssignmentService {
                     "No active room assignment found for the shift date");
         }
 
+        Room oldRoom = currentAssignment.getRoom();
+
         // Truncate the current assignment's end date to the shift date
         currentAssignment.setEndDate(shiftDate);
-        currentAssignment.setStatus(RoomAssignmentStatus.COMPLETED);
-        currentAssignment.setNotes(
-                (currentAssignment.getNotes() != null ? currentAssignment.getNotes() + " | " : "") +
-                "Ended early due to room shift"
-        );
+        if (shiftDate.isAfter(today)) {
+            currentAssignment.setNotes(
+                    (currentAssignment.getNotes() != null ? currentAssignment.getNotes() + " | " : "") +
+                    "Ending early due to upcoming room shift"
+            );
+            // Leave status as is (ACTIVE or SCHEDULED) so NightAudit still charges and it blocks availability
+        } else {
+            currentAssignment.setStatus(RoomAssignmentStatus.COMPLETED);
+            currentAssignment.setNotes(
+                    (currentAssignment.getNotes() != null ? currentAssignment.getNotes() + " | " : "") +
+                    "Ended early due to room shift"
+            );
+        }
         roomAssignmentRepository.save(currentAssignment);
 
         // Cancel any future scheduled assignments after the shift date
@@ -176,24 +203,102 @@ public class RoomAssignmentService {
                 });
 
         // 6. Create new assignment for the new room
+        RoomAssignmentStatus newStatus = shiftDate.isAfter(today) ? RoomAssignmentStatus.SCHEDULED : RoomAssignmentStatus.ACTIVE;
         RoomAssignment newAssignment = new RoomAssignment(
                 booking,
                 newRoom,
                 shiftDate,
                 booking.getCheckOut(),
-                RoomAssignmentStatus.ACTIVE,
-                dto.notes() != null ? dto.notes() : "Room shift from " + currentAssignment.getRoom().getNumber() + " to " + newRoom.getNumber()
+                newStatus,
+                dto.notes() != null ? dto.notes() : "Room shift from " + oldRoom.getNumber() + " to " + newRoom.getNumber()
         );
         roomAssignmentRepository.save(newAssignment);
 
-        // 7. Update booking's current room reference to the new room
+        // 7. Handle folio rate adjustments if unit/rate changed
+        adjustFolioForRoomShift(booking, oldRoom, newRoom, shiftDate);
+
+        // 8. Update booking's current room reference (cache)
         booking.setRoom(newRoom);
         booking.setUnit(newRoom.getUnit());
         bookingRepository.save(booking);
 
-        // 8. Return all assignments for the booking
+        // 9. Return all assignments for the booking
         List<RoomAssignment> allAssignments = roomAssignmentRepository.findByBookingId(bookingId);
         return roomAssignmentMapper.toDtoList(allAssignments);
+    }
+
+    /**
+     * Adjust folio charges when shifting to a room with a different rate.
+     *
+     * Voids future ROOM_RENT charges (from shiftDate onward), then posts new
+     * replacement charges at the new room's baseRate for the remaining nights.
+     */
+    private void adjustFolioForRoomShift(Booking booking, Room oldRoom, Room newRoom, LocalDate shiftDate) {
+        Folio masterFolio = booking.getMasterFolio();
+        if (masterFolio == null) {
+            log.warn("No master folio for booking {} — skipping rate adjustment", booking.getId());
+            return;
+        }
+
+        BigDecimal oldRate = oldRoom.getBaseRate();
+        BigDecimal newRate = newRoom.getBaseRate();
+
+        // Void future ROOM_RENT charges (charges dated on or after shiftDate)
+        if (masterFolio.getCharges() != null) {
+            List<FolioCharge> futureRoomCharges = masterFolio.getCharges().stream()
+                    .filter(c -> !c.isVoided())
+                    .filter(c -> c.getChargeCode() == ChargeCode.ROOM_RENT)
+                    .filter(c -> !c.getChargeDate().isBefore(shiftDate))
+                    .collect(Collectors.toList());
+
+            for (FolioCharge charge : futureRoomCharges) {
+                folioService.voidCharge(
+                        booking.getProperty().getId(),
+                        masterFolio.getId(),
+                        charge.getId(),
+                        "Room shift: voided old rate (was " + oldRate + "/night)",
+                        "SYSTEM"
+                );
+            }
+        }
+
+        // Post new charges at the new room's rate for remaining nights
+        LocalDate chargeDate = shiftDate;
+        while (chargeDate.isBefore(booking.getCheckOut())) {
+            ChargeCreationDto chargeDto = new ChargeCreationDto(
+                    chargeDate,
+                    ChargeCode.ROOM_RENT,
+                    "Room " + newRoom.getNumber() + " - Nightly Rate (shifted)",
+                    newRate,
+                    BigDecimal.ONE,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    "ROOM_ASSIGNMENT",
+                    null,
+                    "Room shift from " + oldRoom.getNumber() + " to " + newRoom.getNumber(),
+                    "SYSTEM"
+            );
+
+            folioService.addCharge(
+                    booking.getProperty().getId(),
+                    masterFolio.getId(),
+                    chargeDto
+            );
+
+            chargeDate = chargeDate.plusDays(1);
+        }
+
+        // Update booking total price
+        BigDecimal oldNightsTotal = masterFolio.getCharges().stream()
+                .filter(c -> !c.isVoided())
+                .filter(c -> c.getChargeCode() == ChargeCode.ROOM_RENT)
+                .map(FolioCharge::getTotalAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        booking.setTotalPrice(oldNightsTotal);
+
+        log.info("Room shift folio adjustment: booking {}, {} → {}, old rate {}, new rate {}",
+                booking.getId(), oldRoom.getNumber(), newRoom.getNumber(), oldRate, newRate);
     }
 
     /**
@@ -210,7 +315,6 @@ public class RoomAssignmentService {
         LocalDate today = LocalDate.now();
 
         for (RoomAssignment assignment : scheduledAssignments) {
-            // Activate assignments that should be active now
             if (!assignment.getStartDate().isAfter(today)) {
                 assignment.setStatus(RoomAssignmentStatus.ACTIVE);
                 roomAssignmentRepository.save(assignment);
@@ -235,6 +339,67 @@ public class RoomAssignmentService {
     }
 
     /**
+     * Extend the active/scheduled assignment's endDate when a booking is extended.
+     * Finds the last (by startDate) active/scheduled assignment and extends it.
+     */
+    @Transactional
+    public void extendActiveAssignment(UUID bookingId, LocalDate newEndDate) {
+        List<RoomAssignment> activeAssignments = roomAssignmentRepository.findActiveAssignmentsByBookingId(
+                bookingId,
+                List.of(RoomAssignmentStatus.ACTIVE, RoomAssignmentStatus.SCHEDULED)
+        );
+
+        if (activeAssignments.isEmpty()) {
+            log.warn("No active/scheduled assignment found for booking {} to extend", bookingId);
+            return;
+        }
+
+        // Extend the LAST assignment (the one with the latest startDate)
+        RoomAssignment lastAssignment = activeAssignments.get(activeAssignments.size() - 1);
+        lastAssignment.setEndDate(newEndDate);
+        roomAssignmentRepository.save(lastAssignment);
+
+        log.info("Extended assignment {} endDate to {} for booking {}",
+                lastAssignment.getId(), newEndDate, bookingId);
+    }
+
+    /**
+     * Truncate active assignments and mark them completed for early checkout.
+     * Sets the endDate of the active assignment to the early checkout date,
+     * and cancels any future scheduled assignments.
+     */
+    @Transactional
+    public void truncateAndCompleteAssignments(UUID bookingId, LocalDate earlyCheckoutDate) {
+        List<RoomAssignment> activeAssignments = roomAssignmentRepository.findActiveAssignmentsByBookingId(
+                bookingId,
+                List.of(RoomAssignmentStatus.ACTIVE, RoomAssignmentStatus.SCHEDULED)
+        );
+
+        for (RoomAssignment assignment : activeAssignments) {
+            if (assignment.getStartDate().isBefore(earlyCheckoutDate)) {
+                // Assignment started before the checkout — truncate its endDate
+                assignment.setEndDate(earlyCheckoutDate);
+                assignment.setStatus(RoomAssignmentStatus.COMPLETED);
+                assignment.setNotes(
+                        (assignment.getNotes() != null ? assignment.getNotes() + " | " : "") +
+                        "Truncated due to early checkout"
+                );
+            } else {
+                // Future assignment that never started — cancel it
+                assignment.setStatus(RoomAssignmentStatus.CANCELLED);
+                assignment.setNotes(
+                        (assignment.getNotes() != null ? assignment.getNotes() + " | " : "") +
+                        "Cancelled due to early checkout"
+                );
+            }
+            roomAssignmentRepository.save(assignment);
+        }
+
+        log.info("Truncated/completed {} assignments for booking {} (early checkout: {})",
+                activeAssignments.size(), bookingId, earlyCheckoutDate);
+    }
+
+    /**
      * Get all room assignments for a booking.
      */
     public List<RoomAssignmentDto> getAssignmentsForBooking(UUID propertyId, UUID bookingId) {
@@ -248,5 +413,50 @@ public class RoomAssignmentService {
 
         List<RoomAssignment> assignments = roomAssignmentRepository.findByBookingId(bookingId);
         return roomAssignmentMapper.toDtoList(assignments);
+    }
+
+    /**
+     * Sync assignment dates when booking dates are updated manually (via updateBooking).
+     * Blocks the update if there are multiple assignments due to room shifts.
+     */
+    @Transactional
+    public void syncDatesForBookingUpdate(UUID bookingId, LocalDate newCheckIn, LocalDate newCheckOut) {
+        List<RoomAssignment> allAssignments = roomAssignmentRepository.findByBookingId(bookingId);
+
+        if (allAssignments.isEmpty()) {
+            return;
+        }
+
+        if (allAssignments.size() > 1) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Cannot arbitrarily update dates because this booking has multiple room assignments (e.g., from a room shift). Please use the extend or early checkout features instead.");
+        }
+
+        RoomAssignment assignment = allAssignments.get(0);
+        assignment.setStartDate(newCheckIn);
+        assignment.setEndDate(newCheckOut);
+        roomAssignmentRepository.save(assignment);
+        
+        log.info("Synced assignment {} dates to {} - {} for booking {}",
+                assignment.getId(), newCheckIn, newCheckOut, bookingId);
+    }
+
+    /**
+     * Cancel all non-completed assignments when a booking is cancelled.
+     */
+    @Transactional
+    public void cancelAssignmentsForBooking(UUID bookingId) {
+        List<RoomAssignment> assignments = roomAssignmentRepository.findByBookingId(bookingId);
+        for (RoomAssignment assignment : assignments) {
+            if (assignment.getStatus() != RoomAssignmentStatus.COMPLETED) {
+                assignment.setStatus(RoomAssignmentStatus.CANCELLED);
+                assignment.setNotes(
+                        (assignment.getNotes() != null ? assignment.getNotes() + " | " : "") +
+                                "Cancelled alongside booking"
+                );
+                roomAssignmentRepository.save(assignment);
+            }
+        }
+        log.info("Cancelled assignments for booking {} due to booking cancellation", bookingId);
     }
 }
