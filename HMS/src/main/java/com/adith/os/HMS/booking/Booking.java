@@ -5,6 +5,7 @@ import com.adith.os.HMS.billing.folio.FolioType;
 import com.adith.os.HMS.guest.Guest;
 import com.adith.os.HMS.property.Property;
 import com.adith.os.HMS.room.Room;
+import com.adith.os.HMS.roomassignment.RoomAssignment;
 import com.adith.os.HMS.unit.Unit;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
@@ -90,6 +91,9 @@ public class Booking {
 
     @Column(name = "group_reference", length = 100)
     private String groupReference;
+
+    @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL)
+    private List<RoomAssignment> roomAssignments = new ArrayList<>();
 
     public Folio getMasterFolio() {
         if (folios == null || folios.isEmpty()) return null;
@@ -272,6 +276,9 @@ public class Booking {
 
     public String getGroupReference() { return groupReference; }
     public void setGroupReference(String groupReference) { this.groupReference = groupReference; }
+
+    public List<RoomAssignment> getRoomAssignments() { return roomAssignments; }
+    public void setRoomAssignments(List<RoomAssignment> roomAssignments) { this.roomAssignments = roomAssignments; }
 
     // Calculated fields - these compute values dynamically
 

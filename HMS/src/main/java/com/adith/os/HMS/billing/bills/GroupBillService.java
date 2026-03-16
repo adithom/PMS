@@ -1,5 +1,7 @@
-package com.adith.os.HMS.booking;
+package com.adith.os.HMS.billing.bills;
 
+import com.adith.os.HMS.booking.Booking;
+import com.adith.os.HMS.booking.BookingRepository;
 import com.adith.os.HMS.billing.folio.Folio;
 import com.adith.os.HMS.billing.folio.FolioCharge;
 import com.adith.os.HMS.billing.folio.FolioRepository;

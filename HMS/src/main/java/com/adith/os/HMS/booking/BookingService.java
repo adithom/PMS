@@ -28,6 +28,7 @@ import com.adith.os.HMS.property.PropertyRepository;
 import com.adith.os.HMS.room.Room;
 import com.adith.os.HMS.room.RoomRepository;
 import com.adith.os.HMS.room.RoomStatus;
+import com.adith.os.HMS.roomassignment.RoomAssignmentService;
 import com.adith.os.HMS.unit.Unit;
 import com.adith.os.HMS.unit.UnitRepository;
 
@@ -45,10 +46,12 @@ public class BookingService {
     private final BookingMapper bookingMapper;
 
     private final FolioService folioService;
+    private final RoomAssignmentService roomAssignmentService;
 
     public BookingService(PropertyRepository propertyRepository, RoomRepository roomRepository,
                           GuestRepository guestRepository, UnitRepository unitRepository,
-                          BookingRepository bookingRepository, BookingMapper bookingMapper, FolioService folioService) {
+                          BookingRepository bookingRepository, BookingMapper bookingMapper,
+                          FolioService folioService, RoomAssignmentService roomAssignmentService) {
         this.propertyRepository = propertyRepository;
         this.roomRepository = roomRepository;
         this.guestRepository = guestRepository;
@@ -56,6 +59,7 @@ public class BookingService {
         this.bookingRepository = bookingRepository;
         this.bookingMapper = bookingMapper;
         this.folioService = folioService;
+        this.roomAssignmentService = roomAssignmentService;
     }
 
     @Transactional
@@ -176,6 +180,9 @@ public class BookingService {
                             null     // routedToFolioId - not set for master folio
                     );
             folioService.createFolio(propertyId, folioDto);
+
+            // Create initial room assignment if room is assigned
+            roomAssignmentService.createInitialAssignment(savedBooking);
 
             return bookingMapper.toDto(savedBooking);
         } catch (Exception e) {
@@ -808,6 +815,9 @@ public class BookingService {
         booking.setRoom(room);
         Booking savedBooking = bookingRepository.save(booking);
 
+        // Create room assignment if none exists
+        roomAssignmentService.createInitialAssignment(savedBooking);
+
         return bookingMapper.toDto(savedBooking);
     }
 
@@ -969,6 +979,10 @@ public class BookingService {
         booking.setStatus(BookingStatus.CHECKED_IN);
 
         Booking savedBooking = bookingRepository.save(booking);
+
+        // Activate room assignments
+        roomAssignmentService.activateAssignments(savedBooking.getId());
+
         return bookingMapper.toDto(savedBooking);
     }
 
@@ -989,6 +1003,9 @@ public class BookingService {
 
         booking.setStatus(BookingStatus.CHECKED_OUT);
         Booking savedBooking = bookingRepository.save(booking);
+
+        // Complete all room assignments
+        roomAssignmentService.completeAssignments(savedBooking.getId());
 
         return bookingMapper.toDto(savedBooking);
     }
