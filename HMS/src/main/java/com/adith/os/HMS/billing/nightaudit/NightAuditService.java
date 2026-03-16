@@ -50,18 +50,8 @@ public class NightAuditService {
      * Runs at the configured cron schedule (default: 2:00 AM daily).
      */
     @Scheduled(cron = "${hms.night-audit.cron:0 0 2 * * *}")
-    @Transactional
     public void runFullNightAudit() {
-        LocalDate auditDate = LocalDate.now().minusDays(1);
-        LocalDate businessDate = auditDate.plusDays(1);
-
-        log.info("--- STARTING FULL NIGHT AUDIT FOR {} ---", auditDate);
-
-        NightAuditResultDto result = runNightAuditInternal(auditDate, false);
-        performInventoryRollover(businessDate);
-
-        log.info("--- COMPLETED FULL NIGHT AUDIT FOR {}. Posted: {}, Skipped: {}, Errors: {} ---",
-                auditDate, result.chargesPosted(), result.chargesSkipped(), result.errors());
+        runFullNightAuditForDate(LocalDate.now().minusDays(1));
     }
 
     /**
@@ -74,6 +64,21 @@ public class NightAuditService {
         NightAuditResultDto result = runNightAuditInternal(chargeDate, true);
         log.info("Night Audit (Manual): Completed for {}. Posted: {}, Skipped: {}, Errors: {}",
                 chargeDate, result.chargesPosted(), result.chargesSkipped(), result.errors());
+        return result;
+    }
+
+    @Transactional
+    public NightAuditResultDto runFullNightAuditForDate(LocalDate auditDate) {
+        LocalDate businessDate = auditDate.plusDays(1);
+
+        log.info("--- STARTING FULL NIGHT AUDIT FOR {} ---", auditDate);
+
+        NightAuditResultDto result = runNightAuditInternal(auditDate, false);
+        performInventoryRollover(businessDate);
+
+        log.info("--- COMPLETED FULL NIGHT AUDIT FOR {}. Posted: {}, Skipped: {}, Errors: {} ---",
+                auditDate, result.chargesPosted(), result.chargesSkipped(), result.errors());
+
         return result;
     }
 
