@@ -141,7 +141,7 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
      * These bookings consume capacity even though they have no room mapped yet.
      */
     @Query("SELECT COUNT(b) FROM Booking b " +
-            "WHERE b.room.property.id = :propertyId " +
+            "WHERE b.property.id = :propertyId " +
             "AND b.room IS NULL " +
             "AND b.checkIn < :checkOut " +
             "AND b.checkOut > :checkIn " +
@@ -158,9 +158,9 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
      * Booking overlap logic: booking.checkIn < checkOut AND booking.checkOut > checkIn
      */
     @Query("SELECT b FROM Booking b " +
-            "WHERE b.room.property.id = :propertyId " +
-            "AND b.checkIn <= :checkOut " +
-            "AND b.checkOut >= :checkIn " +
+            "WHERE b.property.id = :propertyId " +
+            "AND b.checkIn < :checkOut " +
+            "AND b.checkOut > :checkIn " +
             "AND b.status IN :statuses")
     List<Booking> findConflictingBookings(
             @Param("propertyId") UUID propertyId,
@@ -174,8 +174,8 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
      */
     @Query("SELECT b FROM Booking b " +
             "WHERE b.room.id = :roomId " +
-            "AND b.checkIn <= :checkOut " +
-            "AND b.checkOut >= :checkIn " +
+            "AND b.checkIn < :checkOut " +
+            "AND b.checkOut > :checkIn " +
             "AND b.status IN :statuses")
     List<Booking> findConflictingBookingsForRoom(
             @Param("roomId") UUID roomId,
@@ -188,9 +188,9 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
      * Find all bookings for a specific unit that conflict with the given date range
      */
     @Query("SELECT b FROM Booking b " +
-            "WHERE b.room.unit.id = :unitId " +
-            "AND b.checkIn <= :checkOut " +
-            "AND b.checkOut >= :checkIn " +
+            "WHERE b.unit.id = :unitId " +
+            "AND b.checkIn < :checkOut " +
+            "AND b.checkOut > :checkIn " +
             "AND b.status IN :statuses")
     List<Booking> findConflictingBookingsForUnit(
             @Param("unitId") UUID unitId,
@@ -202,7 +202,7 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
     /**
      * Find bookings by property
      */
-    @Query("SELECT b FROM Booking b WHERE b.room.property.id = :propertyId")
+    @Query("SELECT b FROM Booking b WHERE b.property.id = :propertyId")
     List<Booking> findByPropertyId(@Param("propertyId") UUID propertyId);
 
     /**
