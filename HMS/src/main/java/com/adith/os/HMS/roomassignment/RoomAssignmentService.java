@@ -221,9 +221,12 @@ public class RoomAssignmentService {
         // 7. Handle folio rate adjustments for already-posted future charges
         adjustFolioForRoomShift(booking, oldRoom, newRoom, shiftDate, effectiveNewRate);
 
-        // 8. Update booking's current room reference (cache)
-        booking.setRoom(newRoom);
-        booking.setUnit(newRoom.getUnit());
+        // 8. Update booking's current room reference (cache) only for same-day moves.
+        // Future-dated moves are activated by the nightly inventory rollover.
+        if (!shiftDate.isAfter(today)) {
+            booking.setRoom(newRoom);
+            booking.setUnit(newRoom.getUnit());
+        }
         recalculateBookingRoomTotal(booking);
         bookingRepository.save(booking);
 

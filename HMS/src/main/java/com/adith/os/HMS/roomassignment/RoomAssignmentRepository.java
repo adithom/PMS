@@ -173,4 +173,26 @@ public interface RoomAssignmentRepository extends JpaRepository<RoomAssignment, 
     List<RoomAssignment> findActiveAssignmentsByBookingId(
             @Param("bookingId") UUID bookingId,
             @Param("statuses") List<RoomAssignmentStatus> statuses);
+
+    /**
+     * Find assignments that should have ended by the start of the business date.
+     */
+    @Query("SELECT ra FROM RoomAssignment ra " +
+            "WHERE ra.endDate <= :businessDate " +
+            "AND ra.status IN :statuses " +
+            "ORDER BY ra.endDate ASC, ra.startDate ASC")
+    List<RoomAssignment> findAssignmentsEndingOnOrBefore(
+            @Param("businessDate") LocalDate businessDate,
+            @Param("statuses") List<RoomAssignmentStatus> statuses);
+
+    /**
+     * Find scheduled assignments that should become active by the business date.
+     */
+    @Query("SELECT ra FROM RoomAssignment ra " +
+            "WHERE ra.startDate <= :businessDate " +
+            "AND ra.status = :status " +
+            "ORDER BY ra.startDate ASC")
+    List<RoomAssignment> findAssignmentsStartingOnOrBefore(
+            @Param("businessDate") LocalDate businessDate,
+            @Param("status") RoomAssignmentStatus status);
 }

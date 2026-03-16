@@ -5,6 +5,8 @@ import com.adith.os.HMS.billing.folio.Folio;
 import com.adith.os.HMS.billing.folio.FolioService;
 import com.adith.os.HMS.billing.folio.dto.ChargeCreationDto;
 import com.adith.os.HMS.booking.Booking;
+import com.adith.os.HMS.booking.BookingRepository;
+import com.adith.os.HMS.booking.BookingStatus;
 import com.adith.os.HMS.room.Room;
 import com.adith.os.HMS.roomassignment.RoomAssignment;
 import com.adith.os.HMS.roomassignment.RoomAssignmentRepository;
@@ -25,37 +27,41 @@ public class NightAuditService {
     private static final Logger log = LoggerFactory.getLogger(NightAuditService.class);
     private static final List<RoomAssignmentStatus> CHARGEABLE_ASSIGNMENT_STATUSES =
             List.of(RoomAssignmentStatus.SCHEDULED, RoomAssignmentStatus.ACTIVE, RoomAssignmentStatus.COMPLETED);
+    private static final List<RoomAssignmentStatus> COMPLETABLE_ASSIGNMENT_STATUSES =
+            List.of(RoomAssignmentStatus.SCHEDULED, RoomAssignmentStatus.ACTIVE);
 
     private final RoomAssignmentRepository roomAssignmentRepository;
     private final FolioService folioService;
+    private final BookingRepository bookingRepository;
 
     public NightAuditService(RoomAssignmentRepository roomAssignmentRepository,
-                             FolioService folioService) {
+                             FolioService folioService,
+                             BookingRepository bookingRepository) {
         this.roomAssignmentRepository = roomAssignmentRepository;
         this.folioService = folioService;
+        this.bookingRepository = bookingRepository;
     }
 
     /**
-     * Nightly batch job that posts ROOM_RENT charges for all assignments that
-     * covered the previous night.
+     * Full nightly batch job:
+     * 1. Post charges for the previous night
+     * 2. Roll room-assignment inventory into the new business date
      *
      * Runs at the configured cron schedule (default: 2:00 AM daily).
-     * Posts charges for the PREVIOUS night (yesterday's date).
-     *
-     * Logic:
-     * 1. Find all non-cancelled assignments where yesterday falls within [startDate, endDate)
-     * 2. For each assignment, check if a ROOM_RENT charge already exists for that date
-     * 3. If not, post a charge using the assignment's effective nightly rate
      */
     @Scheduled(cron = "${hms.night-audit.cron:0 0 2 * * *}")
     @Transactional
-    public void postNightlyRoomCharges() {
-        LocalDate chargeDate = LocalDate.now().minusDays(1); // Charge for last night
-        log.info("Night Audit: Starting nightly room charge posting for date {}", chargeDate);
+    public void runFullNightAudit() {
+        LocalDate auditDate = LocalDate.now().minusDays(1);
+        LocalDate businessDate = auditDate.plusDays(1);
 
-        NightAuditResultDto result = runNightAuditInternal(chargeDate, false);
-        log.info("Night Audit: Completed for {}. Posted: {}, Skipped: {}, Errors: {}",
-                chargeDate, result.chargesPosted(), result.chargesSkipped(), result.errors());
+        log.info("--- STARTING FULL NIGHT AUDIT FOR {} ---", auditDate);
+
+        NightAuditResultDto result = runNightAuditInternal(auditDate, false);
+        performInventoryRollover(businessDate);
+
+        log.info("--- COMPLETED FULL NIGHT AUDIT FOR {}. Posted: {}, Skipped: {}, Errors: {} ---",
+                auditDate, result.chargesPosted(), result.chargesSkipped(), result.errors());
     }
 
     /**
@@ -149,6 +155,43 @@ public class NightAuditService {
         }
 
         return new NightAuditResultDto(chargeDate, assignments.size(), chargesPosted, chargesSkipped, errors);
+    }
+
+    private void performInventoryRollover(LocalDate businessDate) {
+        log.info("Night Audit: Running inventory rollover for transition to {}", businessDate);
+
+        List<RoomAssignment> endingAssignments = roomAssignmentRepository.findAssignmentsEndingOnOrBefore(
+                businessDate, COMPLETABLE_ASSIGNMENT_STATUSES);
+        int completedCount = 0;
+
+        for (RoomAssignment assignment : endingAssignments) {
+            assignment.setStatus(RoomAssignmentStatus.COMPLETED);
+            roomAssignmentRepository.save(assignment);
+            completedCount++;
+        }
+
+        List<RoomAssignment> startingAssignments = roomAssignmentRepository.findAssignmentsStartingOnOrBefore(
+                businessDate, RoomAssignmentStatus.SCHEDULED);
+        int activatedCount = 0;
+
+        for (RoomAssignment assignment : startingAssignments) {
+            Booking booking = assignment.getBooking();
+
+            if (booking.getStatus() != BookingStatus.CHECKED_IN) {
+                continue;
+            }
+
+            assignment.setStatus(RoomAssignmentStatus.ACTIVE);
+            roomAssignmentRepository.save(assignment);
+
+            booking.setRoom(assignment.getRoom());
+            booking.setUnit(assignment.getRoom().getUnit());
+            bookingRepository.save(booking);
+            activatedCount++;
+        }
+
+        log.info("Night Audit: Inventory rollover completed for {}. Completed: {}, Activated: {}",
+                businessDate, completedCount, activatedCount);
     }
 
     /**
