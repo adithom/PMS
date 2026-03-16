@@ -270,6 +270,10 @@ public class FolioService {
 
             folioChargeRepository.save(charge);
 
+            if (folio.getCharges() != null) {
+                folio.getCharges().add(charge);
+            }
+
             // Recalculate folio totals
             folio.recalculateTotals();
             Folio savedFolio = folioRepository.save(folio);

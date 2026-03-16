@@ -250,6 +250,9 @@ public class GroupBookingService {
                     "Child booking has no master folio");
         }
 
+        // 1. Capture the previous target before making any changes
+        Folio previousTargetFolio = childFolio.getRoutedToFolio();
+
         if (targetFolioId != null) {
             Folio targetFolio = folioRepository.findById(targetFolioId)
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
@@ -258,10 +261,31 @@ public class GroupBookingService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "Target folio does not belong to this property");
             }
+
+            // FIX: Actually apply the routing (this was missing in the original code)
             childFolio.setRoutedToFolio(targetFolio);
+
+            childFolio.recalculateTotals();
+            targetFolio.recalculateTotals();
+            folioRepository.save(targetFolio);
+
+            // Edge case: If the room was routed to Folio A and is now being routed to Folio B,
+            // we must recalculate Folio A so it drops the charges.
+            if (previousTargetFolio != null && !previousTargetFolio.getId().equals(targetFolioId)) {
+                previousTargetFolio.recalculateTotals();
+                folioRepository.save(previousTargetFolio);
+            }
+
         } else {
             // Un-route — child pays independently
             childFolio.setRoutedToFolio(null);
+            childFolio.recalculateTotals();
+
+            // FIX: Recalculate and save the previous target folio so it drops the child's balance
+            if (previousTargetFolio != null) {
+                previousTargetFolio.recalculateTotals();
+                folioRepository.save(previousTargetFolio);
+            }
         }
 
         folioRepository.save(childFolio);
@@ -598,6 +622,7 @@ public class GroupBookingService {
                     );
                 })
                 .collect(Collectors.toList());
+
 
         return new GroupBookingSummaryDto(
                 parent.getId(),

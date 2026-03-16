@@ -2,6 +2,7 @@ package com.adith.os.HMS.room;
 
 import com.adith.os.HMS.booking.Booking;
 import com.adith.os.HMS.property.Property;
+import com.adith.os.HMS.roomassignment.RoomAssignment;
 import com.adith.os.HMS.unit.Unit;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
@@ -55,6 +56,9 @@ public class Room {
 
     @OneToMany(mappedBy = "room")
     private List<Booking> bookings;
+
+    @OneToMany(mappedBy = "room")
+    private List<RoomAssignment> roomAssignments;
 
     public Room() {
     }
@@ -159,6 +163,14 @@ public class Room {
      */
     public boolean isActive() {
         return this.status == RoomStatus.ACTIVE;
+    }
+
+    public List<RoomAssignment> getRoomAssignments() {
+        return roomAssignments;
+    }
+
+    public void setRoomAssignments(List<RoomAssignment> roomAssignments) {
+        this.roomAssignments = roomAssignments;
     }
 
 }

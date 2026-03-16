@@ -2,6 +2,7 @@ package com.adith.os.HMS.billing.bills;
 
 import com.adith.os.HMS.billing.folio.ChargeCategory;
 import com.adith.os.HMS.booking.Booking;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 
 import java.math.BigDecimal;
@@ -42,6 +43,7 @@ public class GroupBill {
      */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_booking_id", nullable = false)
+    @JsonIgnore
     private Booking parentBooking;
 
     @Enumerated(EnumType.STRING)

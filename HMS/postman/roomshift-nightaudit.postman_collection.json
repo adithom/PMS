@@ -1,0 +1,304 @@
+{
+  "info": {
+    "_postman_id": "d7aa0403-f7a8-45b8-a541-7a0dd80e68b4",
+    "name": "HMS Room Shift + Night Audit",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Postman collection for testing room-shift billing, future-dated room moves, manual full night audit, and folio verification."
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "username", "value": "admin" },
+    { "key": "password", "value": "admin123" },
+    { "key": "token", "value": "" },
+    { "key": "propertyId", "value": "" },
+    { "key": "sameDayBookingId", "value": "" },
+    { "key": "futureShiftBookingId", "value": "" },
+    { "key": "sameRoomBookingId", "value": "" },
+    { "key": "sameDayNewRoomId", "value": "" },
+    { "key": "futureShiftNewRoomId", "value": "" },
+    { "key": "currentRoomId", "value": "" },
+    { "key": "sameDayShiftDate", "value": "2026-03-16" },
+    { "key": "futureShiftDate", "value": "2026-03-17" },
+    { "key": "pastShiftDate", "value": "2026-03-15" },
+    { "key": "auditDate", "value": "2026-03-16" },
+    { "key": "newRate", "value": "6500.00" },
+    { "key": "folioId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.token) {",
+                  "  pm.collectionVariables.set('token', json.token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            },
+            "description": "Authenticate first. Saves the JWT into the collection variable `token`."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Room Shift - Happy Path",
+      "item": [
+        {
+          "name": "Shift Room - Same Day (default to new room base rate)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newRoomId\": \"{{sameDayNewRoomId}}\",\n  \"shiftDate\": \"{{sameDayShiftDate}}\",\n  \"notes\": \"Same-day upgrade using destination room base rate\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{sameDayBookingId}}/shift-room",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "properties", "{{propertyId}}", "bookings", "{{sameDayBookingId}}", "shift-room"]
+            },
+            "description": "Expected: 200. Creates a new assignment using the destination room base rate because `newRate` is omitted."
+          },
+          "response": []
+        },
+        {
+          "name": "Shift Room - Same Day (override rate)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newRoomId\": \"{{sameDayNewRoomId}}\",\n  \"shiftDate\": \"{{sameDayShiftDate}}\",\n  \"newRate\": {{newRate}},\n  \"notes\": \"Same-day upgrade using front-desk override rate\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{sameDayBookingId}}/shift-room",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "properties", "{{propertyId}}", "bookings", "{{sameDayBookingId}}", "shift-room"]
+            },
+            "description": "Expected: 200. Stores the custom nightly rate on the new room assignment so night audit uses it later."
+          },
+          "response": []
+        },
+        {
+          "name": "Shift Room - Future Dated (override rate)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newRoomId\": \"{{futureShiftNewRoomId}}\",\n  \"shiftDate\": \"{{futureShiftDate}}\",\n  \"newRate\": {{newRate}},\n  \"notes\": \"Future-dated room move to be activated by night audit rollover\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{futureShiftBookingId}}/shift-room",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "properties", "{{propertyId}}", "bookings", "{{futureShiftBookingId}}", "shift-room"]
+            },
+            "description": "Expected: 200. New assignment remains scheduled until the full night audit rolls inventory forward."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Room Shift - Edge Cases",
+      "item": [
+        {
+          "name": "Shift Room - Reject Same Room",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newRoomId\": \"{{currentRoomId}}\",\n  \"shiftDate\": \"{{sameDayShiftDate}}\",\n  \"notes\": \"Should fail because destination room equals current room\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{sameRoomBookingId}}/shift-room",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "properties", "{{propertyId}}", "bookings", "{{sameRoomBookingId}}", "shift-room"]
+            },
+            "description": "Expected: 400."
+          },
+          "response": []
+        },
+        {
+          "name": "Shift Room - Reject Past Date",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newRoomId\": \"{{futureShiftNewRoomId}}\",\n  \"shiftDate\": \"{{pastShiftDate}}\",\n  \"newRate\": {{newRate}},\n  \"notes\": \"Should fail because shift date is in the past\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{futureShiftBookingId}}/shift-room",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "properties", "{{propertyId}}", "bookings", "{{futureShiftBookingId}}", "shift-room"]
+            },
+            "description": "Expected: 400."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Night Audit",
+      "item": [
+        {
+          "name": "Run Full Night Audit (manual)",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/night-audit/run?date={{auditDate}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "night-audit", "run"],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "{{auditDate}}"
+                }
+              ]
+            },
+            "description": "Runs the full audit for the given audit date: posts charges for that night and rolls inventory into the next business date."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Verification",
+      "item": [
+        {
+          "name": "Get Booking",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{futureShiftBookingId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "properties", "{{propertyId}}", "bookings", "{{futureShiftBookingId}}"]
+            },
+            "description": "Use this before and after running the full audit to see when `booking.room` flips for future-dated shifts."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Room Assignments",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{futureShiftBookingId}}/room-assignments",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "properties", "{{propertyId}}", "bookings", "{{futureShiftBookingId}}", "room-assignments"]
+            },
+            "description": "Verify old assignment completion, new assignment activation, and assignment date ranges."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Master Folio by Booking",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.id) {",
+                  "  pm.collectionVariables.set('folioId', json.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/folios/booking/{{futureShiftBookingId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "properties", "{{propertyId}}", "folios", "booking", "{{futureShiftBookingId}}"]
+            },
+            "description": "Fetches the master folio and stores its id into `folioId` for the next request."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Folio Details",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/folios/{{folioId}}/details",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "properties", "{{propertyId}}", "folios", "{{folioId}}", "details"]
+            },
+            "description": "Inspect posted `ROOM_RENT` charges before and after room shifts / audit runs. Check charge dates, voids, and totals."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

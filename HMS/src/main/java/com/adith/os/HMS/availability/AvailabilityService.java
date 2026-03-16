@@ -8,14 +8,15 @@ import com.adith.os.HMS.property.PropertyRepository;
 import com.adith.os.HMS.room.Room;
 import com.adith.os.HMS.room.RoomRepository;
 import com.adith.os.HMS.room.RoomStatus;
+import com.adith.os.HMS.roomassignment.RoomAssignment;
+import com.adith.os.HMS.roomassignment.RoomAssignmentRepository;
+import com.adith.os.HMS.roomassignment.RoomAssignmentStatus;
 import com.adith.os.HMS.unit.Unit;
 import com.adith.os.HMS.unit.UnitRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
@@ -28,20 +29,32 @@ public class AvailabilityService {
         private final RoomRepository roomRepository;
         private final BookingRepository bookingRepository;
         private final UnitRepository unitRepository;
+        private final RoomAssignmentRepository roomAssignmentRepository;
+
+        // Active statuses for room assignments (occupying a room)
+        private static final List<RoomAssignmentStatus> ACTIVE_ASSIGNMENT_STATUSES =
+                List.of(RoomAssignmentStatus.SCHEDULED, RoomAssignmentStatus.ACTIVE);
+
+        // Booking statuses that consume unit capacity before a room is assigned
+        private static final List<BookingStatus> CAPACITY_HOLD_BOOKING_STATUSES =
+                List.of(BookingStatus.CONFIRMED, BookingStatus.CHECKED_IN);
 
         public AvailabilityService(
                         PropertyRepository propertyRepository,
                         RoomRepository roomRepository,
                         BookingRepository bookingRepository,
-                        UnitRepository unitRepository) {
+                        UnitRepository unitRepository,
+                        RoomAssignmentRepository roomAssignmentRepository) {
                 this.propertyRepository = propertyRepository;
                 this.roomRepository = roomRepository;
                 this.bookingRepository = bookingRepository;
                 this.unitRepository = unitRepository;
+                this.roomAssignmentRepository = roomAssignmentRepository;
         }
 
         /**
-         * 1. Search available rooms for a property within date range
+         * 1. Search available rooms for a property within date range.
+         * Uses RoomAssignment table for overlap checks.
          */
         public AvailabilitySearchDto searchAvailableRooms(UUID propertyId, LocalDate checkIn, LocalDate checkOut) {
                 validateDateRange(checkIn, checkOut);
@@ -50,21 +63,17 @@ public class AvailabilityService {
                                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                                                 "Property not found"));
 
-                // Get all active rooms for the property
                 List<Room> allActiveRooms = roomRepository.findByPropertyIdAndStatus(propertyId, RoomStatus.ACTIVE);
 
-                // Get all conflicting bookings
-                List<Booking> conflictingBookings = bookingRepository.findConflictingBookings(
-                                propertyId, checkIn, checkOut,
-                                List.of(BookingStatus.CONFIRMED, BookingStatus.CHECKED_IN));
+                List<RoomAssignment> conflictingAssignments = roomAssignmentRepository.findConflictingAssignments(
+                                propertyId, checkIn, checkOut, ACTIVE_ASSIGNMENT_STATUSES);
 
-                Set<UUID> bookedRoomIds = conflictingBookings.stream()
-                                .map(booking -> booking.getRoom().getId())
+                Set<UUID> occupiedRoomIds = conflictingAssignments.stream()
+                                .map(ra -> ra.getRoom().getId())
                                 .collect(Collectors.toSet());
 
-                // Separate available and booked rooms
                 List<Room> availableRooms = allActiveRooms.stream()
-                                .filter(room -> !bookedRoomIds.contains(room.getId()))
+                                .filter(room -> !occupiedRoomIds.contains(room.getId()))
                                 .collect(Collectors.toList());
 
                 List<AvailableRoomDto> availableRoomDtos = availableRooms.stream()
@@ -78,13 +87,14 @@ public class AvailabilityService {
                                 checkOut,
                                 allActiveRooms.size(),
                                 availableRooms.size(),
-                                bookedRoomIds.size(),
+                                occupiedRoomIds.size(),
                                 !availableRooms.isEmpty(),
                                 availableRoomDtos);
         }
 
         /**
-         * 2. Check if a specific room is available
+         * 2. Check if a specific room is available.
+         * Uses RoomAssignment table for overlap checks.
          */
         public RoomAvailabilityCheckDto checkRoomAvailability(UUID roomId, LocalDate checkIn, LocalDate checkOut) {
                 validateDateRange(checkIn, checkOut);
@@ -95,17 +105,14 @@ public class AvailabilityService {
                 String reason = "AVAILABLE";
                 boolean isAvailable = true;
 
-                // Check if room is active
                 if (room.getStatus() != RoomStatus.ACTIVE) {
                         isAvailable = false;
                         reason = room.getStatus().toString();
                 } else {
-                        // Check for conflicting bookings
-                        List<Booking> conflictingBookings = bookingRepository.findConflictingBookingsForRoom(
-                                        roomId, checkIn, checkOut,
-                                        List.of(BookingStatus.CONFIRMED, BookingStatus.CHECKED_IN));
+                        List<RoomAssignment> conflictingAssignments = roomAssignmentRepository.findConflictingAssignmentsForRoom(
+                                        roomId, checkIn, checkOut, ACTIVE_ASSIGNMENT_STATUSES);
 
-                        if (!conflictingBookings.isEmpty()) {
+                        if (!conflictingAssignments.isEmpty()) {
                                 isAvailable = false;
                                 reason = "BOOKED";
                         }
@@ -121,7 +128,8 @@ public class AvailabilityService {
         }
 
         /**
-         * 3. Get daily availability for calendar view
+         * 3. Get daily availability for calendar view.
+         * Uses RoomAssignment table for overlap checks.
          */
         public List<DailyAvailabilityDto> getDailyAvailability(UUID propertyId, LocalDate startDate,
                         LocalDate endDate) {
@@ -137,41 +145,38 @@ public class AvailabilityService {
                 List<Room> maintenanceRooms = roomRepository.findByPropertyIdAndStatus(propertyId,
                                 RoomStatus.IN_MAINTENANCE);
 
-                // OPTIMIZATION: Fetch all bookings for the entire period in one query
-                // We extend the range to cover the full days: [startDate, endDate + 1]
-                // The query checks: b.checkIn <= rangeEnd AND b.checkOut >= rangeStart
-                List<Booking> allBookings = bookingRepository.findConflictingBookings(
-                                propertyId, startDate, endDate.plusDays(1),
-                                List.of(BookingStatus.CONFIRMED, BookingStatus.CHECKED_IN));
+                List<RoomAssignment> allAssignments = roomAssignmentRepository.findConflictingAssignments(
+                                propertyId, startDate, endDate.plusDays(1), ACTIVE_ASSIGNMENT_STATUSES);
 
                 List<DailyAvailabilityDto> dailyAvailability = new ArrayList<>();
 
                 LocalDate currentDate = startDate;
                 while (!currentDate.isAfter(endDate)) {
 
-                        LocalDate finalCurrentDate = currentDate; // effectively final for lambda
+                        LocalDate finalCurrentDate = currentDate;
 
-                        // Filter bookings in memory for the specific day
-                        // Logic: Occupied if checkIn <= currentDate AND checkOut > currentDate
-                        // This allows back-to-back bookings (one guest leaves, another arrives on same
-                        // day)
-                        List<Booking> bookingsForDay = allBookings.stream()
-                                        .filter(b -> b.getCheckIn().compareTo(finalCurrentDate) <= 0
-                                                        && b.getCheckOut().compareTo(finalCurrentDate) > 0)
+                        List<RoomAssignment> assignmentsForDay = allAssignments.stream()
+                                        .filter(ra -> ra.getStartDate().compareTo(finalCurrentDate) <= 0
+                                                        && ra.getEndDate().compareTo(finalCurrentDate) > 0)
                                         .collect(Collectors.toList());
 
-                        int bookedRooms = (int) bookingsForDay.stream()
-                                        .map(booking -> booking.getRoom().getId())
+                        int bookedRooms = (int) assignmentsForDay.stream()
+                                        .map(ra -> ra.getRoom().getId())
                                         .distinct()
                                         .count();
 
-                        int availableRoomsNumber = totalActiveRooms - bookedRooms;
+                        long unassignedBookings = bookingRepository.countUnassignedOverlappingPropertyBookings(
+                                propertyId, finalCurrentDate, finalCurrentDate.plusDays(1), CAPACITY_HOLD_BOOKING_STATUSES);
+
+                        int totalBookedCapacity = bookedRooms + (int) unassignedBookings;
+                        int availableRoomsNumber = Math.max(0, totalActiveRooms - totalBookedCapacity);
+                        
                         double occupancyRate = totalActiveRooms > 0
-                                        ? (double) bookedRooms / totalActiveRooms * 100
+                                        ? (double) totalBookedCapacity / totalActiveRooms * 100
                                         : 0.0;
 
-                        Set<UUID> bookedRoomIds = bookingsForDay.stream()
-                                        .map(booking -> booking.getRoom().getId())
+                        Set<UUID> bookedRoomIds = assignmentsForDay.stream()
+                                        .map(ra -> ra.getRoom().getId())
                                         .collect(Collectors.toSet());
 
                         List<Room> availableRooms = allActiveRooms.stream()
@@ -187,7 +192,7 @@ public class AvailabilityService {
                                         currentDate.getDayOfWeek().toString(),
                                         totalActiveRooms,
                                         availableRoomsNumber,
-                                        bookedRooms,
+                                        totalBookedCapacity,
                                         maintenanceRooms.size(),
                                         Math.round(occupancyRate * 100.0) / 100.0,
                                         availableRoomDtos));
@@ -199,7 +204,8 @@ public class AvailabilityService {
         }
 
         /**
-         * 4. Get occupancy report for a specific date
+         * 4. Get occupancy report for a specific date.
+         * Uses RoomAssignment table for room count accuracy.
          */
         public OccupancyReportDto getOccupancyReport(UUID propertyId, LocalDate date) {
                 Property property = propertyRepository.findById(propertyId)
@@ -220,21 +226,27 @@ public class AvailabilityService {
                                 .collect(Collectors.toList());
 
                 LocalDate nextDay = date.plusDays(1);
-                List<Booking> bookingsForDay = bookingRepository.findConflictingBookings(
-                                propertyId, date, nextDay, List.of(BookingStatus.CONFIRMED, BookingStatus.CHECKED_IN));
 
-                List<BookedRoomDto> bookedRoomDtos = bookingsForDay.stream()
+                List<RoomAssignment> assignmentsForDay = roomAssignmentRepository.findConflictingAssignments(
+                                propertyId, date, nextDay, ACTIVE_ASSIGNMENT_STATUSES);
+
+                List<BookedRoomDto> bookedRoomDtos = assignmentsForDay.stream()
                                 .map(this::mapToBookedRoomDto)
                                 .collect(Collectors.toList());
 
-                int bookedCount = (int) bookingsForDay.stream()
-                                .map(booking -> booking.getRoom().getId())
+                int bookedCount = (int) assignmentsForDay.stream()
+                                .map(ra -> ra.getRoom().getId())
                                 .distinct()
                                 .count();
 
-                int availableCount = activeRooms.size() - bookedCount;
+                long unassignedBookings = bookingRepository.countUnassignedOverlappingPropertyBookings(
+                                propertyId, date, nextDay, CAPACITY_HOLD_BOOKING_STATUSES);
+
+                int totalBookedCapacity = bookedCount + (int) unassignedBookings;
+
+                int availableCount = Math.max(0, activeRooms.size() - totalBookedCapacity);
                 double occupancyRate = activeRooms.size() > 0
-                                ? (double) bookedCount / activeRooms.size() * 100
+                                ? (double) totalBookedCapacity / activeRooms.size() * 100
                                 : 0.0;
 
                 return new OccupancyReportDto(
@@ -243,7 +255,7 @@ public class AvailabilityService {
                                 date,
                                 allRooms.size(),
                                 activeRooms.size(),
-                                bookedCount,
+                                totalBookedCapacity,
                                 availableCount,
                                 maintenanceRooms.size(),
                                 inactiveRooms.size(),
@@ -296,7 +308,8 @@ public class AvailabilityService {
         }
 
         /**
-         * 6. Search available rooms by unit
+         * 6. Search available rooms by unit.
+         * Uses RoomAssignment table.
          */
         public List<AvailableRoomDto> searchAvailableRoomsByUnit(UUID unitId, LocalDate checkIn, LocalDate checkOut) {
                 validateDateRange(checkIn, checkOut);
@@ -306,21 +319,31 @@ public class AvailabilityService {
 
                 List<Room> allActiveRooms = roomRepository.findByUnitIdAndStatus(unitId, RoomStatus.ACTIVE);
 
-                List<Booking> conflictingBookings = bookingRepository.findConflictingBookingsForUnit(
-                                unitId, checkIn, checkOut, List.of(BookingStatus.CONFIRMED, BookingStatus.CHECKED_IN));
+                List<RoomAssignment> conflictingAssignments = roomAssignmentRepository.findConflictingAssignmentsForUnit(
+                                unitId, checkIn, checkOut, ACTIVE_ASSIGNMENT_STATUSES);
 
-                Set<UUID> bookedRoomIds = conflictingBookings.stream()
-                                .map(booking -> booking.getRoom().getId())
+                Set<UUID> occupiedRoomIds = conflictingAssignments.stream()
+                                .map(ra -> ra.getRoom().getId())
                                 .collect(Collectors.toSet());
 
-                return allActiveRooms.stream()
-                                .filter(room -> !bookedRoomIds.contains(room.getId()))
+                List<Room> physicallyEmptyRooms = allActiveRooms.stream()
+                                .filter(room -> !occupiedRoomIds.contains(room.getId()))
+                                .collect(Collectors.toList());
+
+                long unassignedHolds = bookingRepository.countUnassignedOverlappingUnitBookings(
+                                unitId, checkIn, checkOut, CAPACITY_HOLD_BOOKING_STATUSES);
+
+                int roomsToActuallyReturn = Math.max(0, physicallyEmptyRooms.size() - (int) unassignedHolds);
+
+                return physicallyEmptyRooms.stream()
+                                .limit(roomsToActuallyReturn)
                                 .map(this::mapToAvailableRoomDto)
                                 .collect(Collectors.toList());
         }
 
         /**
-         * 7. Get unit occupancy report
+         * 7. Get unit occupancy report.
+         * Uses RoomAssignment table.
          */
         public UnitOccupancyReportDto getUnitOccupancyReport(UUID unitId, LocalDate date) {
                 Unit unit = unitRepository.findById(unitId)
@@ -332,21 +355,27 @@ public class AvailabilityService {
                                 .collect(Collectors.toList());
 
                 LocalDate nextDay = date.plusDays(1);
-                List<Booking> bookingsForDay = bookingRepository.findConflictingBookingsForUnit(
-                                unitId, date, nextDay, List.of(BookingStatus.CONFIRMED, BookingStatus.CHECKED_IN));
 
-                List<BookedRoomDto> bookedRoomDtos = bookingsForDay.stream()
+                List<RoomAssignment> assignmentsForDay = roomAssignmentRepository.findConflictingAssignmentsForUnit(
+                                unitId, date, nextDay, ACTIVE_ASSIGNMENT_STATUSES);
+
+                List<BookedRoomDto> bookedRoomDtos = assignmentsForDay.stream()
                                 .map(this::mapToBookedRoomDto)
                                 .collect(Collectors.toList());
 
-                int bookedCount = (int) bookingsForDay.stream()
-                                .map(booking -> booking.getRoom().getId())
+                int bookedCount = (int) assignmentsForDay.stream()
+                                .map(ra -> ra.getRoom().getId())
                                 .distinct()
                                 .count();
 
-                int availableCount = activeRooms.size() - bookedCount;
+                long unassignedBookings = bookingRepository.countUnassignedOverlappingUnitBookings(
+                                unitId, date, nextDay, CAPACITY_HOLD_BOOKING_STATUSES);
+
+                int totalBookedCapacity = bookedCount + (int) unassignedBookings;
+
+                int availableCount = Math.max(0, activeRooms.size() - totalBookedCapacity);
                 double occupancyRate = activeRooms.size() > 0
-                                ? (double) bookedCount / activeRooms.size() * 100
+                                ? (double) totalBookedCapacity / activeRooms.size() * 100
                                 : 0.0;
 
                 return new UnitOccupancyReportDto(
@@ -355,7 +384,7 @@ public class AvailabilityService {
                                 date,
                                 allRooms.size(),
                                 activeRooms.size(),
-                                bookedCount,
+                                totalBookedCapacity,
                                 availableCount,
                                 Math.round(occupancyRate * 100.0) / 100.0,
                                 bookedRoomDtos);
@@ -371,7 +400,6 @@ public class AvailabilityService {
                         throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                                         "Check-in date must be before check-out date");
                 }
-                // Note: We allow past dates for historical reporting and calendar views
         }
 
         private AvailableRoomDto mapToAvailableRoomDto(Room room) {
@@ -384,8 +412,9 @@ public class AvailabilityService {
                                 room.getStatus().toString());
         }
 
-        private BookedRoomDto mapToBookedRoomDto(Booking booking) {
-                Room room = booking.getRoom();
+        private BookedRoomDto mapToBookedRoomDto(RoomAssignment assignment) {
+                Room room = assignment.getRoom();
+                Booking booking = assignment.getBooking();
                 return new BookedRoomDto(
                                 room.getId(),
                                 room.getNumber(),
