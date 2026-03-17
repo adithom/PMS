@@ -175,6 +175,7 @@ public class PropertyService {
         entity.setPhone(dto.phone());
         entity.setPostalCode(dto.postalCode());
         entity.setCountry(dto.country());
+        entity.setGstNumber(dto.gstNumber());
 
         Property saved = propertyRepository.save(entity);
         return propertyMapper.toDto(saved);
@@ -233,6 +234,9 @@ public class PropertyService {
         }
         if (dto.checkOutTime() != null) {
             entity.setCheckOutTime(dto.checkOutTime());
+        }
+        if (dto.gstNumber() != null) {
+            entity.setGstNumber(dto.gstNumber());
         }
 
         Property saved = propertyRepository.save(entity);
