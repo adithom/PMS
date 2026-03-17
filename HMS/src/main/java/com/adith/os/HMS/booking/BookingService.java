@@ -939,7 +939,7 @@ public class BookingService {
                                 "Booking Extension - Room Rent",
                                 nightlyRateToApply,
                                 BigDecimal.ONE,
-                                BigDecimal.ZERO, // Tax rate todo: global tax rate lookup
+                                BigDecimal.ZERO, // Tax rate
                                 BigDecimal.ZERO, // Discount rate
                                 "BOOKING",
                                 bookingId,

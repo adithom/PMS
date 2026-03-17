@@ -1,944 +1,768 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import propertyApi from '../api/propertyApi';
 import roomApi from '../api/roomApi';
 import type { RoomAvailabilityCheckDto } from '../api/roomApi';
 import type { Property, Room, RoomStatus, UnitDto } from '../types';
-import LoadingSpinner from '../components/LoadingSpinner';
-import ErrorMessage from '../components/ErrorMessage';
-import ConfirmDialog from '../components/ConfirmDialog';
-import RoomBookingForm from '../components/RoomBookingForm'; 
-const BookingForm = RoomBookingForm;
+import RoomBookingForm from '../components/RoomBookingForm';
 
-type RoomDisplayStatus = 'AVAILABLE' | 'BOOKED' | 'MAINTENANCE' | 'INACTIVE';
+/* ────────────────────────────────────────────────────────────── */
+/*  Types                                                        */
+/* ────────────────────────────────────────────────────────────── */
 
-// helper: unify id field (some APIs return `id`, availability uses `roomId`)
-const getRoomId = (room: Room) => (room as any).roomId ?? (room as any).id ?? null;
+type RoomDisplayStatus = 'VACANT' | 'OCCUPIED' | 'MAINTENANCE' | 'INACTIVE';
+
+type RoomSelection = {
+  room: Room;
+  propertyId: string;
+};
+
+type RoomsDialog =
+  | { type: 'actions'; selection: RoomSelection }
+  | { type: 'edit'; selection: RoomSelection }
+  | { type: 'delete'; selection: RoomSelection }
+  | { type: 'booking'; selection: RoomSelection }
+  | { type: 'add'; propertyId: string }
+  | null;
+
+type NewRoomFormData = {
+  unitId: string;
+  number: string;
+  type: string;
+  capacity: number;
+  baseRate: number;
+  status: RoomStatus;
+};
+
+type RoomCountSummary = Record<RoomDisplayStatus, number>;
+
+/* ────────────────────────────────────────────────────────────── */
+/*  Constants & Design Tokens                                    */
+/* ────────────────────────────────────────────────────────────── */
+
+const EMPTY_EDIT_FORM: Partial<Room> = {
+  number: '',
+  type: '',
+  capacity: 2,
+  baseRate: 0,
+  status: 'ACTIVE',
+};
+
+const ROOM_STATUSES: RoomDisplayStatus[] = ['VACANT', 'OCCUPIED', 'INACTIVE', 'MAINTENANCE'];
+
+const STATUS_META: Record<
+  RoomDisplayStatus,
+  {
+    label: string;
+    description: string;
+    tile: string;
+    chip: string;
+    swatch: string;
+    stat: string;
+    dot: string;
+  }
+> = {
+  VACANT: {
+    label: 'Vacant',
+    description: 'Ready to assign',
+    tile: 'border-slate-200 bg-white hover:border-emerald-400 hover:shadow-md',
+    chip: 'bg-emerald-100 text-emerald-700 border border-emerald-200',
+    swatch: 'bg-emerald-500',
+    stat: 'bg-emerald-50 border-emerald-200',
+    dot: 'bg-emerald-500',
+  },
+  OCCUPIED: {
+    label: 'Occupied',
+    description: 'Guest checked in',
+    tile: 'border-emerald-200 bg-emerald-50 hover:border-emerald-400 hover:shadow-md',
+    chip: 'bg-emerald-200 text-emerald-800 border border-emerald-300',
+    swatch: 'bg-emerald-600',
+    stat: 'bg-emerald-50 border-emerald-200',
+    dot: 'bg-emerald-600',
+  },
+  INACTIVE: {
+    label: 'Inactive',
+    description: 'Not sellable',
+    tile: 'border-amber-200 bg-amber-50 hover:border-amber-400 hover:shadow-md opacity-80',
+    chip: 'bg-amber-100 text-amber-700 border border-amber-200',
+    swatch: 'bg-amber-400',
+    stat: 'bg-amber-50 border-amber-200',
+    dot: 'bg-amber-400',
+  },
+  MAINTENANCE: {
+    label: 'Maintenance',
+    description: 'Blocked upkeep',
+    tile: 'border-slate-300 bg-slate-100 hover:border-slate-400 hover:shadow-md opacity-80',
+    chip: 'bg-slate-200 text-slate-600 border border-slate-300',
+    swatch: 'bg-slate-400',
+    stat: 'bg-slate-100 border-slate-200',
+    dot: 'bg-slate-400',
+  },
+};
+
+const btnPrimary =
+  'inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
+
+const btnSecondary =
+  'inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-all hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
+
+const btnDanger =
+  'inline-flex items-center justify-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
+
+const inputCls =
+  'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition-all placeholder:text-slate-400 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100';
+
+const labelCls = 'mb-1.5 block text-sm font-medium text-slate-700';
+
+/* ────────────────────────────────────────────────────────────── */
+/*  Helpers                                                      */
+/* ────────────────────────────────────────────────────────────── */
+
+function cn(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(' ');
+}
+
+const getRoomId = (room: Room): string | null =>
+  (room as { roomId?: string; id?: string }).roomId ??
+  (room as { roomId?: string; id?: string }).id ??
+  null;
+
+function createEmptyRoomForm(): NewRoomFormData {
+  return { unitId: '', number: '', type: '', capacity: 2, baseRate: 0, status: 'ACTIVE' };
+}
+
+function createEditFormData(room: Room): Partial<Room> {
+  return {
+    number: room.number,
+    type: room.type,
+    capacity: room.capacity,
+    baseRate: room.baseRate,
+    status: room.status,
+  };
+}
+
+function getFallbackDisplayStatus(room: Room): RoomDisplayStatus {
+  if (room.status === 'INACTIVE') return 'INACTIVE';
+  if (room.status === 'IN_MAINTENANCE' || room.status === 'QUEUED_FOR_MAINTENANCE')
+    return 'MAINTENANCE';
+  return 'VACANT';
+}
+
+function resolveRoomDisplayStatus(
+  room: Room,
+  lookup: Record<string, RoomDisplayStatus>,
+): RoomDisplayStatus {
+  const id = getRoomId(room);
+  if (id && lookup[id]) return lookup[id];
+  return getFallbackDisplayStatus(room);
+}
+
+function createEmptySummary(): RoomCountSummary {
+  return { VACANT: 0, OCCUPIED: 0, MAINTENANCE: 0, INACTIVE: 0 };
+}
+
+function formatCurrency(amount: number): string {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
+/* ────────────────────────────────────────────────────────────── */
+/*  ModalShell                                                   */
+/* ────────────────────────────────────────────────────────────── */
+
+function ModalShell({
+  title,
+  subtitle,
+  size = 'regular',
+  children,
+  onClose,
+}: {
+  title: string;
+  subtitle?: string;
+  size?: 'regular' | 'wide';
+  children: ReactNode;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className={cn(
+          'w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl',
+          size === 'wide' ? 'max-w-5xl' : 'max-w-lg',
+        )}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-4 border-b border-slate-100 bg-slate-50/80 px-6 py-5">
+          <div>
+            <h2 className="text-lg font-bold tracking-tight text-slate-900">{title}</h2>
+            {subtitle ? <p className="mt-0.5 text-sm text-slate-500">{subtitle}</p> : null}
+          </div>
+          <button
+            type="button"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-700"
+            onClick={onClose}
+          >
+            ✕
+          </button>
+        </div>
+        <div className="max-h-[calc(100vh-10rem)] overflow-y-auto px-6 py-6">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────── */
+/*  Page Component                                               */
+/* ────────────────────────────────────────────────────────────── */
 
 export default function Rooms() {
-  const [showAddFormFor, setShowAddFormFor] = useState<string | null>(null);
   const [properties, setProperties] = useState<Property[]>([]);
   const [roomsByProperty, setRoomsByProperty] = useState<Record<string, Room[]>>({});
   const [roomDisplayStatus, setRoomDisplayStatus] = useState<Record<string, RoomDisplayStatus>>({});
+  const [unitsByProperty, setUnitsByProperty] = useState<Record<string, UnitDto[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedRoom, setSelectedRoom] = useState<{ room: Room; propertyId: string } | null>(null);
-  const [bookingRoom, setBookingRoom] = useState<{ room: Room; propertyId: string } | null>(null); // << added
-  const [showActionDialog, setShowActionDialog] = useState(false);
-  const [showEditForm, setShowEditForm] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [editFormData, setEditFormData] = useState<Partial<Room>>({
-    number: '',
-    type: '',
-    capacity: 2,
-    baseRate: 0,
-    status: 'ACTIVE' as RoomStatus
-  });
+  const [dialog, setDialog] = useState<RoomsDialog>(null);
+  const [editFormData, setEditFormData] = useState<Partial<Room>>(EMPTY_EDIT_FORM);
+  const [newRoomData, setNewRoomData] = useState<NewRoomFormData>(createEmptyRoomForm());
 
-  // Form data for creating a new room
-  const [newRoomData, setNewRoomData] = useState({
-    unitId: '',
-    number: '',
-    type: '',
-    capacity: 2,
-    baseRate: 0,
-    status: 'ACTIVE' as RoomStatus,
-    lastMaintained: ''
-  });
-
-  // Units per property for the dropdown
-  const [unitsByProperty, setUnitsByProperty] = useState<Record<string, UnitDto[]>>({});
-
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const props = await propertyApi.getAll();
-      setProperties(props);
-
-      const unitsData: Record<string, UnitDto[]> = {};
-      for (const p of props) {
-        try {
-          const units = await propertyApi.getUnits(p.id);
-          unitsData[p.id] = units;
-        } catch (err) {
-          unitsData[p.id] = [];
-        }
-      }
-      setUnitsByProperty(unitsData);
-
-
-      const roomsData: Record<string, Room[]> = {};
+      const nextProperties = await propertyApi.getAll();
+      const unitResults = await Promise.all(
+        nextProperties.map(async (property) => {
+          try {
+            const units = await propertyApi.getUnits(property.id);
+            return [property.id, units] as const;
+          } catch {
+            return [property.id, []] as const;
+          }
+        }),
+      );
+      const roomResults = await Promise.all(
+        nextProperties.map(async (property) => {
+          const rooms = await roomApi.getByProperty(property.id);
+          return [property.id, rooms ?? []] as const;
+        }),
+      );
+      const nextUnitsByProperty = Object.fromEntries(unitResults);
+      const nextRoomsByProperty = Object.fromEntries(roomResults);
       const statusData: Record<string, RoomDisplayStatus> = {};
-
       const today = new Date().toISOString().split('T')[0];
       const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
-
-      // Fetch rooms in parallel for all properties
-      const roomsPromises = props.map(p => roomApi.getByProperty(p.id));
-      const roomsResults = await Promise.all(roomsPromises);
-      props.forEach((p, idx) => roomsData[p.id] = roomsResults[idx] || []);
-
-      // For each property fetch availability in bulk where possible (parallel)
-      const availabilityPromises = props.map(async (p) => {
-        try {
-          const avail = await roomApi.searchAvailableRooms(p.id, today, tomorrow);
-          return { propertyId: p.id, avail };
-        } catch (err) {
-          return { propertyId: p.id, avail: null };
-        }
-      });
-
-      const availResults = await Promise.all(availabilityPromises);
-
-      // First, mark rooms that come from AvailabilitySearchDto.availableRoomsList as AVAILABLE
-      for (const res of availResults) {
-        const avail: any = (res as any).avail;
-        if (!avail) continue;
-        if (Array.isArray(avail.availableRoomsList)) {
-          for (const r of avail.availableRoomsList) {
-            const rid = r.roomId?.toString();
-            if (rid) statusData[rid] = 'AVAILABLE';
-          }
-        }
-      }
-
-      // Now for any room that still doesn't have a status, fall back to checking per-room availability
-      const perPropertyChecks = props.map(async (p) => {
-        const rooms = roomsData[p.id] || [];
-        const checkPromises = rooms.map(async (room) => {
-          const rid = getRoomId(room);
-          if (!rid) return;
-          if (statusData[rid]) return;
-
-          if (room.status === 'IN_MAINTENANCE' || room.status === 'QUEUED_FOR_MAINTENANCE') {
-            statusData[rid] = 'MAINTENANCE';
-            return;
-          }
-          if (room.status === 'INACTIVE') {
-            statusData[rid] = 'INACTIVE';
-            return;
-          }
-
+      const availabilityResults = await Promise.all(
+        nextProperties.map(async (property) => {
           try {
-            const availability: RoomAvailabilityCheckDto = await roomApi.checkRoomAvailability(rid, today, tomorrow);
-            if (availability.isAvailable) {
-              statusData[rid] = 'AVAILABLE';
-            } else {
-              const reason = (availability.reason || '').toUpperCase();
-              if (reason === 'IN_MAINTENANCE' || reason === 'MAINTENANCE') statusData[rid] = 'MAINTENANCE';
-              else if (reason === 'INACTIVE') statusData[rid] = 'INACTIVE';
-              else statusData[rid] = 'BOOKED';
-            }
+            const availability = await roomApi.searchAvailableRooms(property.id, today, tomorrow);
+            return [property.id, availability] as const;
           } catch {
-            statusData[rid] = 'AVAILABLE';
+            return [property.id, null] as const;
           }
-        });
-
-        await Promise.all(checkPromises);
-      });
-
-      await Promise.all(perPropertyChecks);
-
-      // ensure every room has a status
-      for (const p of props) {
-        for (const r of roomsData[p.id] || []) {
-          const rid = getRoomId(r);
-          if (!rid) continue;
-          if (!statusData[rid]) {
-            statusData[rid] = r.status === 'INACTIVE' ? 'INACTIVE' : 'AVAILABLE';
-          }
+        }),
+      );
+      for (const [, availability] of availabilityResults) {
+        if (!availability?.availableRoomsList) continue;
+        for (const room of availability.availableRoomsList) {
+          if (room.roomId) statusData[room.roomId] = 'VACANT';
         }
       }
-
-      setRoomsByProperty(roomsData);
+      await Promise.all(
+        nextProperties.map(async (property) => {
+          const rooms = nextRoomsByProperty[property.id] ?? [];
+          await Promise.all(
+            rooms.map(async (room) => {
+              const roomId = getRoomId(room);
+              if (!roomId || statusData[roomId]) return;
+              if (room.status === 'INACTIVE') { statusData[roomId] = 'INACTIVE'; return; }
+              if (room.status === 'IN_MAINTENANCE' || room.status === 'QUEUED_FOR_MAINTENANCE') {
+                statusData[roomId] = 'MAINTENANCE'; return;
+              }
+              try {
+                const avail: RoomAvailabilityCheckDto = await roomApi.checkRoomAvailability(roomId, today, tomorrow);
+                if (avail.isAvailable) { statusData[roomId] = 'VACANT'; return; }
+                const reason = (avail.reason || '').toUpperCase();
+                if (reason === 'INACTIVE') statusData[roomId] = 'INACTIVE';
+                else if (reason === 'IN_MAINTENANCE' || reason === 'MAINTENANCE') statusData[roomId] = 'MAINTENANCE';
+                else statusData[roomId] = 'OCCUPIED';
+              } catch {
+                statusData[roomId] = getFallbackDisplayStatus(room);
+              }
+            }),
+          );
+        }),
+      );
+      for (const property of nextProperties) {
+        for (const room of nextRoomsByProperty[property.id] ?? []) {
+          const roomId = getRoomId(room);
+          if (!roomId) continue;
+          if (room.status === 'INACTIVE') statusData[roomId] = 'INACTIVE';
+          else if (room.status === 'IN_MAINTENANCE' || room.status === 'QUEUED_FOR_MAINTENANCE') statusData[roomId] = 'MAINTENANCE';
+          else if (!statusData[roomId]) statusData[roomId] = 'VACANT';
+        }
+      }
+      setProperties(nextProperties);
+      setUnitsByProperty(nextUnitsByProperty);
+      setRoomsByProperty(nextRoomsByProperty);
       setRoomDisplayStatus(statusData);
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const handleRoomClick = (room: Room, propertyId: string) => {
-    setSelectedRoom({ room, propertyId });
-    setShowActionDialog(true);
-  };
+  useEffect(() => { void loadData(); }, [loadData]);
 
-  // open booking form for the selected room
-  const handleCreateBooking = () => {
-  // open booking modal for the currently selected room
-  if (!selectedRoom) return;
-  setShowActionDialog(false);
-  setBookingRoom({ room: selectedRoom.room, propertyId: selectedRoom.propertyId });
-};
-
-
-  const handleEditRoom = () => {
-    if (!selectedRoom) return;
-    setEditFormData({
-      number: selectedRoom.room.number,
-      type: selectedRoom.room.type,
-      capacity: selectedRoom.room.capacity,
-      baseRate: selectedRoom.room.baseRate,
-      status: selectedRoom.room.status
+  const propertySections = useMemo(() => {
+    return properties.map((property) => {
+      const rooms = [...(roomsByProperty[property.id] ?? [])].sort((a, b) =>
+        a.number.localeCompare(b.number, undefined, { numeric: true, sensitivity: 'base' }),
+      );
+      const summary = createEmptySummary();
+      for (const room of rooms) summary[resolveRoomDisplayStatus(room, roomDisplayStatus)] += 1;
+      const activeInventory = Math.max(rooms.length - summary.INACTIVE, 0);
+      const occupancyRate = activeInventory > 0 ? Math.round((summary.OCCUPIED / activeInventory) * 100) : 0;
+      return { property, rooms, summary, occupancyRate };
     });
-    setShowActionDialog(false);
-    setShowEditForm(true);
-  };
+  }, [properties, roomDisplayStatus, roomsByProperty]);
 
-  const handleUpdateRoom = async () => {
-    if (!selectedRoom) return;
-    const rid = getRoomId(selectedRoom.room);
-    if (!rid) {
-      setError('Cannot determine room id for update');
-      return;
+  const overviewSummary = useMemo(() => {
+    const s = createEmptySummary();
+    for (const sec of propertySections) {
+      s.VACANT += sec.summary.VACANT;
+      s.OCCUPIED += sec.summary.OCCUPIED;
+      s.MAINTENANCE += sec.summary.MAINTENANCE;
+      s.INACTIVE += sec.summary.INACTIVE;
     }
+    return s;
+  }, [propertySections]);
 
-    try {
-      await roomApi.partialUpdate(selectedRoom.propertyId, rid, editFormData);
-      setShowEditForm(false);
-      setSelectedRoom(null);
-      await loadData();
-    } catch (err) {
-      setError((err as Error).message);
-    }
-  };
+  const totalRooms = overviewSummary.VACANT + overviewSummary.OCCUPIED + overviewSummary.MAINTENANCE + overviewSummary.INACTIVE;
+  const activeInventory = Math.max(totalRooms - overviewSummary.INACTIVE, 0);
+  const occupiedPct = activeInventory > 0 ? Math.round((overviewSummary.OCCUPIED / activeInventory) * 100) : 0;
 
-  const handleDeleteRoom = async () => {
-    if (!selectedRoom) return;
-    const rid = getRoomId(selectedRoom.room);
-    if (!rid) {
-      setError('Cannot determine room id for delete');
-      return;
-    }
+  const addRoomPropertyId = dialog?.type === 'add' ? dialog.propertyId : null;
+  const bookingTarget = dialog?.type === 'booking' ? dialog.selection : null;
+  const editTarget = dialog?.type === 'edit' ? dialog.selection : null;
+  const deleteTarget = dialog?.type === 'delete' ? dialog.selection : null;
+  const actionTarget = dialog?.type === 'actions' ? dialog.selection : null;
+  const selectedRoom = dialog && 'selection' in dialog ? dialog.selection : null;
+  const selectedRoomStatus = selectedRoom ? resolveRoomDisplayStatus(selectedRoom.room, roomDisplayStatus) : null;
 
-    try {
-      await roomApi.delete(selectedRoom.propertyId, rid);
-      setShowDeleteConfirm(false);
-      setShowEditForm(false);
-      setSelectedRoom(null);
-      await loadData();
-    } catch (err) {
-      setError((err as Error).message);
-    }
-  };
-
+  const handleRefresh = () => void loadData();
+  const handleRoomClick = (room: Room, propertyId: string) =>
+    setDialog({ type: 'actions', selection: { room, propertyId } });
   const handleAddRoom = (propertyId: string) => {
-    setShowAddFormFor(propertyId);
-    setNewRoomData({
-      unitId: '',
-      number: '',
-      type: '',
-      capacity: 2,
-      baseRate: 0,
-      status: 'ACTIVE' as RoomStatus,
-      lastMaintained: ''
-    });
+    setNewRoomData(createEmptyRoomForm());
+    setDialog({ type: 'add', propertyId });
   };
-
-  const handleCreateRoom = async () => {
-    if (!showAddFormFor) return;
-
+  const handleEditRoom = (selection: RoomSelection) => {
+    setEditFormData(createEditFormData(selection.room));
+    setDialog({ type: 'edit', selection });
+  };
+  const handleCreateBooking = (selection: RoomSelection) =>
+    setDialog({ type: 'booking', selection });
+  const handleUpdateRoom = async () => {
+    if (!editTarget) return;
+    const roomId = getRoomId(editTarget.room);
+    if (!roomId) { setError('Cannot determine room id for update'); return; }
     try {
-      const payload: any = {
+      await roomApi.partialUpdate(editTarget.propertyId, roomId, editFormData);
+      setDialog(null);
+      await loadData();
+    } catch (err) { setError((err as Error).message); }
+  };
+  const handleDeleteRoom = async () => {
+    if (!deleteTarget) return;
+    const roomId = getRoomId(deleteTarget.room);
+    if (!roomId) { setError('Cannot determine room id for delete'); return; }
+    try {
+      await roomApi.delete(deleteTarget.propertyId, roomId);
+      setDialog(null);
+      await loadData();
+    } catch (err) { setError((err as Error).message); }
+  };
+  const handleCreateRoom = async () => {
+    if (!addRoomPropertyId) return;
+    try {
+      const payload: Partial<Room> & { unitId?: string } = {
         number: newRoomData.number,
         type: newRoomData.type,
         capacity: newRoomData.capacity,
         baseRate: newRoomData.baseRate,
-        status: newRoomData.status
+        status: newRoomData.status,
       };
-      
-      if (newRoomData.unitId) {
-        payload.unitId = newRoomData.unitId;
-      }
-
-      await roomApi.create(showAddFormFor, payload);
-      setShowAddFormFor(null);
+      if (newRoomData.unitId) payload.unitId = newRoomData.unitId;
+      await roomApi.create(addRoomPropertyId, payload);
+      setDialog(null);
       await loadData();
-    } catch (err) {
-      setError((err as Error).message);
-    }
+    } catch (err) { setError((err as Error).message); }
   };
 
-  const getRoomColor = (status: RoomDisplayStatus): string => {
-    switch (status) {
-      case 'AVAILABLE':
-        return '#d1fae5';
-      case 'BOOKED':
-        return 'white';
-      case 'MAINTENANCE':
-      case 'INACTIVE':
-        return '#fecdd3';
-      default:
-        return 'white';
-    }
-  };
+  if (loading) {
+    return (
+      <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-slate-50">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-emerald-500" />
+          <p className="text-sm font-medium text-slate-500">Syncing live availability…</p>
+        </div>
+      </div>
+    );
+  }
 
-  const getRoomLabel = (status: RoomDisplayStatus): string | null => {
-    switch (status) {
-      case 'BOOKED': return 'Booked';
-      case 'MAINTENANCE': return 'Maintenance';
-      case 'INACTIVE': return 'Inactive';
-      default: return null;
-    }
-  };
-
-  if (loading) return <LoadingSpinner />;
-  if (error) return <ErrorMessage message={error} onRetry={loadData} />;
+  if (error && properties.length === 0) {
+    return (
+      <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-slate-50 px-4">
+        <div className="w-full max-w-md rounded-2xl border border-rose-200 bg-white p-8 text-center shadow-sm">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-rose-100 text-xl">⚠️</div>
+          <h1 className="text-lg font-bold text-slate-900">Unable to load rooms</h1>
+          <p className="mt-2 text-sm text-slate-500">{error}</p>
+          <button type="button" className={cn(btnPrimary, 'mt-6')} onClick={handleRefresh}>Try Again</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div style={{ maxWidth: '900px', margin: '0 auto', padding: '2rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-        <h1 style={{ margin: 0 }}>Rooms</h1>
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', fontSize: '0.875rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <div style={{ width: '20px', height: '20px', background: '#d1fae5', border: '2px solid #333' }} />
-            <span>Available</span>
+    <div className="min-h-[calc(100vh-4rem)] bg-slate-50 pb-20">
+      {/* Single padding wrapper — matches your nav's horizontal breathing room */}
+      <div className="px-6 pt-8 sm:px-10">
+
+        {/* ─── Page Header ─── */}
+        <div className="flex flex-col items-center gap-4 text-center">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-emerald-600">Front Desk</p>
+            <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
+              Rooms &amp; Inventory
+            </h1>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <div style={{ width: '20px', height: '20px', background: 'white', border: '2px solid #333' }} />
-            <span>Booked</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <div style={{ width: '20px', height: '20px', background: '#fecdd3', border: '2px solid #333' }} />
-            <span>Maintenance/Inactive</span>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-3 shadow-sm">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Occupancy</span>
+              <span className="text-xl font-extrabold text-slate-900">{occupiedPct}%</span>
+              <span className="text-xs font-medium text-slate-400">({overviewSummary.OCCUPIED}/{activeInventory})</span>
+            </div>
+            <button type="button" className={btnSecondary} onClick={handleRefresh}>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+              </svg>
+              Refresh
+            </button>
           </div>
         </div>
-      </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-        {properties.map((property) => {
-          const rooms = roomsByProperty[property.id] || [];
+        {/* ─── Legend ─── */}
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+          {ROOM_STATUSES.map((s) => (
+            <span key={s} className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm">
+              <span className={cn('h-2 w-2 rounded-full', STATUS_META[s].swatch)} />
+              {STATUS_META[s].label}
+            </span>
+          ))}
+        </div>
 
-          return (
-            <div key={property.id} style={{
-              background: '#e0f2fe',
-              border: '1px solid #bae6fd',
-              borderRadius: '12px',
-              padding: '1.5rem',
-              boxShadow: '0 2px 6px rgba(0,0,0,0.1)'
-            }}>
-              <div style={{ position: 'relative', marginBottom: '1rem', height: '60px' }}>
-  <div
-    style={{
-      position: 'absolute',
-      left: '50%',
-      top: '50%',
-      transform: 'translate(-50%, -50%)',
-      textAlign: 'center',
-    }}
-  >
-    <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600, color: '#0f172a' }}>
-      {property.name}
-    </h2>
-    <p style={{ margin: '0.25rem 0 0', color: '#475569', fontSize: '0.9rem' }}>
-      {property.code} • {rooms.length} rooms
-    </p>
-  </div>
-  <button
-    onClick={() => handleAddRoom(property.id)}
-    style={{
-      position: 'absolute',
-      right: 0,
-      top: '50%',
-      transform: 'translateY(-50%)',
-      padding: '0.5rem 1rem',
-      background: '#2563eb',
-      color: 'white',
-      border: 'none',
-      borderRadius: '6px',
-      cursor: 'pointer',
-      fontSize: '0.875rem',
-      fontWeight: 500,
-      transition: 'background 0.2s',
-    }}
-    onMouseEnter={(e) => (e.currentTarget.style.background = '#1d4ed8')}
-    onMouseLeave={(e) => (e.currentTarget.style.background = '#2563eb')}
-  >
-    + Add Room
-  </button>
-</div>
+        {error ? (
+          <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
+        ) : null}
 
-
-
-              <div style={{
-                display: 'flex',
-                justifyContent: 'center',
-                flexWrap: 'wrap',
-                gap: '0.75rem'
-              }}>
-                {rooms.map((room) => {
-                  const rid = getRoomId(room);
-                  const displayStatus = rid ? (roomDisplayStatus[rid] ?? 'AVAILABLE') : (room.status === 'INACTIVE' ? 'INACTIVE' : 'AVAILABLE');
-                  const roomColor = getRoomColor(displayStatus);
-                  const roomLabel = getRoomLabel(displayStatus);
-
-                  return (
-                    <button
-                      key={rid ?? room.number}
-                      onClick={() => handleRoomClick(room, property.id)}
-                      style={{
-                        width: '80px',
-                        height: '65px',
-                        border: '2px solid #334155',
-                        borderRadius: '8px',
-                        background: roomColor,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '1rem',
-                        fontWeight: '600',
-                        transition: 'all 0.2s',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = 'translateY(-3px)';
-                        e.currentTarget.style.boxShadow = '0 4px 10px rgba(0,0,0,0.15)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = 'translateY(0)';
-                        e.currentTarget.style.boxShadow = 'none';
-                      }}
-                    >
-                      <div>{room.number}</div>
-                      {roomLabel && (
-                        <div style={{ fontSize: '0.7rem', color: '#881337', marginTop: '0.25rem' }}>
-                          {roomLabel}
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
+        {/* ─── Overview Stats ─── */}
+        {/* 5 equal columns, full width — no max-width, so it fills like the rest of the page */}
+        <div className="mt-8 grid grid-cols-5 gap-4">
+          <div className="flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-white py-5 text-center shadow-sm">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Properties</p>
+            <p className="mt-2 text-3xl font-extrabold text-slate-900">{propertySections.length}</p>
+          </div>
+          <div className="flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-white py-5 text-center shadow-sm">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Rooms</p>
+            <p className="mt-2 text-3xl font-extrabold text-slate-900">{totalRooms}</p>
+          </div>
+          {(['VACANT', 'OCCUPIED', 'INACTIVE'] as RoomDisplayStatus[]).map((s) => (
+            <div key={s} className={cn('flex flex-col items-center justify-center rounded-xl border py-5 text-center shadow-sm', STATUS_META[s].stat)}>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{STATUS_META[s].label}</p>
+              <p className="mt-2 text-3xl font-extrabold text-slate-900">{overviewSummary[s]}</p>
             </div>
-          );
-        })}
-      </div>
+          ))}
+        </div>
 
-      {showActionDialog && selectedRoom && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0,0,0,0.6)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000
-          }}
-          onClick={() => setShowActionDialog(false)}
-        >
-          <div
-            style={{
-              background: 'white',
-              borderRadius: '12px',
-              padding: '2rem',
-              minWidth: '350px',
-              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)'
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.5rem' }}>
-              Room {selectedRoom.room.number}
-            </h3>
-            <div style={{ marginBottom: '1.5rem', color: '#64748b', fontSize: '0.875rem' }}>
-              {(() => {
-                const rid = getRoomId(selectedRoom.room);
-                const displayStatus = rid ? (roomDisplayStatus[rid] ?? 'AVAILABLE') : 'UNKNOWN';
-                let statusColor = '#9333ea';
-                if (displayStatus === 'AVAILABLE') statusColor = '#16a34a';
-                else if (displayStatus === 'BOOKED') statusColor = '#dc2626';
+        {/* ─── Property Sections ─── */}
+        <div className="mt-10 space-y-8">
+          {propertySections.map(({ property, rooms, summary, occupancyRate }) => (
+            <section key={property.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
 
-                return (
-                  <p style={{ margin: '0.25rem 0' }}>
-                    Status: <span style={{ color: statusColor, fontWeight: 600 }}>
-                      {displayStatus}
+              {/* Property header */}
+              <div className="flex flex-col gap-4 border-b border-slate-200 bg-slate-50/60 px-6 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-8">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-base font-bold text-slate-900">{property.name}</h2>
+                    <span className="rounded-md bg-slate-200/80 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                      {property.code}
                     </span>
+                  </div>
+                  <p className="mt-1 truncate text-sm text-slate-500">
+                    {property.address || 'No address specified'}
                   </p>
-                );
-              })()}
-            </div>
+                  <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 text-xs font-semibold text-slate-500">
+                    <span className="flex items-center gap-1.5">
+                      <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />{rooms.length} Rooms
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className={cn('h-1.5 w-1.5 rounded-full', STATUS_META.VACANT.dot)} />{summary.VACANT} Vacant
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className={cn('h-1.5 w-1.5 rounded-full', STATUS_META.OCCUPIED.dot)} />{summary.OCCUPIED} Occupied
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />{occupancyRate}% Occupancy
+                    </span>
+                  </div>
+                </div>
+                <button type="button" className={cn(btnPrimary, 'shrink-0 self-start sm:self-center')} onClick={() => handleAddRoom(property.id)}>
+                  + Add Room
+                </button>
+              </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              <button
-                onClick={handleCreateBooking}
-                style={{
-                  padding: '0.875rem',
-                  background: '#2563eb',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '1rem',
-                  fontWeight: '500',
-                  transition: 'background 0.2s'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.background = '#1d4ed8'}
-                onMouseLeave={(e) => e.currentTarget.style.background = '#2563eb'}
-              >
-                Create Booking
-              </button>
-              <button
-                onClick={handleEditRoom}
-                style={{
-                  padding: '0.875rem',
-                  background: '#64748b',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '1rem',
-                  fontWeight: '500',
-                  transition: 'background 0.2s'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.background = '#475569'}
-                onMouseLeave={(e) => e.currentTarget.style.background = '#64748b'}
-              >
-                Edit Room
-              </button>
-              <button
-                onClick={() => setShowActionDialog(false)}
-                style={{
-                  padding: '0.875rem',
-                  background: 'white',
-                  color: '#475569',
-                  border: '2px solid #e2e8f0',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '1rem',
-                  fontWeight: '500'
-                }}
-              >
-                Cancel
-              </button>
+              {/* Room grid */}
+              <div className="px-6 py-6 sm:px-8">
+                {rooms.length === 0 ? (
+                  <div className="rounded-xl border-2 border-dashed border-slate-200 py-12 text-center">
+                    <p className="text-sm font-medium text-slate-400">No rooms configured for this property.</p>
+                    <button type="button" className={cn(btnSecondary, 'mt-4')} onClick={() => handleAddRoom(property.id)}>
+                      + Add First Room
+                    </button>
+                  </div>
+                ) : (
+                  /*
+                    auto-fill: each card is at least 110px wide, stretches to fill remaining space.
+                    Cards distribute evenly — no dead space on the right ever.
+                    The card uses flex-col so status chip / room number / footer are always
+                    in their own rows, none of them can collide with a border.
+                  */
+                  <div
+                    className="grid gap-3"
+                    style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))' }}
+                  >
+                    {rooms.map((room) => {
+                      const displayStatus = resolveRoomDisplayStatus(room, roomDisplayStatus);
+                      const meta = STATUS_META[displayStatus];
+                      const roomId = getRoomId(room);
+
+                      return (
+                        <button
+                          key={roomId ?? room.number}
+                          type="button"
+                          className={cn(
+                            'group flex flex-col rounded-xl border-2 transition-all duration-200 ease-out hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2',
+                            meta.tile,
+                          )}
+                          style={{ minHeight: '130px' }}
+                          onClick={() => handleRoomClick(room, property.id)}
+                        >
+                          {/* Row 1 — status chip, right-aligned, padded from all edges */}
+                          <div className="flex justify-end p-2.5 pb-0">
+                            <span className={cn('rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider', meta.chip)}>
+                              {meta.label}
+                            </span>
+                          </div>
+
+                          {/* Row 2 — room number + type, vertically centred in remaining space */}
+                          <div className="flex flex-1 flex-col items-center justify-center px-3 py-2">
+                            <span className="text-2xl font-extrabold tracking-tight text-slate-900 leading-none">
+                              {room.number}
+                            </span>
+                            <span className="mt-1 text-[10px] font-medium text-slate-400">
+                              {room.type || 'Standard'}
+                            </span>
+                          </div>
+
+                          {/* Row 3 — Pax left, Rate right; px-3 pb-3 keeps both away from borders */}
+                          <div className="flex items-center justify-between px-3 pb-3 pt-1">
+                            <span className="text-[10px] font-semibold text-slate-400">
+                              {room.capacity}&thinsp;<span className="font-normal">Pax</span>
+                            </span>
+                            <span className="text-[10px] font-semibold text-slate-500">
+                              {formatCurrency(room.baseRate)}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </section>
+          ))}
+        </div>
+
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════ */}
+      {/*  MODALS                                                */}
+      {/* ═══════════════════════════════════════════════════════ */}
+
+      {actionTarget ? (
+        <ModalShell title={`Room ${actionTarget.room.number}`} subtitle={actionTarget.room.type || 'Standard'} onClose={() => setDialog(null)}>
+          <div className="space-y-6">
+            <div className={cn('rounded-xl border p-4', selectedRoomStatus ? STATUS_META[selectedRoomStatus].stat : 'border-slate-200 bg-slate-50')}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Current Status</p>
+                  <p className="mt-1 text-xl font-bold text-slate-900">{selectedRoomStatus ? STATUS_META[selectedRoomStatus].label : 'Unknown'}</p>
+                </div>
+                <span className="text-sm font-medium text-slate-500">{selectedRoomStatus ? STATUS_META[selectedRoomStatus].description : ''}</span>
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Capacity</p>
+                <p className="mt-1 text-lg font-semibold text-slate-900">{actionTarget.room.capacity} guests</p>
+              </div>
+              <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Base Rate</p>
+                <p className="mt-1 text-lg font-semibold text-slate-900">{formatCurrency(actionTarget.room.baseRate)}</p>
+              </div>
+              <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/60 p-4 sm:col-span-2">
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Assigned Unit</p>
+                  <p className="mt-1 text-base font-semibold text-slate-900">{actionTarget.room.unitName || 'Direct room'}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Inventory State</p>
+                  <p className="mt-1 text-base font-semibold capitalize text-slate-900">
+                    {actionTarget.room.status.toLowerCase().replaceAll('_', ' ')}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-wrap justify-end gap-3 pt-2">
+              <button type="button" className={btnSecondary} onClick={() => handleEditRoom(actionTarget)}>Edit Room</button>
+              <button type="button" className={btnPrimary} onClick={() => handleCreateBooking(actionTarget)}>Create Booking</button>
             </div>
           </div>
-        </div>
-      )}
+        </ModalShell>
+      ) : null}
 
-      {/* Booking form modal - opened when bookingRoom is set */}
-      {/* Booking form modal - opened when bookingRoom is set */}
-{bookingRoom && (
-  <div
-    style={{
-      position: 'fixed',
-      inset: 0,
-      background: 'rgba(0,0,0,0.6)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000
-    }}
-    onClick={() => setBookingRoom(null)}
-  >
-    <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 800 }}>
-      <BookingForm
-        propertyId={bookingRoom.propertyId ?? null}
-        room={bookingRoom.room ?? null}
-        onSuccess={async (createdBooking) => {
-          // refresh rooms/availability after booking created
-          await loadData();
-          setBookingRoom(null);
-        }}
-        onCancel={() => setBookingRoom(null)}
-      />
-    </div>
-  </div>
-)}
+      {bookingTarget ? (
+        <ModalShell title={`Create Booking — Room ${bookingTarget.room.number}`} size="wide" onClose={() => setDialog(null)}>
+          <RoomBookingForm
+            propertyId={bookingTarget.propertyId}
+            room={bookingTarget.room}
+            onSuccess={async () => { setDialog(null); await loadData(); }}
+            onCancel={() => setDialog(null)}
+          />
+        </ModalShell>
+      ) : null}
 
-
-      {showEditForm && selectedRoom && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0,0,0,0.6)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000
-          }}
-          onClick={() => setShowEditForm(false)}
-        >
-          <div
-            style={{
-              background: 'white',
-              borderRadius: '12px',
-              padding: '2rem',
-              minWidth: '450px',
-              maxWidth: '500px',
-              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)'
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 style={{ margin: '0 0 1.5rem 0', fontSize: '1.5rem' }}>
-              Edit Room {selectedRoom.room.number}
-            </h3>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div>
-                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', fontSize: '0.875rem' }}>
-                  Room Number *
-                </label>
-                <input
-                  type="text"
-                  value={editFormData.number}
-                  onChange={(e) => setEditFormData({ ...editFormData, number: e.target.value })}
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    border: '2px solid #e2e8f0',
-                    borderRadius: '6px',
-                    fontSize: '1rem'
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', fontSize: '0.875rem' }}>
-                  Type *
-                </label>
-                <input
-                  type="text"
-                  value={editFormData.type}
-                  onChange={(e) => setEditFormData({ ...editFormData, type: e.target.value })}
-                  placeholder="e.g., Deluxe, Suite"
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    border: '2px solid #e2e8f0',
-                    borderRadius: '6px',
-                    fontSize: '1rem'
-                  }}
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', fontSize: '0.875rem' }}>
-                    Capacity *
-                  </label>
-                  <input
-                    type="number"
-                    value={editFormData.capacity}
-                    onChange={(e) => setEditFormData({ ...editFormData, capacity: parseInt(e.target.value) })}
-                    min="1"
-                    style={{
-                      width: '100%',
-                      padding: '0.75rem',
-                      border: '2px solid #e2e8f0',
-                      borderRadius: '6px',
-                      fontSize: '1rem'
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', fontSize: '0.875rem' }}>
-                    Base Rate *
-                  </label>
-                  <input
-                    type="number"
-                    value={editFormData.baseRate}
-                    onChange={(e) => setEditFormData({ ...editFormData, baseRate: parseFloat(e.target.value) })}
-                    min="0"
-                    step="100"
-                    style={{
-                      width: '100%',
-                      padding: '0.75rem',
-                      border: '2px solid #e2e8f0',
-                      borderRadius: '6px',
-                      fontSize: '1rem'
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', fontSize: '0.875rem' }}>
-                  Status
-                </label>
-                <select
-                  value={editFormData.status}
-                  onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value as RoomStatus })}
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    border: '2px solid #e2e8f0',
-                    borderRadius: '6px',
-                    fontSize: '1rem'
-                  }}
-                >
-                  <option value="ACTIVE">Active</option>
-                  <option value="IN_MAINTENANCE">In Maintenance</option>
-                  <option value="QUEUED_FOR_MAINTENANCE">Queued for Maintenance</option>
-                  <option value="INACTIVE">Inactive</option>
-                </select>
-              </div>
+      {editTarget ? (
+        <ModalShell title={`Edit Room ${editTarget.room.number}`} onClose={() => setDialog(null)}>
+          <div className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label>
+                <span className={labelCls}>Room number</span>
+                <input className={inputCls} type="text" value={editFormData.number ?? ''} onChange={(e) => setEditFormData((c) => ({ ...c, number: e.target.value }))} />
+              </label>
+              <label>
+                <span className={labelCls}>Type</span>
+                <input className={inputCls} type="text" value={editFormData.type ?? ''} placeholder="e.g. Deluxe Suite" onChange={(e) => setEditFormData((c) => ({ ...c, type: e.target.value }))} />
+              </label>
             </div>
-
-            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
-              <button
-                onClick={handleUpdateRoom}
-                style={{
-                  flex: 1,
-                  padding: '0.875rem',
-                  background: '#2563eb',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '1rem',
-                  fontWeight: '600',
-                  transition: 'background 0.2s'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.background = '#1d4ed8'}
-                onMouseLeave={(e) => e.currentTarget.style.background = '#2563eb'}
-              >
-                Update
-              </button>
-              <button
-                onClick={() => setShowDeleteConfirm(true)}
-                style={{
-                  flex: 1,
-                  padding: '0.875rem',
-                  background: '#dc2626',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '1rem',
-                  fontWeight: '600',
-                  transition: 'background 0.2s'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.background = '#b91c1c'}
-                onMouseLeave={(e) => e.currentTarget.style.background = '#dc2626'}
-              >
-                Delete
-              </button>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label>
+                <span className={labelCls}>Capacity</span>
+                <input className={inputCls} type="number" min="1" value={editFormData.capacity ?? 1} onChange={(e) => setEditFormData((c) => ({ ...c, capacity: Number(e.target.value) || 1 }))} />
+              </label>
+              <label>
+                <span className={labelCls}>Base Rate (₹)</span>
+                <input className={inputCls} type="number" min="0" step="100" value={editFormData.baseRate ?? 0} onChange={(e) => setEditFormData((c) => ({ ...c, baseRate: Number(e.target.value) || 0 }))} />
+              </label>
+            </div>
+            <label>
+              <span className={labelCls}>Status</span>
+              <select className={inputCls} value={editFormData.status ?? 'ACTIVE'} onChange={(e) => setEditFormData((c) => ({ ...c, status: e.target.value as RoomStatus }))}>
+                <option value="ACTIVE">Active</option>
+                <option value="IN_MAINTENANCE">In Maintenance</option>
+                <option value="QUEUED_FOR_MAINTENANCE">Queued for Maintenance</option>
+                <option value="INACTIVE">Inactive</option>
+              </select>
+            </label>
+            <div className="mt-6 flex flex-col-reverse justify-between gap-3 border-t border-slate-100 pt-5 sm:flex-row">
+              <button type="button" className={btnDanger} onClick={() => setDialog({ type: 'delete', selection: editTarget })}>Delete Room</button>
+              <div className="flex justify-end gap-3">
+                <button type="button" className={btnSecondary} onClick={() => setDialog(null)}>Cancel</button>
+                <button type="button" className={btnPrimary} onClick={handleUpdateRoom}>Save Changes</button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        </ModalShell>
+      ) : null}
 
-      {showAddFormFor && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0,0,0,0.6)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000
-          }}
-          onClick={() => setShowAddFormFor(null)}
-        >
-          <div
-            style={{
-              background: 'white',
-              borderRadius: '12px',
-              padding: '2rem',
-              minWidth: '450px',
-              maxWidth: '500px',
-              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)'
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 style={{ margin: '0 0 1.5rem 0', fontSize: '1.5rem' }}>
-              Add New Room
-            </h3>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div>
-                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', fontSize: '0.875rem' }}>
-                  Unit
-                </label>
-                <select
-                  value={newRoomData.unitId}
-                  onChange={(e) => setNewRoomData({ ...newRoomData, unitId: e.target.value })}
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    border: '2px solid #e2e8f0',
-                    borderRadius: '6px',
-                    fontSize: '1rem'
-                  }}
-                >
-                  <option value="">No Unit (Optional)</option>
-                  {(unitsByProperty[showAddFormFor] || []).map((unit: any) => (
-                    <option key={unit.id} value={unit.id}>
-                      {unit.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', fontSize: '0.875rem' }}>
-                  Room Number *
-                </label>
-                <input
-                  type="text"
-                  value={newRoomData.number}
-                  onChange={(e) => setNewRoomData({ ...newRoomData, number: e.target.value })}
-                  placeholder="e.g., 101"
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    border: '2px solid #e2e8f0',
-                    borderRadius: '6px',
-                    fontSize: '1rem'
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', fontSize: '0.875rem' }}>
-                  Type
-                </label>
-                <input
-                  type="text"
-                  value={newRoomData.type}
-                  onChange={(e) => setNewRoomData({ ...newRoomData, type: e.target.value })}
-                  placeholder="e.g., Deluxe, Suite"
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    border: '2px solid #e2e8f0',
-                    borderRadius: '6px',
-                    fontSize: '1rem'
-                  }}
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', fontSize: '0.875rem' }}>
-                    Capacity *
-                  </label>
-                  <input
-                    type="number"
-                    value={newRoomData.capacity}
-                    onChange={(e) => setNewRoomData({ ...newRoomData, capacity: parseInt(e.target.value) })}
-                    min="1"
-                    style={{
-                      width: '100%',
-                      padding: '0.75rem',
-                      border: '2px solid #e2e8f0',
-                      borderRadius: '6px',
-                      fontSize: '1rem'
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', fontSize: '0.875rem' }}>
-                    Base Rate *
-                  </label>
-                  <input
-                    type="number"
-                    value={newRoomData.baseRate}
-                    onChange={(e) => setNewRoomData({ ...newRoomData, baseRate: parseFloat(e.target.value) })}
-                    min="0"
-                    step="100"
-                    style={{
-                      width: '100%',
-                      padding: '0.75rem',
-                      border: '2px solid #e2e8f0',
-                      borderRadius: '6px',
-                      fontSize: '1rem'
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500', fontSize: '0.875rem' }}>
-                  Status
-                </label>
-                <select
-                  value={newRoomData.status}
-                  onChange={(e) => setNewRoomData({ ...newRoomData, status: e.target.value as RoomStatus })}
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    border: '2px solid #e2e8f0',
-                    borderRadius: '6px',
-                    fontSize: '1rem'
-                  }}
-                >
-                  <option value="ACTIVE">Active</option>
-                  <option value="IN_MAINTENANCE">In Maintenance</option>
-                  <option value="QUEUED_FOR_MAINTENANCE">Queued for Maintenance</option>
-                  <option value="INACTIVE">Inactive</option>
-                </select>
-              </div>
+      {addRoomPropertyId ? (
+        <ModalShell title="Add New Room" onClose={() => setDialog(null)}>
+          <div className="space-y-4">
+            <label>
+              <span className={labelCls}>Unit Association</span>
+              <select className={inputCls} value={newRoomData.unitId} onChange={(e) => setNewRoomData((c) => ({ ...c, unitId: e.target.value }))}>
+                <option value="">No Unit / Direct Room</option>
+                {(unitsByProperty[addRoomPropertyId] ?? []).map((unit) => (
+                  <option key={unit.id} value={unit.id}>{unit.name}</option>
+                ))}
+              </select>
+            </label>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label>
+                <span className={labelCls}>Room number</span>
+                <input className={inputCls} type="text" value={newRoomData.number} onChange={(e) => setNewRoomData((c) => ({ ...c, number: e.target.value }))} placeholder="101" />
+              </label>
+              <label>
+                <span className={labelCls}>Type</span>
+                <input className={inputCls} type="text" value={newRoomData.type} onChange={(e) => setNewRoomData((c) => ({ ...c, type: e.target.value }))} placeholder="Deluxe, Suite" />
+              </label>
             </div>
-
-            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
-              <button
-                onClick={handleCreateRoom}
-                style={{
-                  flex: 1,
-                  padding: '0.875rem',
-                  background: '#2563eb',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '1rem',
-                  fontWeight: '600',
-                  transition: 'background 0.2s'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.background = '#1d4ed8'}
-                onMouseLeave={(e) => e.currentTarget.style.background = '#2563eb'}
-              >
-                Create Room
-              </button>
-              <button
-                onClick={() => setShowAddFormFor(null)}
-                style={{
-                  flex: 1,
-                  padding: '0.875rem',
-                  background: 'white',
-                  color: '#475569',
-                  border: '2px solid #e2e8f0',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '1rem',
-                  fontWeight: '600'
-                }}
-              >
-                Cancel
-              </button>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label>
+                <span className={labelCls}>Capacity</span>
+                <input className={inputCls} type="number" min="1" value={newRoomData.capacity} onChange={(e) => setNewRoomData((c) => ({ ...c, capacity: Number(e.target.value) || 1 }))} />
+              </label>
+              <label>
+                <span className={labelCls}>Base Rate (₹)</span>
+                <input className={inputCls} type="number" min="0" step="100" value={newRoomData.baseRate} onChange={(e) => setNewRoomData((c) => ({ ...c, baseRate: Number(e.target.value) || 0 }))} />
+              </label>
+            </div>
+            <label>
+              <span className={labelCls}>Initial Status</span>
+              <select className={inputCls} value={newRoomData.status} onChange={(e) => setNewRoomData((c) => ({ ...c, status: e.target.value as RoomStatus }))}>
+                <option value="ACTIVE">Active</option>
+                <option value="IN_MAINTENANCE">In Maintenance</option>
+                <option value="INACTIVE">Inactive</option>
+              </select>
+            </label>
+            <div className="mt-6 flex justify-end gap-3 border-t border-slate-100 pt-5">
+              <button type="button" className={btnSecondary} onClick={() => setDialog(null)}>Cancel</button>
+              <button type="button" className={btnPrimary} onClick={handleCreateRoom}>Create Room</button>
             </div>
           </div>
-        </div>
-      )}
+        </ModalShell>
+      ) : null}
 
-      {showDeleteConfirm && selectedRoom && (
-        <ConfirmDialog
-          title="Delete Room"
-          message={`Are you sure you want to delete room ${selectedRoom.room.number}? This action cannot be undone.`}
-          onConfirm={handleDeleteRoom}
-          onCancel={() => setShowDeleteConfirm(false)}
-        />
-      )}
+      {deleteTarget ? (
+        <ModalShell title={`Delete Room ${deleteTarget.room.number}?`} onClose={() => setDialog({ type: 'edit', selection: deleteTarget })}>
+          <div className="space-y-5">
+            <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm leading-6 text-rose-800">
+              <strong>Warning:</strong> This action cannot be undone. You are permanently removing this room from inventory.
+            </div>
+            <div className="flex justify-end gap-3">
+              <button type="button" className={btnSecondary} onClick={() => setDialog({ type: 'edit', selection: deleteTarget })}>Cancel</button>
+              <button type="button" className={btnDanger} onClick={handleDeleteRoom}>Confirm Deletion</button>
+            </div>
+          </div>
+        </ModalShell>
+      ) : null}
     </div>
   );
 }
