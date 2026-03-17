@@ -1,23 +1,31 @@
 package com.adith.os.HMS.billing.folio;
 
+import java.math.BigDecimal;
+
 public enum ChargeCode {
 
-    ROOM_RENT(ChargeCategory.ROOM_RENT),
-    RESTAURANT(ChargeCategory.ANCILLARY),
-    LAUNDRY(ChargeCategory.ANCILLARY),
-    SPA(ChargeCategory.ANCILLARY),
-    TRAVEL_DESK(ChargeCategory.ANCILLARY),
-    SHOP(ChargeCategory.ANCILLARY),
-    MISC(ChargeCategory.ANCILLARY);
+    ROOM_RENT(ChargeCategory.ROOM_RENT, new BigDecimal("12.00")),
+    RESTAURANT(ChargeCategory.ANCILLARY, new BigDecimal("5.00")),
+    LAUNDRY(ChargeCategory.ANCILLARY, new BigDecimal("18.00")),
+    SPA(ChargeCategory.ANCILLARY, new BigDecimal("18.00")),
+    TRAVEL_DESK(ChargeCategory.ANCILLARY, new BigDecimal("18.00")),
+    SHOP(ChargeCategory.ANCILLARY, new BigDecimal("18.00")),
+    MISC(ChargeCategory.ANCILLARY, new BigDecimal("18.00"));
 
     private final ChargeCategory category;
+    private final BigDecimal defaultTaxRate;
 
-    ChargeCode(ChargeCategory category) {
+    ChargeCode(ChargeCategory category, BigDecimal defaultTaxRate) {
         this.category = category;
+        this.defaultTaxRate = defaultTaxRate;
     }
 
     public ChargeCategory getCategory() {
         return category;
+    }
+
+    public BigDecimal getDefaultTaxRate() {
+        return defaultTaxRate;
     }
 
     public boolean isRoomRent() {

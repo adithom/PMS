@@ -131,7 +131,7 @@ public class NightAuditService {
                         "Room " + room.getNumber() + " - Nightly Rate",
                         nightlyRate,
                         BigDecimal.ONE,
-                        BigDecimal.ZERO,
+                        null,
                         BigDecimal.ZERO,
                         "ROOM_ASSIGNMENT",
                         assignment.getId(),

@@ -261,7 +261,8 @@ public class FolioService {
             charge.setDescription(dto.description());
             charge.setUnitPrice(dto.unitPrice());
             charge.setQuantity(dto.quantity() != null ? dto.quantity() : BigDecimal.ONE);
-            charge.setTaxRate(dto.taxRate() != null ? dto.taxRate() : BigDecimal.ZERO);
+            BigDecimal taxRate = dto.taxRate() != null ? dto.taxRate() : dto.chargeCode().getDefaultTaxRate();
+            charge.setTaxRate(taxRate);
             charge.setDiscountRate(dto.discountRate() != null ? dto.discountRate() : BigDecimal.ZERO);
             charge.setReferenceType(dto.referenceType());
             charge.setReferenceId(dto.referenceId());

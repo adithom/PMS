@@ -8,6 +8,7 @@ public record PropertyDto(
         String code,
         String address,
         String country,
-        Integer totalRooms
+        Integer totalRooms,
+        String gstNumber
 ) {}
 

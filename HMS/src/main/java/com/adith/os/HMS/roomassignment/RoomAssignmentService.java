@@ -117,7 +117,7 @@ public class RoomAssignmentService {
                     "Shift date must be before the check-out date");
         }
 
-        if (shiftDate.isBefore(booking.getCheckIn()) || shiftDate.isEqual(booking.getCheckIn())) {
+        if (shiftDate.isBefore(booking.getCheckIn())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Shift date must be after the check-in date");
         }

@@ -10,6 +10,7 @@ public record PropertyUpdateDto(
         String country,
         String postalCode,
         String phone,
+        String gstNumber,
         Time checkInTime,
         Time checkOutTime
 ) {}

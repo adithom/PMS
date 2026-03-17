@@ -26,6 +26,7 @@ public class PropertyMapper {
         property.setCheckInTime(dto.checkInTime());
         property.setCheckOutTime(dto.checkOutTime());
         property.setPhone(dto.phone());
+        property.setGstNumber(dto.gstNumber());
 
         return property;
     }
@@ -41,7 +42,8 @@ public class PropertyMapper {
                 property.getCode(),
                 property.getAddress(),
                 property.getCountry(),
-                property.getTotalRooms()
+                property.getTotalRooms(),
+                property.getGstNumber()
         );
     }
 
