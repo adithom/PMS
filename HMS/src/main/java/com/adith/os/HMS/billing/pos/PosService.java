@@ -108,9 +108,9 @@ public class PosService {
                 LocalDate.now(),
                 chargeCode,
                 "POS Order: " + order.getOrderNumber(),
-                order.getTotalAmount(),
+                order.getSubtotal(), // <--- Pass Subtotal instead of TotalAmount
                 BigDecimal.ONE,
-                BigDecimal.ZERO,
+                null,
                 BigDecimal.ZERO,
                 "POS_ORDER",
                 order.getId(),

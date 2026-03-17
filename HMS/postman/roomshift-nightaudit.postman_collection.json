@@ -1,9 +1,9 @@
 {
   "info": {
-    "_postman_id": "6e8e9795-3524-4774-b585-7c2a4c655178",
-    "name": "HMS Room Shift + Night Audit (Seeded Scenario with Tests)",
+    "_postman_id": "d7aa0403-f7a8-45b8-a541-7a0dd80e68b4",
+    "name": "HMS Room Shift + Night Audit",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Creates randomized mock data first, then exercises room-shift and night-audit behavior including edge cases. Fully automated with pass/fail assertions."
+    "description": "Postman collection for testing room-shift billing, future-dated room moves, manual full night audit, and folio verification."
   },
   "auth": {
     "type": "bearer",
@@ -17,57 +17,26 @@
   },
   "variable": [
     { "key": "baseUrl", "value": "http://localhost:8080" },
-    { "key": "username", "value": "adith" },
-    { "key": "password", "value": "adith123" },
+    { "key": "username", "value": "admin" },
+    { "key": "password", "value": "admin123" },
     { "key": "token", "value": "" },
-    { "key": "seedSuffix", "value": "" },
-    { "key": "today", "value": "" },
-    { "key": "tomorrow", "value": "" },
-    { "key": "checkoutDate", "value": "" },
-    { "key": "auditDate", "value": "" },
-    { "key": "pastDate", "value": "" },
-    { "key": "propertyName", "value": "" },
-    { "key": "propertyCode", "value": "" },
     { "key": "propertyId", "value": "" },
-    { "key": "standardUnitId", "value": "" },
-    { "key": "deluxeUnitId", "value": "" },
-    { "key": "room101Id", "value": "" },
-    { "key": "room102Id", "value": "" },
-    { "key": "room103Id", "value": "" },
-    { "key": "room104Id", "value": "" },
-    { "key": "room205Id", "value": "" },
-    { "key": "room206Id", "value": "" },
-    { "key": "room207Id", "value": "" },
-    { "key": "room208Id", "value": "" },
-    { "key": "guestDefaultId", "value": "" },
-    { "key": "guestOverrideId", "value": "" },
-    { "key": "guestFutureId", "value": "" },
-    { "key": "guestSameRoomId", "value": "" },
-    { "key": "guestBlockerId", "value": "" },
-    { "key": "defaultRateBookingId", "value": "" },
-    { "key": "overrideRateBookingId", "value": "" },
+    { "key": "sameDayBookingId", "value": "" },
     { "key": "futureShiftBookingId", "value": "" },
     { "key": "sameRoomBookingId", "value": "" },
-    { "key": "blockerBookingId", "value": "" },
-    { "key": "defaultRate", "value": "6500.00" },
-    { "key": "overrideRate", "value": "7777.00" },
-    { "key": "futureRate", "value": "8888.00" },
-    { "key": "futureShiftFolioId", "value": "" },
-    { "key": "overrideShiftFolioId", "value": "" },
-    { "key": "phone1", "value": "" },
-    { "key": "phone2", "value": "" },
-    { "key": "phone3", "value": "" },
-    { "key": "phone4", "value": "" },
-    { "key": "phone5", "value": "" },
-    { "key": "id1", "value": "" },
-    { "key": "id2", "value": "" },
-    { "key": "id3", "value": "" },
-    { "key": "id4", "value": "" },
-    { "key": "id5", "value": "" }
+    { "key": "sameDayNewRoomId", "value": "" },
+    { "key": "futureShiftNewRoomId", "value": "" },
+    { "key": "currentRoomId", "value": "" },
+    { "key": "sameDayShiftDate", "value": "2026-03-16" },
+    { "key": "futureShiftDate", "value": "2026-03-17" },
+    { "key": "pastShiftDate", "value": "2026-03-15" },
+    { "key": "auditDate", "value": "2026-03-16" },
+    { "key": "newRate", "value": "6500.00" },
+    { "key": "folioId", "value": "" }
   ],
   "item": [
     {
-      "name": "1. Auth",
+      "name": "Auth",
       "item": [
         {
           "name": "Login",
@@ -75,440 +44,258 @@
             {
               "listen": "test",
               "script": {
-                "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });",
                   "const json = pm.response.json();",
-                  "pm.test(\"Token exists in response\", function () { pm.expect(json.token).to.not.be.undefined; });",
-                  "pm.collectionVariables.set('token', json.token || '');"
-                ]
+                  "if (json.token) {",
+                  "  pm.collectionVariables.set('token', json.token);",
+                  "}"
+                ],
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
-            "auth": { "type": "noauth" },
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}" },
-            "url": "{{baseUrl}}/api/auth/login",
-            "description": "Run this first. Uses an admin account because property/unit/room creation is admin-only."
-          },
-          "response": []
-        },
-        {
-          "name": "Seed Dynamic Variables",
-          "event": [
-            {
-              "listen": "prerequest",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "function fmt(d) { return d.toISOString().slice(0, 10); }",
-                  "const now = new Date();",
-                  "const today = new Date(now);",
-                  "const tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate() + 1);",
-                  "const checkout = new Date(now); checkout.setDate(checkout.getDate() + 4);",
-                  "const past = new Date(now); past.setDate(past.getDate() - 1);",
-                  "const suffix = `${Date.now()}${Math.floor(Math.random() * 1000)}`;",
-                  "pm.collectionVariables.set('seedSuffix', suffix);",
-                  "pm.collectionVariables.set('today', fmt(today));",
-                  "pm.collectionVariables.set('tomorrow', fmt(tomorrow));",
-                  "pm.collectionVariables.set('checkoutDate', fmt(checkout));",
-                  "pm.collectionVariables.set('auditDate', fmt(today));",
-                  "pm.collectionVariables.set('pastDate', fmt(past));",
-                  "pm.collectionVariables.set('propertyName', `Room Shift Lab ${suffix}`);",
-                  "pm.collectionVariables.set('propertyCode', `RSL${suffix.slice(-5)}`);",
-                  "const randId = () => Math.random().toString(36).substring(2, 10).toUpperCase();",
-                  "const randPhone = () => '+91-9' + Math.floor(100000000 + Math.random() * 900000000);",
-                  "pm.collectionVariables.set('phone1', randPhone());",
-                  "pm.collectionVariables.set('phone2', randPhone());",
-                  "pm.collectionVariables.set('phone3', randPhone());",
-                  "pm.collectionVariables.set('phone4', randPhone());",
-                  "pm.collectionVariables.set('phone5', randPhone());",
-                  "pm.collectionVariables.set('id1', randId());",
-                  "pm.collectionVariables.set('id2', randId());",
-                  "pm.collectionVariables.set('id3', randId());",
-                  "pm.collectionVariables.set('id4', randId());",
-                  "pm.collectionVariables.set('id5', randId());"
-                ]
-              }
+            "auth": {
+              "type": "noauth"
             },
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });"
-                ]
-              }
-            }
-          ],
-          "request": { "method": "GET", "url": "{{baseUrl}}/api/auth/me" },
-          "response": []
-        }
-      ]
-    },
-    {
-      "name": "2. Scenario Setup",
-      "item": [
-        {
-          "name": "Create Property",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test(\"Status code is 200 or 201\", function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
-                  "const json = pm.response.json();",
-                  "pm.test(\"Property ID exists\", function () { pm.expect(json.id).to.not.be.undefined; });",
-                  "pm.collectionVariables.set('propertyId', json.id);"
-                ]
-              }
-            }
-          ],
-          "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"name\": \"{{propertyName}}\",\n  \"code\": \"{{propertyCode}}\",\n  \"address\": \"123 Shift Test Street\",\n  \"region\": \"Karnataka\",\n  \"country\": \"India\",\n  \"postalCode\": \"560001\",\n  \"phone\": \"+91-9999999999\",\n  \"checkInTime\": \"14:00:00\",\n  \"checkOutTime\": \"11:00:00\"\n}" },
-            "url": "{{baseUrl}}/api/properties"
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            },
+            "description": "Authenticate first. Saves the JWT into the collection variable `token`."
           },
           "response": []
-        },
-        {
-          "name": "Create Standard Unit",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test(\"Status code is 200 or 201\", function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
-                  "pm.collectionVariables.set('standardUnitId', pm.response.json().id);"
-                ]
-              }
-            }
-          ],
-          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"name\": \"Standard {{seedSuffix}}\",\n  \"sortOrder\": 1\n}" }, "url": "{{baseUrl}}/api/properties/{{propertyId}}/units" },
-          "response": []
-        },
-        {
-          "name": "Create Deluxe Unit",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test(\"Status code is 200 or 201\", function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
-                  "pm.collectionVariables.set('deluxeUnitId', pm.response.json().id);"
-                ]
-              }
-            }
-          ],
-          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"name\": \"Deluxe {{seedSuffix}}\",\n  \"sortOrder\": 2\n}" }, "url": "{{baseUrl}}/api/properties/{{propertyId}}/units" },
-          "response": []
-        },
-        {
-          "name": "Create Room 101",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Status code is 200/201\", function(){pm.expect(pm.response.code).to.be.oneOf([200,201])}); pm.collectionVariables.set('room101Id', pm.response.json().id);"] } }],
-          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"unitId\": \"{{standardUnitId}}\",\n  \"number\": \"101\",\n  \"type\": \"Standard Queen\",\n  \"capacity\": 2,\n  \"baseRate\": 4000.00,\n  \"status\": \"ACTIVE\"\n}" }, "url": "{{baseUrl}}/api/properties/{{propertyId}}/rooms" }
-        },
-        {
-          "name": "Create Room 102",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Status code is 200/201\", function(){pm.expect(pm.response.code).to.be.oneOf([200,201])}); pm.collectionVariables.set('room102Id', pm.response.json().id);"] } }],
-          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"unitId\": \"{{standardUnitId}}\",\n  \"number\": \"102\",\n  \"type\": \"Standard Queen\",\n  \"capacity\": 2,\n  \"baseRate\": 4200.00,\n  \"status\": \"ACTIVE\"\n}" }, "url": "{{baseUrl}}/api/properties/{{propertyId}}/rooms" }
-        },
-        {
-          "name": "Create Room 103",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Status code is 200/201\", function(){pm.expect(pm.response.code).to.be.oneOf([200,201])}); pm.collectionVariables.set('room103Id', pm.response.json().id);"] } }],
-          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"unitId\": \"{{standardUnitId}}\",\n  \"number\": \"103\",\n  \"type\": \"Standard Twin\",\n  \"capacity\": 2,\n  \"baseRate\": 4300.00,\n  \"status\": \"ACTIVE\"\n}" }, "url": "{{baseUrl}}/api/properties/{{propertyId}}/rooms" }
-        },
-        {
-          "name": "Create Room 104",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Status code is 200/201\", function(){pm.expect(pm.response.code).to.be.oneOf([200,201])}); pm.collectionVariables.set('room104Id', pm.response.json().id);"] } }],
-          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"unitId\": \"{{standardUnitId}}\",\n  \"number\": \"104\",\n  \"type\": \"Standard Twin\",\n  \"capacity\": 2,\n  \"baseRate\": 4400.00,\n  \"status\": \"ACTIVE\"\n}" }, "url": "{{baseUrl}}/api/properties/{{propertyId}}/rooms" }
-        },
-        {
-          "name": "Create Room 205",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Status code is 200/201\", function(){pm.expect(pm.response.code).to.be.oneOf([200,201])}); pm.collectionVariables.set('room205Id', pm.response.json().id);"] } }],
-          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"unitId\": \"{{deluxeUnitId}}\",\n  \"number\": \"205\",\n  \"type\": \"Deluxe King\",\n  \"capacity\": 2,\n  \"baseRate\": 6000.00,\n  \"status\": \"ACTIVE\"\n}" }, "url": "{{baseUrl}}/api/properties/{{propertyId}}/rooms" }
-        },
-        {
-          "name": "Create Room 206",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Status code is 200/201\", function(){pm.expect(pm.response.code).to.be.oneOf([200,201])}); pm.collectionVariables.set('room206Id', pm.response.json().id);"] } }],
-          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"unitId\": \"{{deluxeUnitId}}\",\n  \"number\": \"206\",\n  \"type\": \"Deluxe King\",\n  \"capacity\": 2,\n  \"baseRate\": 6200.00,\n  \"status\": \"ACTIVE\"\n}" }, "url": "{{baseUrl}}/api/properties/{{propertyId}}/rooms" }
-        },
-        {
-          "name": "Create Room 207",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Status code is 200/201\", function(){pm.expect(pm.response.code).to.be.oneOf([200,201])}); pm.collectionVariables.set('room207Id', pm.response.json().id);"] } }],
-          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"unitId\": \"{{deluxeUnitId}}\",\n  \"number\": \"207\",\n  \"type\": \"Premium Suite\",\n  \"capacity\": 3,\n  \"baseRate\": 7000.00,\n  \"status\": \"ACTIVE\"\n}" }, "url": "{{baseUrl}}/api/properties/{{propertyId}}/rooms" }
-        },
-        {
-          "name": "Create Room 208",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Status code is 200/201\", function(){pm.expect(pm.response.code).to.be.oneOf([200,201])}); pm.collectionVariables.set('room208Id', pm.response.json().id);"] } }],
-          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"unitId\": \"{{deluxeUnitId}}\",\n  \"number\": \"208\",\n  \"type\": \"Premium Suite\",\n  \"capacity\": 3,\n  \"baseRate\": 7200.00,\n  \"status\": \"ACTIVE\"\n}" }, "url": "{{baseUrl}}/api/properties/{{propertyId}}/rooms" }
-        },
-        {
-          "name": "Create Guest - Default Shift",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Status code is 200/201\", function(){pm.expect(pm.response.code).to.be.oneOf([200,201])}); pm.collectionVariables.set('guestDefaultId', pm.response.json().id);"] } }],
-          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"firstName\": \"Default\",\n  \"lastName\": \"Shift{{seedSuffix}}\",\n  \"email\": \"default.shift.{{seedSuffix}}@example.com\",\n  \"phone\": \"{{phone1}}\",\n  \"idNumber\": \"DEF-{{id1}}\",\n  \"guestIdType\": \"PASSPORT\",\n  \"preferences\": \"Generated for room shift default-rate scenario\"\n}" }, "url": "{{baseUrl}}/api/guests" }
-        },
-        {
-          "name": "Create Guest - Override Shift",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Status code is 200/201\", function(){pm.expect(pm.response.code).to.be.oneOf([200,201])}); pm.collectionVariables.set('guestOverrideId', pm.response.json().id);"] } }],
-          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"firstName\": \"Override\",\n  \"lastName\": \"Shift{{seedSuffix}}\",\n  \"email\": \"override.shift.{{seedSuffix}}@example.com\",\n  \"phone\": \"{{phone2}}\",\n  \"idNumber\": \"OVR-{{id2}}\",\n  \"guestIdType\": \"PASSPORT\",\n  \"preferences\": \"Generated for room shift override-rate scenario\"\n}" }, "url": "{{baseUrl}}/api/guests" }
-        },
-        {
-          "name": "Create Guest - Future Shift",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Status code is 200/201\", function(){pm.expect(pm.response.code).to.be.oneOf([200,201])}); pm.collectionVariables.set('guestFutureId', pm.response.json().id);"] } }],
-          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"firstName\": \"Future\",\n  \"lastName\": \"Shift{{seedSuffix}}\",\n  \"email\": \"future.shift.{{seedSuffix}}@example.com\",\n  \"phone\": \"{{phone3}}\",\n  \"idNumber\": \"FUT-{{id3}}\",\n  \"guestIdType\": \"PASSPORT\",\n  \"preferences\": \"Generated for future-dated room shift scenario\"\n}" }, "url": "{{baseUrl}}/api/guests" }
-        },
-        {
-          "name": "Create Guest - Same Room Edge",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Status code is 200/201\", function(){pm.expect(pm.response.code).to.be.oneOf([200,201])}); pm.collectionVariables.set('guestSameRoomId', pm.response.json().id);"] } }],
-          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"firstName\": \"SameRoom\",\n  \"lastName\": \"Edge{{seedSuffix}}\",\n  \"email\": \"same.room.edge.{{seedSuffix}}@example.com\",\n  \"phone\": \"{{phone4}}\",\n  \"idNumber\": \"SAM-{{id4}}\",\n  \"guestIdType\": \"PASSPORT\",\n  \"preferences\": \"Generated for same-room / blocked-room edge cases\"\n}" }, "url": "{{baseUrl}}/api/guests" }
-        },
-        {
-          "name": "Create Guest - Blocker",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Status code is 200/201\", function(){pm.expect(pm.response.code).to.be.oneOf([200,201])}); pm.collectionVariables.set('guestBlockerId', pm.response.json().id);"] } }],
-          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"firstName\": \"Blocker\",\n  \"lastName\": \"Guest{{seedSuffix}}\",\n  \"email\": \"blocker.guest.{{seedSuffix}}@example.com\",\n  \"phone\": \"{{phone5}}\",\n  \"idNumber\": \"BLK-{{id5}}\",\n  \"guestIdType\": \"PASSPORT\",\n  \"preferences\": \"Occupies a destination room so shift availability can fail\"\n}" }, "url": "{{baseUrl}}/api/guests" }
-        },
-        {
-          "name": "Create Booking - Default Shift",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Status code is 200/201\", function(){pm.expect(pm.response.code).to.be.oneOf([200,201])}); pm.collectionVariables.set('defaultRateBookingId', pm.response.json().id);"] } }],
-          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"roomId\": \"{{room101Id}}\",\n  \"guestId\": \"{{guestDefaultId}}\",\n  \"unitId\": \"{{standardUnitId}}\",\n  \"status\": \"CONFIRMED\",\n  \"checkIn\": \"{{today}}\",\n  \"checkOut\": \"{{checkoutDate}}\",\n  \"adults\": 2,\n  \"children\": 0,\n  \"currency\": \"INR\",\n  \"totalPrice\": 0,\n  \"paidAmount\": 0,\n  \"specialRequests\": \"Default room-shift scenario\"\n}" }, "url": "{{baseUrl}}/api/properties/{{propertyId}}/bookings" }
-        },
-        {
-          "name": "Create Booking - Override Shift",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Status code is 200/201\", function(){pm.expect(pm.response.code).to.be.oneOf([200,201])}); pm.collectionVariables.set('overrideRateBookingId', pm.response.json().id);"] } }],
-          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"roomId\": \"{{room102Id}}\",\n  \"guestId\": \"{{guestOverrideId}}\",\n  \"unitId\": \"{{standardUnitId}}\",\n  \"status\": \"CONFIRMED\",\n  \"checkIn\": \"{{today}}\",\n  \"checkOut\": \"{{checkoutDate}}\",\n  \"adults\": 2,\n  \"children\": 0,\n  \"currency\": \"INR\",\n  \"totalPrice\": 0,\n  \"paidAmount\": 0,\n  \"specialRequests\": \"Override-rate room-shift scenario\"\n}" }, "url": "{{baseUrl}}/api/properties/{{propertyId}}/bookings" }
-        },
-        {
-          "name": "Create Booking - Future Shift",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Status code is 200/201\", function(){pm.expect(pm.response.code).to.be.oneOf([200,201])}); pm.collectionVariables.set('futureShiftBookingId', pm.response.json().id);"] } }],
-          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"roomId\": \"{{room103Id}}\",\n  \"guestId\": \"{{guestFutureId}}\",\n  \"unitId\": \"{{standardUnitId}}\",\n  \"status\": \"CONFIRMED\",\n  \"checkIn\": \"{{today}}\",\n  \"checkOut\": \"{{checkoutDate}}\",\n  \"adults\": 2,\n  \"children\": 0,\n  \"currency\": \"INR\",\n  \"totalPrice\": 0,\n  \"paidAmount\": 0,\n  \"specialRequests\": \"Future-dated room-shift scenario\"\n}" }, "url": "{{baseUrl}}/api/properties/{{propertyId}}/bookings" }
-        },
-        {
-          "name": "Create Booking - Same Room Edge",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Status code is 200/201\", function(){pm.expect(pm.response.code).to.be.oneOf([200,201])}); pm.collectionVariables.set('sameRoomBookingId', pm.response.json().id);"] } }],
-          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"roomId\": \"{{room104Id}}\",\n  \"guestId\": \"{{guestSameRoomId}}\",\n  \"unitId\": \"{{standardUnitId}}\",\n  \"status\": \"CONFIRMED\",\n  \"checkIn\": \"{{today}}\",\n  \"checkOut\": \"{{checkoutDate}}\",\n  \"adults\": 2,\n  \"children\": 0,\n  \"currency\": \"INR\",\n  \"totalPrice\": 0,\n  \"paidAmount\": 0,\n  \"specialRequests\": \"Edge-case booking for room shift validation\"\n}" }, "url": "{{baseUrl}}/api/properties/{{propertyId}}/bookings" }
-        },
-        {
-          "name": "Create Booking - Blocker",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Status code is 200/201\", function(){pm.expect(pm.response.code).to.be.oneOf([200,201])}); pm.collectionVariables.set('blockerBookingId', pm.response.json().id);"] } }],
-          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"roomId\": \"{{room206Id}}\",\n  \"guestId\": \"{{guestBlockerId}}\",\n  \"unitId\": \"{{deluxeUnitId}}\",\n  \"status\": \"CONFIRMED\",\n  \"checkIn\": \"{{today}}\",\n  \"checkOut\": \"{{checkoutDate}}\",\n  \"adults\": 2,\n  \"children\": 0,\n  \"currency\": \"INR\",\n  \"totalPrice\": 0,\n  \"paidAmount\": 0,\n  \"specialRequests\": \"Blocks a destination room for conflict testing\"\n}" }, "url": "{{baseUrl}}/api/properties/{{propertyId}}/bookings" }
-        },
-        {
-          "name": "Check In Booking - Default Shift",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Status code is 200/201\", function(){pm.expect(pm.response.code).to.be.oneOf([200,201])});"] } }],
-          "request": { "method": "POST", "url": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{defaultRateBookingId}}/check-in" },
-          "response": []
-        },
-        {
-          "name": "Check In Booking - Override Shift",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Status code is 200/201\", function(){pm.expect(pm.response.code).to.be.oneOf([200,201])});"] } }],
-          "request": { "method": "POST", "url": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{overrideRateBookingId}}/check-in" },
-          "response": []
-        },
-        {
-          "name": "Check In Booking - Future Shift",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Status code is 200/201\", function(){pm.expect(pm.response.code).to.be.oneOf([200,201])});"] } }],
-          "request": { "method": "POST", "url": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{futureShiftBookingId}}/check-in" },
-          "response": []
-        },
-        {
-          "name": "Check In Booking - Same Room Edge",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Status code is 200/201\", function(){pm.expect(pm.response.code).to.be.oneOf([200,201])});"] } }],
-          "request": { "method": "POST", "url": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{sameRoomBookingId}}/check-in" },
-          "response": []
-        },
-        {
-          "name": "Check In Booking - Blocker",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Status code is 200/201\", function(){pm.expect(pm.response.code).to.be.oneOf([200,201])});"] } }],
-          "request": { "method": "POST", "url": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{blockerBookingId}}/check-in" },
-          "response": []
         }
       ]
     },
     {
-      "name": "3. Room Shift Scenarios",
+      "name": "Room Shift - Happy Path",
       "item": [
         {
-          "name": "Shift Room - Same Day (default destination base rate)",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Status is 200/201 - Successful Shift\", function(){pm.expect(pm.response.code).to.be.oneOf([200,201])});"] } }],
+          "name": "Shift Room - Same Day (default to new room base rate)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"newRoomId\": \"{{room205Id}}\",\n  \"shiftDate\": \"{{today}}\",\n  \"notes\": \"Same-day upgrade using destination room base rate\"\n}" },
-            "url": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{defaultRateBookingId}}/shift-room"
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newRoomId\": \"{{sameDayNewRoomId}}\",\n  \"shiftDate\": \"{{sameDayShiftDate}}\",\n  \"notes\": \"Same-day upgrade using destination room base rate\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{sameDayBookingId}}/shift-room",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "properties", "{{propertyId}}", "bookings", "{{sameDayBookingId}}", "shift-room"]
+            },
+            "description": "Expected: 200. Creates a new assignment using the destination room base rate because `newRate` is omitted."
           },
           "response": []
         },
         {
           "name": "Shift Room - Same Day (override rate)",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Status is 200/201 - Successful Shift\", function(){pm.expect(pm.response.code).to.be.oneOf([200,201])});"] } }],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"newRoomId\": \"{{room207Id}}\",\n  \"shiftDate\": \"{{today}}\",\n  \"newRate\": {{overrideRate}},\n  \"notes\": \"Same-day upgrade using explicit front-desk override rate\"\n}" },
-            "url": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{overrideRateBookingId}}/shift-room"
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newRoomId\": \"{{sameDayNewRoomId}}\",\n  \"shiftDate\": \"{{sameDayShiftDate}}\",\n  \"newRate\": {{newRate}},\n  \"notes\": \"Same-day upgrade using front-desk override rate\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{sameDayBookingId}}/shift-room",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "properties", "{{propertyId}}", "bookings", "{{sameDayBookingId}}", "shift-room"]
+            },
+            "description": "Expected: 200. Stores the custom nightly rate on the new room assignment so night audit uses it later."
           },
           "response": []
         },
         {
-          "name": "Shift Room - Future Dated",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Status is 200/201 - Successful Shift\", function(){pm.expect(pm.response.code).to.be.oneOf([200,201])});"] } }],
+          "name": "Shift Room - Future Dated (override rate)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"newRoomId\": \"{{room208Id}}\",\n  \"shiftDate\": \"{{tomorrow}}\",\n  \"newRate\": {{futureRate}},\n  \"notes\": \"Future-dated room move to activate during inventory rollover\"\n}" },
-            "url": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{futureShiftBookingId}}/shift-room"
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newRoomId\": \"{{futureShiftNewRoomId}}\",\n  \"shiftDate\": \"{{futureShiftDate}}\",\n  \"newRate\": {{newRate}},\n  \"notes\": \"Future-dated room move to be activated by night audit rollover\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{futureShiftBookingId}}/shift-room",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "properties", "{{propertyId}}", "bookings", "{{futureShiftBookingId}}", "shift-room"]
+            },
+            "description": "Expected: 200. New assignment remains scheduled until the full night audit rolls inventory forward."
           },
           "response": []
-        },
+        }
+      ]
+    },
+    {
+      "name": "Room Shift - Edge Cases",
+      "item": [
         {
           "name": "Shift Room - Reject Same Room",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Status code is 400 Bad Request\", function () { pm.response.to.have.status(400); });"] } }],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"newRoomId\": \"{{room104Id}}\",\n  \"shiftDate\": \"{{today}}\",\n  \"notes\": \"Expected 400 because destination matches current room\"\n}" },
-            "url": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{sameRoomBookingId}}/shift-room"
-          },
-          "response": []
-        },
-        {
-          "name": "Shift Room - Reject Occupied Destination",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Status code is 409 Conflict\", function () { pm.response.to.have.status(409); });"] } }],
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"newRoomId\": \"{{room206Id}}\",\n  \"shiftDate\": \"{{today}}\",\n  \"notes\": \"Expected 409 because blocker booking already occupies room 206\"\n}" },
-            "url": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{sameRoomBookingId}}/shift-room"
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newRoomId\": \"{{currentRoomId}}\",\n  \"shiftDate\": \"{{sameDayShiftDate}}\",\n  \"notes\": \"Should fail because destination room equals current room\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{sameRoomBookingId}}/shift-room",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "properties", "{{propertyId}}", "bookings", "{{sameRoomBookingId}}", "shift-room"]
+            },
+            "description": "Expected: 400."
           },
           "response": []
         },
         {
           "name": "Shift Room - Reject Past Date",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Status code is 400 Bad Request\", function () { pm.response.to.have.status(400); });"] } }],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"newRoomId\": \"{{room208Id}}\",\n  \"shiftDate\": \"{{pastDate}}\",\n  \"newRate\": {{futureRate}},\n  \"notes\": \"Expected 400 because shift date is in the past\"\n}" },
-            "url": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{futureShiftBookingId}}/shift-room"
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newRoomId\": \"{{futureShiftNewRoomId}}\",\n  \"shiftDate\": \"{{pastShiftDate}}\",\n  \"newRate\": {{newRate}},\n  \"notes\": \"Should fail because shift date is in the past\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{futureShiftBookingId}}/shift-room",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "properties", "{{propertyId}}", "bookings", "{{futureShiftBookingId}}", "shift-room"]
+            },
+            "description": "Expected: 400."
           },
           "response": []
         }
       ]
     },
     {
-      "name": "4. Verification Before Audit",
+      "name": "Night Audit",
       "item": [
         {
-          "name": "Get Future Shift Booking",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Status code is 200\", function(){pm.response.to.have.status(200)});"] } }],
-          "request": { "method": "GET", "url": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{futureShiftBookingId}}" },
-          "response": []
-        },
-        {
-          "name": "Get Future Shift Room Assignments",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Status code is 200\", function(){pm.response.to.have.status(200)});"] } }],
-          "request": { "method": "GET", "url": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{futureShiftBookingId}}/room-assignments" },
-          "response": []
-        },
-        {
-          "name": "Get Override Shift Room Assignments",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Status code is 200\", function(){pm.response.to.have.status(200)});"] } }],
-          "request": { "method": "GET", "url": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{overrideRateBookingId}}/room-assignments" },
-          "response": []
-        }
-      ]
-    },
-    {
-      "name": "5. Night Audit",
-      "item": [
-        {
-          "name": "Run Full Night Audit",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Status code is 200/201 - Audit Success\", function(){pm.expect(pm.response.code).to.be.oneOf([200,201])});"] } }],
+          "name": "Run Full Night Audit (manual)",
           "request": {
             "method": "POST",
-            "url": "{{baseUrl}}/api/night-audit/run?date={{auditDate}}",
-            "description": "Charges the night represented by {{auditDate}} and rolls inventory into {{tomorrow}}."
-          },
-          "response": []
-        },
-        {
-          "name": "Run Full Night Audit Again (idempotency rerun)",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Status code is 200/201 - Rerun Success\", function(){pm.expect(pm.response.code).to.be.oneOf([200,201])});"] } }],
-          "request": {
-            "method": "POST",
-            "url": "{{baseUrl}}/api/night-audit/run?date={{auditDate}}",
-            "description": "Second run for the same date. Should not add duplicate room-rent charges."
+            "url": {
+              "raw": "{{baseUrl}}/api/night-audit/run?date={{auditDate}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "night-audit", "run"],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "{{auditDate}}"
+                }
+              ]
+            },
+            "description": "Runs the full audit for the given audit date: posts charges for that night and rolls inventory into the next business date."
           },
           "response": []
         }
       ]
     },
     {
-      "name": "6. Verification After Audit",
+      "name": "Verification",
       "item": [
         {
-          "name": "Get Future Shift Booking After Audit",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Status code is 200\", function(){pm.response.to.have.status(200)});"] } }],
-          "request": { "method": "GET", "url": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{futureShiftBookingId}}" },
+          "name": "Get Booking",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{futureShiftBookingId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "properties", "{{propertyId}}", "bookings", "{{futureShiftBookingId}}"]
+            },
+            "description": "Use this before and after running the full audit to see when `booking.room` flips for future-dated shifts."
+          },
           "response": []
         },
         {
-          "name": "Get Future Shift Room Assignments After Audit",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Status code is 200\", function(){pm.response.to.have.status(200)});"] } }],
-          "request": { "method": "GET", "url": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{futureShiftBookingId}}/room-assignments" },
+          "name": "Get Room Assignments",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/bookings/{{futureShiftBookingId}}/room-assignments",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "properties", "{{propertyId}}", "bookings", "{{futureShiftBookingId}}", "room-assignments"]
+            },
+            "description": "Verify old assignment completion, new assignment activation, and assignment date ranges."
+          },
           "response": []
         },
         {
-          "name": "Get Future Shift Master Folio",
+          "name": "Get Master Folio by Booking",
           "event": [
             {
               "listen": "test",
               "script": {
-                "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status code is 200\", function(){pm.response.to.have.status(200)});",
-                  "pm.collectionVariables.set('futureShiftFolioId', pm.response.json().id);"
-                ]
+                  "const json = pm.response.json();",
+                  "if (json.id) {",
+                  "  pm.collectionVariables.set('folioId', json.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
               }
             }
           ],
-          "request": { "method": "GET", "url": "{{baseUrl}}/api/properties/{{propertyId}}/folios/booking/{{futureShiftBookingId}}" },
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/folios/booking/{{futureShiftBookingId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "properties", "{{propertyId}}", "folios", "booking", "{{futureShiftBookingId}}"]
+            },
+            "description": "Fetches the master folio and stores its id into `folioId` for the next request."
+          },
           "response": []
         },
         {
-          "name": "Get Future Shift Folio Details",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Status code is 200\", function(){pm.response.to.have.status(200)});"] } }],
-          "request": { "method": "GET", "url": "{{baseUrl}}/api/properties/{{propertyId}}/folios/{{futureShiftFolioId}}/details" },
-          "response": []
-        },
-        {
-          "name": "Get Override Shift Master Folio",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test(\"Status code is 200\", function(){pm.response.to.have.status(200)});",
-                  "pm.collectionVariables.set('overrideShiftFolioId', pm.response.json().id);"
-                ]
-              }
-            }
-          ],
-          "request": { "method": "GET", "url": "{{baseUrl}}/api/properties/{{propertyId}}/folios/booking/{{overrideRateBookingId}}" },
-          "response": []
-        },
-        {
-          "name": "Get Override Shift Folio Details",
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test(\"Status code is 200\", function(){pm.response.to.have.status(200)});"] } }],
-          "request": { "method": "GET", "url": "{{baseUrl}}/api/properties/{{propertyId}}/folios/{{overrideShiftFolioId}}/details" },
+          "name": "Get Folio Details",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/properties/{{propertyId}}/folios/{{folioId}}/details",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "properties", "{{propertyId}}", "folios", "{{folioId}}", "details"]
+            },
+            "description": "Inspect posted `ROOM_RENT` charges before and after room shifts / audit runs. Check charge dates, voids, and totals."
+          },
           "response": []
         }
       ]
