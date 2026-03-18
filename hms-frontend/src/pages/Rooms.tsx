@@ -433,7 +433,7 @@ export default function Rooms() {
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-slate-50 pb-20">
       {/* Single padding wrapper — matches your nav's horizontal breathing room */}
-      <div className="px-6 pt-8 sm:px-10">
+      <div className="mx-auto max-w-7xl px-8 pt-8 sm:px-12 lg:px-16">
 
         {/* ─── Page Header ─── */}
         <div className="flex flex-col items-center gap-4 text-center">
