@@ -4,9 +4,10 @@ import roomApi from '../api/roomApi';
 import type { RoomAvailabilityCheckDto } from '../api/roomApi';
 import type { Property, Room, RoomStatus, UnitDto } from '../types';
 import RoomBookingForm from '../components/RoomBookingForm';
+import LoadingSpinner from '../components/LoadingSpinner'; // <-- Added Import
 
 /* ────────────────────────────────────────────────────────────── */
-/*  Types                                                        */
+/* Types                                                        */
 /* ────────────────────────────────────────────────────────────── */
 
 type RoomDisplayStatus = 'VACANT' | 'OCCUPIED' | 'MAINTENANCE' | 'INACTIVE';
@@ -36,7 +37,7 @@ type NewRoomFormData = {
 type RoomCountSummary = Record<RoomDisplayStatus, number>;
 
 /* ────────────────────────────────────────────────────────────── */
-/*  Constants & Design Tokens                                    */
+/* Constants & Design Tokens                                    */
 /* ────────────────────────────────────────────────────────────── */
 
 const EMPTY_EDIT_FORM: Partial<Room> = {
@@ -114,7 +115,7 @@ const inputCls =
 const labelCls = 'mb-1.5 block text-sm font-medium text-slate-700';
 
 /* ────────────────────────────────────────────────────────────── */
-/*  Helpers                                                      */
+/* Helpers                                                      */
 /* ────────────────────────────────────────────────────────────── */
 
 function cn(...classes: Array<string | false | null | undefined>) {
@@ -169,7 +170,7 @@ function formatCurrency(amount: number): string {
 }
 
 /* ────────────────────────────────────────────────────────────── */
-/*  ModalShell                                                   */
+/* ModalShell                                                   */
 /* ────────────────────────────────────────────────────────────── */
 
 function ModalShell({
@@ -217,7 +218,7 @@ function ModalShell({
 }
 
 /* ────────────────────────────────────────────────────────────── */
-/*  Page Component                                               */
+/* Page Component                                               */
 /* ────────────────────────────────────────────────────────────── */
 
 export default function Rooms() {
@@ -409,10 +410,8 @@ export default function Rooms() {
   if (loading) {
     return (
       <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-slate-50">
-        <div className="flex flex-col items-center gap-4">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-emerald-500" />
-          <p className="text-sm font-medium text-slate-500">Syncing live availability…</p>
-        </div>
+        {/* Render the new pixel art spinner component */}
+        <LoadingSpinner text="Syncing live availability…" />
       </div>
     );
   }
@@ -603,7 +602,7 @@ export default function Rooms() {
       </div>
 
       {/* ═══════════════════════════════════════════════════════ */}
-      {/*  MODALS                                                */}
+      {/* MODALS                                                */}
       {/* ═══════════════════════════════════════════════════════ */}
 
       {actionTarget ? (

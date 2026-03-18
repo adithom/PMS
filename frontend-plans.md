@@ -1,5 +1,6 @@
 ### immediate
-- [ ] rooms - vacant white, booked green
+- [x] rooms - vacant white, booked green
+- [ ] tailwind migration 
 - [ ] twin bedded rooms - check box while booking creation
 - [ ] birthday celebration pop up
 - [ ] calender modification
