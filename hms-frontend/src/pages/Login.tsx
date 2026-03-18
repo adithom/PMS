@@ -4,7 +4,10 @@ import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getDefaultRouteForRole } from '../config/roleConfig';
-import './Login.css';
+
+// Importing your custom components
+import ErrorMessage from '../components/ErrorMessage';
+import LoadingSpinner from '../components/LoadingSpinner';
 
 export default function Login() {
   const { login } = useAuth();
@@ -32,19 +35,26 @@ export default function Login() {
   };
 
   return (
-    <div className="login-page">
-      <div className="login-card">
-        <div className="login-header">
-          <h1 className="login-title">Spice Tree HMS</h1>
-          <p className="login-subtitle">Sign in to your account</p>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-600 to-primary-900 p-4">
+      <div className="bg-white p-10 rounded-2xl shadow-xl w-full max-w-md animate-slide-up">
+        
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2 tracking-tight">
+            Spice Tree HMS
+          </h1>
+          <p className="text-sm text-gray-500">
+            Sign in to your account
+          </p>
         </div>
 
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label className="label">Username</label>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Username
+            </label>
             <input
               type="text"
-              className="input"
+              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none transition-colors disabled:bg-slate-100 disabled:cursor-not-allowed"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               required
@@ -52,11 +62,13 @@ export default function Login() {
             />
           </div>
 
-          <div className="form-group">
-            <label className="label">Password</label>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Password
+            </label>
             <input
               type="password"
-              className="input"
+              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none transition-colors disabled:bg-slate-100 disabled:cursor-not-allowed"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -64,27 +76,34 @@ export default function Login() {
             />
           </div>
 
-          {error && (
-            <div className="login-error">
-              {error}
-            </div>
-          )}
+          {error && <ErrorMessage message={error} />}
 
           <button
             type="submit"
-            className="btn btn-primary"
-            style={{ width: '100%' }}
+            className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white font-medium py-2.5 px-4 rounded-lg hover:bg-blue-700 focus:ring-4 focus:ring-blue-600/50 transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
             disabled={isLoading}
           >
-            {isLoading ? 'Signing in...' : 'Sign In'}
+            {isLoading ? (
+              <>
+                {/* Inline SVG Spinner for the button */}
+                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span>Signing in...</span>
+              </>
+            ) : (
+              'Sign In'
+            )}
           </button>
         </form>
 
-        <div className="login-footer">
-          <p className="login-footer-text">
+        <div className="mt-8 pt-6 border-t border-gray-100 text-center">
+          <p className="text-xs text-gray-500">
             Contact your administrator for login credentials
           </p>
         </div>
+        
       </div>
     </div>
   );

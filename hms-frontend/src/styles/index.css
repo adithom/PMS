@@ -1,6 +1,28 @@
 @import 'tailwindcss';
 @import './variables.css'; /* Only keep this if you have specific non-Tailwind variables */
 
+@theme {
+  /* Define the primary colors used in the Login background */
+  --color-primary-500: #3b82f6; /* Blue 500 */
+  --color-primary-600: #2563eb; /* Blue 600 */
+  --color-primary-700: #1d4ed8; /* Blue 700 */
+  --color-primary-900: #1e3a8a; /* Blue 900 */
+
+  /* Define the slide-up animation */
+  --animate-slide-up: slideUp 0.5s ease-out forwards;
+  
+  @keyframes slideUp {
+    0% {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
 body {
   @apply bg-slate-50 text-slate-900 antialiased;
   font-family: var(--font-sans);
