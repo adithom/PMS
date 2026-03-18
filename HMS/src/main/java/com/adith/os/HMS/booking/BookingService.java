@@ -1181,4 +1181,33 @@ public class BookingService {
 
         return occupiedRooms + unassignedBookings;
     }
+
+    /**
+     * Get all bookings that overlap with the provided date range.
+     * Essential for tape charts and availability grids.
+     */
+    public List<BookingDto> getBookingsByDateRangeOverlap(UUID propertyId, LocalDate from, LocalDate to) {
+        if (propertyId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Property ID is required");
+        }
+        if (from == null || to == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Date range (from/to) is required");
+        }
+        if (to.isBefore(from)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "End date must be after or equal to start date");
+        }
+
+        if (!propertyRepository.existsById(propertyId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Property not found: " + propertyId);
+        }
+
+        try {
+            // Fetch bookings that intersect with the [from, to] window
+            List<Booking> bookings = bookingRepository.findOverlappingBookings(propertyId, from, to);
+            return bookingMapper.toDtoList(bookings);
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Failed to fetch overlapping bookings: " + e.getMessage());
+        }
+    }
 }

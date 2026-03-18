@@ -91,6 +91,11 @@ const bookingApi = {
       `/properties/${propertyId}/bookings/${bookingId}/check-in`,
       null
     ),
+
+  // Fetch all bookings overlapping a date range (single server call).
+  // GET /api/properties/{propertyId}/bookings/range?from=…&to=…
+  getRange: (propertyId: string, from: string, to: string) =>
+    api.get<Booking[]>(`/properties/${propertyId}/bookings/range`, { from, to }),
 };
 
 export default bookingApi;

@@ -119,6 +119,21 @@ public class BookingController {
         return ResponseEntity.ok(bookings);
     }
 
+    /**
+     * Get all bookings overlapping with a specific date range (for Gantt/Tape charts)
+     * GET /api/properties/{propertyId}/bookings/range?from=2026-03-01&to=2026-03-15
+     */
+    @GetMapping("/range")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK', 'AGENCY')")
+    public ResponseEntity<List<BookingDto>> getBookingsByDateRange(
+            @PathVariable UUID propertyId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+
+        List<BookingDto> bookings = bookingService.getBookingsByDateRangeOverlap(propertyId, from, to);
+        return ResponseEntity.ok(bookings);
+    }
+
     // UPDATE
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
