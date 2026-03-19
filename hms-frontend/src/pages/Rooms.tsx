@@ -1,10 +1,14 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import propertyApi from '../api/propertyApi';
 import roomApi from '../api/roomApi';
 import type { RoomAvailabilityCheckDto } from '../api/roomApi';
-import type { Property, Room, RoomStatus, UnitDto } from '../types';
-import RoomBookingForm from '../components/RoomBookingForm';
-import LoadingSpinner from '../components/LoadingSpinner'; // <-- Added Import
+import type { Property, Room, UnitDto } from '../types';
+
+import BookingForm from '../components/BookingForm'; 
+import LoadingSpinner from '../components/LoadingSpinner';
+import ModalShell from '../components/ModalShell';
+import RoomDetailsView from '../components/RoomDetailView';
+import RoomForm from '../components/RoomEditForm';
 
 /* ────────────────────────────────────────────────────────────── */
 /* Types                                                        */
@@ -25,28 +29,11 @@ type RoomsDialog =
   | { type: 'add'; propertyId: string }
   | null;
 
-type NewRoomFormData = {
-  unitId: string;
-  number: string;
-  type: string;
-  capacity: number;
-  baseRate: number;
-  status: RoomStatus;
-};
-
 type RoomCountSummary = Record<RoomDisplayStatus, number>;
 
 /* ────────────────────────────────────────────────────────────── */
 /* Constants & Design Tokens                                    */
 /* ────────────────────────────────────────────────────────────── */
-
-const EMPTY_EDIT_FORM: Partial<Room> = {
-  number: '',
-  type: '',
-  capacity: 2,
-  baseRate: 0,
-  status: 'ACTIVE',
-};
 
 const ROOM_STATUSES: RoomDisplayStatus[] = ['VACANT', 'OCCUPIED', 'INACTIVE', 'MAINTENANCE'];
 
@@ -109,11 +96,6 @@ const btnSecondary =
 const btnDanger =
   'inline-flex items-center justify-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
 
-const inputCls =
-  'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition-all placeholder:text-slate-400 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100';
-
-const labelCls = 'mb-1.5 block text-sm font-medium text-slate-700';
-
 /* ────────────────────────────────────────────────────────────── */
 /* Helpers                                                      */
 /* ────────────────────────────────────────────────────────────── */
@@ -126,20 +108,6 @@ const getRoomId = (room: Room): string | null =>
   (room as { roomId?: string; id?: string }).roomId ??
   (room as { roomId?: string; id?: string }).id ??
   null;
-
-function createEmptyRoomForm(): NewRoomFormData {
-  return { unitId: '', number: '', type: '', capacity: 2, baseRate: 0, status: 'ACTIVE' };
-}
-
-function createEditFormData(room: Room): Partial<Room> {
-  return {
-    number: room.number,
-    type: room.type,
-    capacity: room.capacity,
-    baseRate: room.baseRate,
-    status: room.status,
-  };
-}
 
 function getFallbackDisplayStatus(room: Room): RoomDisplayStatus {
   if (room.status === 'INACTIVE') return 'INACTIVE';
@@ -170,54 +138,6 @@ function formatCurrency(amount: number): string {
 }
 
 /* ────────────────────────────────────────────────────────────── */
-/* ModalShell                                                   */
-/* ────────────────────────────────────────────────────────────── */
-
-function ModalShell({
-  title,
-  subtitle,
-  size = 'regular',
-  children,
-  onClose,
-}: {
-  title: string;
-  subtitle?: string;
-  size?: 'regular' | 'wide';
-  children: ReactNode;
-  onClose: () => void;
-}) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <div
-        className={cn(
-          'w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl',
-          size === 'wide' ? 'max-w-5xl' : 'max-w-lg',
-        )}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-start justify-between gap-4 border-b border-slate-100 bg-slate-50/80 px-6 py-5">
-          <div>
-            <h2 className="text-lg font-bold tracking-tight text-slate-900">{title}</h2>
-            {subtitle ? <p className="mt-0.5 text-sm text-slate-500">{subtitle}</p> : null}
-          </div>
-          <button
-            type="button"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-700"
-            onClick={onClose}
-          >
-            ✕
-          </button>
-        </div>
-        <div className="max-h-[calc(100vh-10rem)] overflow-y-auto px-6 py-6">{children}</div>
-      </div>
-    </div>
-  );
-}
-
-/* ────────────────────────────────────────────────────────────── */
 /* Page Component                                               */
 /* ────────────────────────────────────────────────────────────── */
 
@@ -226,11 +146,10 @@ export default function Rooms() {
   const [roomsByProperty, setRoomsByProperty] = useState<Record<string, Room[]>>({});
   const [roomDisplayStatus, setRoomDisplayStatus] = useState<Record<string, RoomDisplayStatus>>({});
   const [unitsByProperty, setUnitsByProperty] = useState<Record<string, UnitDto[]>>({});
+  
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<RoomsDialog>(null);
-  const [editFormData, setEditFormData] = useState<Partial<Room>>(EMPTY_EDIT_FORM);
-  const [newRoomData, setNewRoomData] = useState<NewRoomFormData>(createEmptyRoomForm());
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -253,11 +172,14 @@ export default function Rooms() {
           return [property.id, rooms ?? []] as const;
         }),
       );
+      
       const nextUnitsByProperty = Object.fromEntries(unitResults);
       const nextRoomsByProperty = Object.fromEntries(roomResults);
       const statusData: Record<string, RoomDisplayStatus> = {};
+      
       const today = new Date().toISOString().split('T')[0];
       const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+      
       const availabilityResults = await Promise.all(
         nextProperties.map(async (property) => {
           try {
@@ -268,12 +190,14 @@ export default function Rooms() {
           }
         }),
       );
+      
       for (const [, availability] of availabilityResults) {
         if (!availability?.availableRoomsList) continue;
         for (const room of availability.availableRoomsList) {
           if (room.roomId) statusData[room.roomId] = 'VACANT';
         }
       }
+      
       await Promise.all(
         nextProperties.map(async (property) => {
           const rooms = nextRoomsByProperty[property.id] ?? [];
@@ -299,6 +223,7 @@ export default function Rooms() {
           );
         }),
       );
+      
       for (const property of nextProperties) {
         for (const room of nextRoomsByProperty[property.id] ?? []) {
           const roomId = getRoomId(room);
@@ -308,6 +233,7 @@ export default function Rooms() {
           else if (!statusData[roomId]) statusData[roomId] = 'VACANT';
         }
       }
+      
       setProperties(nextProperties);
       setUnitsByProperty(nextUnitsByProperty);
       setRoomsByProperty(nextRoomsByProperty);
@@ -357,29 +283,16 @@ export default function Rooms() {
   const selectedRoom = dialog && 'selection' in dialog ? dialog.selection : null;
   const selectedRoomStatus = selectedRoom ? resolveRoomDisplayStatus(selectedRoom.room, roomDisplayStatus) : null;
 
+  // Generate today/tomorrow dynamically for new bookings
+  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const tomorrowStr = useMemo(() => new Date(Date.now() + 86400000).toISOString().split('T')[0], []);
+
   const handleRefresh = () => void loadData();
-  const handleRoomClick = (room: Room, propertyId: string) =>
-    setDialog({ type: 'actions', selection: { room, propertyId } });
-  const handleAddRoom = (propertyId: string) => {
-    setNewRoomData(createEmptyRoomForm());
-    setDialog({ type: 'add', propertyId });
-  };
-  const handleEditRoom = (selection: RoomSelection) => {
-    setEditFormData(createEditFormData(selection.room));
-    setDialog({ type: 'edit', selection });
-  };
-  const handleCreateBooking = (selection: RoomSelection) =>
-    setDialog({ type: 'booking', selection });
-  const handleUpdateRoom = async () => {
-    if (!editTarget) return;
-    const roomId = getRoomId(editTarget.room);
-    if (!roomId) { setError('Cannot determine room id for update'); return; }
-    try {
-      await roomApi.partialUpdate(editTarget.propertyId, roomId, editFormData);
-      setDialog(null);
-      await loadData();
-    } catch (err) { setError((err as Error).message); }
-  };
+  const handleRoomClick = (room: Room, propertyId: string) => setDialog({ type: 'actions', selection: { room, propertyId } });
+  const handleAddRoom = (propertyId: string) => setDialog({ type: 'add', propertyId });
+  const handleEditRoom = (selection: RoomSelection) => setDialog({ type: 'edit', selection });
+  const handleCreateBooking = (selection: RoomSelection) => setDialog({ type: 'booking', selection });
+  
   const handleDeleteRoom = async () => {
     if (!deleteTarget) return;
     const roomId = getRoomId(deleteTarget.room);
@@ -390,27 +303,10 @@ export default function Rooms() {
       await loadData();
     } catch (err) { setError((err as Error).message); }
   };
-  const handleCreateRoom = async () => {
-    if (!addRoomPropertyId) return;
-    try {
-      const payload: Partial<Room> & { unitId?: string } = {
-        number: newRoomData.number,
-        type: newRoomData.type,
-        capacity: newRoomData.capacity,
-        baseRate: newRoomData.baseRate,
-        status: newRoomData.status,
-      };
-      if (newRoomData.unitId) payload.unitId = newRoomData.unitId;
-      await roomApi.create(addRoomPropertyId, payload);
-      setDialog(null);
-      await loadData();
-    } catch (err) { setError((err as Error).message); }
-  };
 
   if (loading) {
     return (
       <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-slate-50">
-        {/* Render the new pixel art spinner component */}
         <LoadingSpinner text="Syncing live availability…" />
       </div>
     );
@@ -431,7 +327,6 @@ export default function Rooms() {
 
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-slate-50 pb-20">
-      {/* Single padding wrapper — matches your nav's horizontal breathing room */}
       <div className="mx-auto max-w-7xl px-8 pt-8 sm:px-12 lg:px-16">
 
         {/* ─── Page Header ─── */}
@@ -472,7 +367,6 @@ export default function Rooms() {
         ) : null}
 
         {/* ─── Overview Stats ─── */}
-        {/* 5 equal columns, full width — no max-width, so it fills like the rest of the page */}
         <div className="mt-8 grid grid-cols-5 gap-4">
           <div className="flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-white py-5 text-center shadow-sm">
             <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Properties</p>
@@ -495,7 +389,6 @@ export default function Rooms() {
           {propertySections.map(({ property, rooms, summary, occupancyRate }) => (
             <section key={property.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
 
-              {/* Property header */}
               <div className="flex flex-col gap-4 border-b border-slate-200 bg-slate-50/60 px-6 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-8">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
@@ -527,7 +420,6 @@ export default function Rooms() {
                 </button>
               </div>
 
-              {/* Room grid */}
               <div className="px-6 py-6 sm:px-8">
                 {rooms.length === 0 ? (
                   <div className="rounded-xl border-2 border-dashed border-slate-200 py-12 text-center">
@@ -537,12 +429,6 @@ export default function Rooms() {
                     </button>
                   </div>
                 ) : (
-                  /*
-                    auto-fill: each card is at least 110px wide, stretches to fill remaining space.
-                    Cards distribute evenly — no dead space on the right ever.
-                    The card uses flex-col so status chip / room number / footer are always
-                    in their own rows, none of them can collide with a border.
-                  */
                   <div
                     className="grid gap-3"
                     style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))' }}
@@ -563,14 +449,12 @@ export default function Rooms() {
                           style={{ minHeight: '130px' }}
                           onClick={() => handleRoomClick(room, property.id)}
                         >
-                          {/* Row 1 — status chip, right-aligned, padded from all edges */}
                           <div className="flex justify-end p-2.5 pb-0">
                             <span className={cn('rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider', meta.chip)}>
                               {meta.label}
                             </span>
                           </div>
 
-                          {/* Row 2 — room number + type, vertically centred in remaining space */}
                           <div className="flex flex-1 flex-col items-center justify-center px-3 py-2">
                             <span className="text-2xl font-extrabold tracking-tight text-slate-900 leading-none">
                               {room.number}
@@ -580,7 +464,6 @@ export default function Rooms() {
                             </span>
                           </div>
 
-                          {/* Row 3 — Pax left, Rate right; px-3 pb-3 keeps both away from borders */}
                           <div className="flex items-center justify-between px-3 pb-3 pt-1">
                             <span className="text-[10px] font-semibold text-slate-400">
                               {room.capacity}&thinsp;<span className="font-normal">Pax</span>
@@ -607,51 +490,24 @@ export default function Rooms() {
 
       {actionTarget ? (
         <ModalShell title={`Room ${actionTarget.room.number}`} subtitle={actionTarget.room.type || 'Standard'} onClose={() => setDialog(null)}>
-          <div className="space-y-6">
-            <div className={cn('rounded-xl border p-4', selectedRoomStatus ? STATUS_META[selectedRoomStatus].stat : 'border-slate-200 bg-slate-50')}>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Current Status</p>
-                  <p className="mt-1 text-xl font-bold text-slate-900">{selectedRoomStatus ? STATUS_META[selectedRoomStatus].label : 'Unknown'}</p>
-                </div>
-                <span className="text-sm font-medium text-slate-500">{selectedRoomStatus ? STATUS_META[selectedRoomStatus].description : ''}</span>
-              </div>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
-                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Capacity</p>
-                <p className="mt-1 text-lg font-semibold text-slate-900">{actionTarget.room.capacity} guests</p>
-              </div>
-              <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
-                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Base Rate</p>
-                <p className="mt-1 text-lg font-semibold text-slate-900">{formatCurrency(actionTarget.room.baseRate)}</p>
-              </div>
-              <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/60 p-4 sm:col-span-2">
-                <div>
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Assigned Unit</p>
-                  <p className="mt-1 text-base font-semibold text-slate-900">{actionTarget.room.unitName || 'Direct room'}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Inventory State</p>
-                  <p className="mt-1 text-base font-semibold capitalize text-slate-900">
-                    {actionTarget.room.status.toLowerCase().replaceAll('_', ' ')}
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="flex flex-wrap justify-end gap-3 pt-2">
-              <button type="button" className={btnSecondary} onClick={() => handleEditRoom(actionTarget)}>Edit Room</button>
-              <button type="button" className={btnPrimary} onClick={() => handleCreateBooking(actionTarget)}>Create Booking</button>
-            </div>
-          </div>
+          <RoomDetailsView
+            room={actionTarget.room}
+            statusLabel={selectedRoomStatus ? STATUS_META[selectedRoomStatus].label : 'Unknown'}
+            statusDescription={selectedRoomStatus ? STATUS_META[selectedRoomStatus].description : ''}
+            statusStatClass={selectedRoomStatus ? STATUS_META[selectedRoomStatus].stat : ''}
+            onEdit={() => handleEditRoom(actionTarget)}
+            onBook={() => handleCreateBooking(actionTarget)}
+          />
         </ModalShell>
       ) : null}
 
       {bookingTarget ? (
         <ModalShell title={`Create Booking — Room ${bookingTarget.room.number}`} size="wide" onClose={() => setDialog(null)}>
-          <RoomBookingForm
+          <BookingForm
             propertyId={bookingTarget.propertyId}
             room={bookingTarget.room}
+            initialCheckIn={todayStr}
+            initialCheckOut={tomorrowStr}
             onSuccess={async () => { setDialog(null); await loadData(); }}
             onCancel={() => setDialog(null)}
           />
@@ -660,92 +516,30 @@ export default function Rooms() {
 
       {editTarget ? (
         <ModalShell title={`Edit Room ${editTarget.room.number}`} onClose={() => setDialog(null)}>
-          <div className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label>
-                <span className={labelCls}>Room number</span>
-                <input className={inputCls} type="text" value={editFormData.number ?? ''} onChange={(e) => setEditFormData((c) => ({ ...c, number: e.target.value }))} />
-              </label>
-              <label>
-                <span className={labelCls}>Type</span>
-                <input className={inputCls} type="text" value={editFormData.type ?? ''} placeholder="e.g. Deluxe Suite" onChange={(e) => setEditFormData((c) => ({ ...c, type: e.target.value }))} />
-              </label>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label>
-                <span className={labelCls}>Capacity</span>
-                <input className={inputCls} type="number" min="1" value={editFormData.capacity ?? 1} onChange={(e) => setEditFormData((c) => ({ ...c, capacity: Number(e.target.value) || 1 }))} />
-              </label>
-              <label>
-                <span className={labelCls}>Base Rate (₹)</span>
-                <input className={inputCls} type="number" min="0" step="100" value={editFormData.baseRate ?? 0} onChange={(e) => setEditFormData((c) => ({ ...c, baseRate: Number(e.target.value) || 0 }))} />
-              </label>
-            </div>
-            <label>
-              <span className={labelCls}>Status</span>
-              <select className={inputCls} value={editFormData.status ?? 'ACTIVE'} onChange={(e) => setEditFormData((c) => ({ ...c, status: e.target.value as RoomStatus }))}>
-                <option value="ACTIVE">Active</option>
-                <option value="IN_MAINTENANCE">In Maintenance</option>
-                <option value="QUEUED_FOR_MAINTENANCE">Queued for Maintenance</option>
-                <option value="INACTIVE">Inactive</option>
-              </select>
-            </label>
-            <div className="mt-6 flex flex-col-reverse justify-between gap-3 border-t border-slate-100 pt-5 sm:flex-row">
-              <button type="button" className={btnDanger} onClick={() => setDialog({ type: 'delete', selection: editTarget })}>Delete Room</button>
-              <div className="flex justify-end gap-3">
-                <button type="button" className={btnSecondary} onClick={() => setDialog(null)}>Cancel</button>
-                <button type="button" className={btnPrimary} onClick={handleUpdateRoom}>Save Changes</button>
-              </div>
-            </div>
+          <RoomForm
+            propertyId={editTarget.propertyId}
+            initialRoom={editTarget.room}
+            units={unitsByProperty[editTarget.propertyId] || []}
+            onSuccess={async () => { setDialog(null); await loadData(); }}
+            onCancel={() => setDialog(null)}
+          />
+          {/* We insert the Delete Button beneath the form */}
+          <div className="mt-4 pt-4 border-t border-slate-100 flex justify-end">
+             <button type="button" className={btnDanger} onClick={() => setDialog({ type: 'delete', selection: editTarget })}>
+               Delete Room
+             </button>
           </div>
         </ModalShell>
       ) : null}
 
       {addRoomPropertyId ? (
         <ModalShell title="Add New Room" onClose={() => setDialog(null)}>
-          <div className="space-y-4">
-            <label>
-              <span className={labelCls}>Unit Association</span>
-              <select className={inputCls} value={newRoomData.unitId} onChange={(e) => setNewRoomData((c) => ({ ...c, unitId: e.target.value }))}>
-                <option value="">No Unit / Direct Room</option>
-                {(unitsByProperty[addRoomPropertyId] ?? []).map((unit) => (
-                  <option key={unit.id} value={unit.id}>{unit.name}</option>
-                ))}
-              </select>
-            </label>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label>
-                <span className={labelCls}>Room number</span>
-                <input className={inputCls} type="text" value={newRoomData.number} onChange={(e) => setNewRoomData((c) => ({ ...c, number: e.target.value }))} placeholder="101" />
-              </label>
-              <label>
-                <span className={labelCls}>Type</span>
-                <input className={inputCls} type="text" value={newRoomData.type} onChange={(e) => setNewRoomData((c) => ({ ...c, type: e.target.value }))} placeholder="Deluxe, Suite" />
-              </label>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label>
-                <span className={labelCls}>Capacity</span>
-                <input className={inputCls} type="number" min="1" value={newRoomData.capacity} onChange={(e) => setNewRoomData((c) => ({ ...c, capacity: Number(e.target.value) || 1 }))} />
-              </label>
-              <label>
-                <span className={labelCls}>Base Rate (₹)</span>
-                <input className={inputCls} type="number" min="0" step="100" value={newRoomData.baseRate} onChange={(e) => setNewRoomData((c) => ({ ...c, baseRate: Number(e.target.value) || 0 }))} />
-              </label>
-            </div>
-            <label>
-              <span className={labelCls}>Initial Status</span>
-              <select className={inputCls} value={newRoomData.status} onChange={(e) => setNewRoomData((c) => ({ ...c, status: e.target.value as RoomStatus }))}>
-                <option value="ACTIVE">Active</option>
-                <option value="IN_MAINTENANCE">In Maintenance</option>
-                <option value="INACTIVE">Inactive</option>
-              </select>
-            </label>
-            <div className="mt-6 flex justify-end gap-3 border-t border-slate-100 pt-5">
-              <button type="button" className={btnSecondary} onClick={() => setDialog(null)}>Cancel</button>
-              <button type="button" className={btnPrimary} onClick={handleCreateRoom}>Create Room</button>
-            </div>
-          </div>
+           <RoomForm
+            propertyId={addRoomPropertyId}
+            units={unitsByProperty[addRoomPropertyId] || []}
+            onSuccess={async () => { setDialog(null); await loadData(); }}
+            onCancel={() => setDialog(null)}
+          />
         </ModalShell>
       ) : null}
 

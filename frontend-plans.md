@@ -8,3 +8,5 @@
 
 ### next
 - reports
+
+hello, some testing on nvim, pretty cool possibly idk

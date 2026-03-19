@@ -61,7 +61,7 @@ public class Booking {
     @Column(nullable = false, columnDefinition = "integer default 0")
     private Integer children = 0;
 
-    @Column(length = 3, columnDefinition = "char(3) default 'INR'")
+    @Column(length = 3, columnDefinition = "char(3)")
     private String currency = "INR";
 
     @Column(name = "total_price", precision = 10, scale = 2, nullable = false)
