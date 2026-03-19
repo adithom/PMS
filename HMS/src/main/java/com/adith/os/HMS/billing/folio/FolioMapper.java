@@ -95,6 +95,7 @@ public class FolioMapper {
                 folio.getTotalAmount(),
                 folio.getPaidAmount(),
                 folio.getBalanceDue(),
+                folio.getRoutedToFolio() != null ? folio.getRoutedToFolio().getId() : null,
                 folio.getCurrency(),
                 folio.getCreatedAt(),
                 folio.getClosedAt(),

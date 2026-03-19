@@ -160,7 +160,7 @@ public class Folio {
                 if (child.getPayments() != null) {
                     routedPaid = routedPaid.add(child.getPayments().stream()
                             .filter(p -> p.getPaymentStatus() == PaymentStatus.COMPLETED)
-                            .map(Payment::getAmount)
+                            .map(p -> p.getAmount().subtract(p.getRefundedAmount() != null ? p.getRefundedAmount() : BigDecimal.ZERO))
                             .reduce(BigDecimal.ZERO, BigDecimal::add));
                 }
             }
@@ -176,7 +176,7 @@ public class Folio {
         BigDecimal selfPaid = payments != null
                 ? payments.stream()
                 .filter(p -> p.getPaymentStatus() == PaymentStatus.COMPLETED)
-                .map(Payment::getAmount)
+                .map(p -> p.getAmount().subtract(p.getRefundedAmount() != null ? p.getRefundedAmount() : BigDecimal.ZERO))
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 : BigDecimal.ZERO;
 

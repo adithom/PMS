@@ -24,6 +24,9 @@ export default function FolioDetailModal({ propertyId, folioId, onClose }: Folio
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Action states
+  const [isProcessingId, setIsProcessingId] = useState<string | null>(null);
+
   // Sub-modal states
   const [showAddCharge, setShowAddCharge] = useState(false);
   const [showAddPayment, setShowAddPayment] = useState(false);
@@ -42,6 +45,25 @@ export default function FolioDetailModal({ propertyId, folioId, onClose }: Folio
       setError(err.message || 'Failed to load folio details.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleVoidOrRefund = async (item: LedgerItem) => {
+    if (item.type === 'CHARGE') {
+      const reason = window.prompt('Please enter a reason for voiding this charge:');
+      if (!reason) return; // Exit if the user cancels the prompt
+
+      setIsProcessingId(item.raw.id);
+      try {
+        await folioApi.voidCharge(propertyId, folioId, item.raw.id, reason);
+        await loadFolio(); // Refresh data to update balances and the grid
+      } catch (err: any) {
+        alert(err.message || 'Failed to void charge.');
+      } finally {
+        setIsProcessingId(null);
+      }
+    } else {
+      alert('Payment refund flow is handled in the Payment Gateway dashboard.');
     }
   };
 
@@ -182,8 +204,12 @@ export default function FolioDetailModal({ propertyId, folioId, onClose }: Folio
                           </td>
                           <td className="p-4 text-center">
                             {!item.isVoided && folio.status === 'OPEN' && (
-                              <button className="text-[10px] font-bold uppercase tracking-wider text-rose-500 hover:text-rose-700">
-                                {item.type === 'CHARGE' ? 'Void' : 'Refund'}
+                              <button 
+                                onClick={() => handleVoidOrRefund(item)}
+                                disabled={isProcessingId === item.raw.id}
+                                className="text-[10px] font-bold uppercase tracking-wider text-rose-500 hover:text-rose-700 disabled:opacity-50"
+                              >
+                                {isProcessingId === item.raw.id ? 'Processing...' : (item.type === 'CHARGE' ? 'Void' : 'Refund')}
                               </button>
                             )}
                           </td>
@@ -251,7 +277,6 @@ export default function FolioDetailModal({ propertyId, folioId, onClose }: Folio
                   Receive Payment
                 </button>
 
-                {/* The New Routing Button */}
                 <button 
                   onClick={() => setShowRouting(true)}
                   className="flex w-full items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-bold text-indigo-700 transition-all hover:bg-indigo-100"
@@ -269,10 +294,6 @@ export default function FolioDetailModal({ propertyId, folioId, onClose }: Folio
                     <path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                   </svg>
                   Print Proforma Bill
-                </button>
-
-                <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-bold text-white shadow-sm transition-all hover:bg-slate-800 disabled:opacity-50">
-                  Close Folio & Check Out
                 </button>
               </div>
             )}

@@ -328,6 +328,16 @@ public class FolioService {
                     "Charge does not belong to the specified folio");
         }
 
+        if (folio.getStatus() != FolioStatus.OPEN) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Cannot void charges on a closed or posted folio");
+        }
+
+        if (charge.getBill() != null || charge.getGroupBill() != null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Cannot void a charge that has already been finalized on a bill/invoice");
+        }
+
         try {
             charge.voidCharge(voidedBy != null ? voidedBy : "SYSTEM", reason);
             folioChargeRepository.save(charge);
@@ -536,6 +546,11 @@ public class FolioService {
         }
         if (charge.isVoided()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot route a voided charge");
+        }
+
+        if (charge.getBill() != null || charge.getGroupBill() != null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Cannot route a charge that has already been finalized on a bill/invoice");
         }
 
         // 3. Determine and Validate Target Folio

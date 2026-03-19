@@ -13,8 +13,10 @@ import Rooms from './pages/Rooms';
 import Bookings from './pages/Bookings';
 import Guests from './pages/Guests';
 import PosInterface from './pages/PosInterface';
-import BillingManager from './pages/BillingManager';
+import AdminBillingManager from './pages/AdminBillingManager';
+import FrontDeskBillingManager from './pages/FrontDeskBillingManager';
 import Sandbox from './pages/Sandbox';
+
 
 function AppRoutes() {
   const { user, isLoading } = useAuth();
@@ -107,17 +109,41 @@ function AppRoutes() {
         }
       />
 
+
       <Route
         path="/billing"
         element={
           <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER', 'FRONTDESK']}>
             <>
               <Navigation allowedRoutes={allowedRoutes} />
-              <BillingManager />
+              
+              {user?.role === 'ADMIN' ? (
+                <AdminBillingManager />
+              ) : (
+                <FrontDeskBillingManager 
+                  propertyId={user?.properties?.[0]?.id || ''} 
+                />
+              )}
             </>
           </ProtectedRoute>
         }
       />
+
+    
+
+      <Route
+        path="/frontdesk-billing"
+        element={
+          <ProtectedRoute allowedRoles={['ADMIN']}>
+            <>
+              <Navigation allowedRoutes={allowedRoutes} />
+              <FrontDeskBillingManager 
+            propertyId="4ce85cf7-cb84-4c87-b405-c11be2f64ac6" />
+            </>
+          </ProtectedRoute>
+        }
+      />
+
 
       {/* Developer Sandbox - Hidden from normal navigation */}
       <Route

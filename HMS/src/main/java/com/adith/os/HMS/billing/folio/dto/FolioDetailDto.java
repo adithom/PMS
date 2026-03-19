@@ -23,6 +23,7 @@ public record FolioDetailDto(
         BigDecimal totalAmount,
         BigDecimal paidAmount,
         BigDecimal balanceDue,
+        UUID routedToFolioId,
         String currency,
         OffsetDateTime createdAt,
         OffsetDateTime closedAt,
