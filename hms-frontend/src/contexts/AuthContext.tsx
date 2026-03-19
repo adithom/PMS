@@ -5,6 +5,8 @@ import type { ReactNode } from 'react';
 import fetchClient, { ApiError } from '../api/fetchClient';
 import type { AuthResponse, UserInfo } from '../api/authApi';
 
+// todo: make backend send user info in login response to avoid extra /auth/me
+
 interface AuthContextType {
   user: UserInfo | null;
   token: string | null;

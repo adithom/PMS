@@ -12,7 +12,6 @@ import FolioDetailModal from '../components/Billing/FolioDetailModal';
 /* ────────────────────────────────────────────────────────────── */
 
 // todo: remove folio id requirement from routing charges to target
-// todo: wire up close folio and void charges
 
 interface GlobalFolio extends FolioDto {
   propertyName: string;
@@ -438,7 +437,7 @@ export default function AdminBillingDashboard() {
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 mb-6">
               <h3 className="text-sm font-bold text-amber-800">Note on the Audit Log</h3>
               <p className="mt-1 text-xs text-amber-700 leading-relaxed">
-                Currently, the backend API does not have a global <code>/api/audit/financials</code> endpoint to fetch all voided charges and refunded payments natively. This view demonstrates how the Corporate Audit Log will look once that endpoint is established by the backend team.
+                Currently, the backend API does not have a global <code>/api/audit/financials</code> endpoint to fetch all voided charges and refunded payments natively. This view demonstrates how the Corporate Audit Log will look once that endpoint is established at the backend.
               </p>
             </div>
 
