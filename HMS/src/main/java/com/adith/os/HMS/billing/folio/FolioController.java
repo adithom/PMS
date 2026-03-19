@@ -92,6 +92,17 @@ public class FolioController {
         return ResponseEntity.ok(updatedFolio);
     }
 
+    @PostMapping("/{id}/charges/{chargeId}/route")
+    public ResponseEntity<FolioDto> routeCharge(
+            @PathVariable UUID propertyId,
+            @PathVariable UUID id,
+            @PathVariable UUID chargeId,
+            @RequestParam(required = false) UUID targetFolioId) {
+
+        FolioDto updatedFolio = folioService.routeCharge(propertyId, id, chargeId, targetFolioId);
+        return ResponseEntity.ok(updatedFolio);
+    }
+
     // STATUS CHANGES
     @PatchMapping("/{id}/close")
     public ResponseEntity<FolioDto> closeFolio(

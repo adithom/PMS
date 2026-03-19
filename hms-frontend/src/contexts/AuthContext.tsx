@@ -1,7 +1,8 @@
-// src/contexts/AuthContext.tsx
 import { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
-import { apiClient } from '../api/apiClient';
+
+// Import fetchClient and your custom ApiError class
+import fetchClient, { ApiError } from '../api/fetchClient';
 import type { AuthResponse, UserInfo } from '../api/authApi';
 
 interface AuthContextType {
@@ -24,16 +25,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const initAuth = async () => {
       const storedToken = localStorage.getItem('accessToken');
-      console.log('Initializing auth, token exists:', !!storedToken); // Debug log
-
+      
       if (storedToken) {
         try {
-          const userInfo = await apiClient.get<UserInfo>('/auth/me');
-          console.log('User info fetched:', userInfo); // Debug log
+          // fetchClient automatically attaches the token from localStorage
+          const userInfo = await fetchClient.get<UserInfo>('/auth/me');
           setUser(userInfo);
           setToken(storedToken);
         } catch (error) {
-          console.error('Token validation failed:', error); // Debug log
+          console.error('Token validation failed:', error);
           // Token invalid, clear it
           localStorage.removeItem('accessToken');
           setToken(null);
@@ -48,7 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (username: string, password: string): Promise<UserInfo> => {
     try {
-      const response = await apiClient.post<AuthResponse>('/auth/login', { username, password });
+      const response = await fetchClient.post<AuthResponse>('/auth/login', { username, password });
 
       localStorage.setItem('accessToken', response.token);
       setToken(response.token);
@@ -65,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Fetch full user info
       try {
-        const userInfo = await apiClient.get<UserInfo>('/auth/me');
+        const userInfo = await fetchClient.get<UserInfo>('/auth/me');
         setUser(userInfo);
         return userInfo;
       } catch (fetchError) {
@@ -78,12 +78,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setToken(null);
       setUser(null);
 
-      // Throw a more user-friendly error
-      if (error.status === 401) {
-        throw new Error('Invalid username or password');
-      } else if (error.status === 403) {
-        throw new Error('Access forbidden');
-      } else if (error.message) {
+      // Utilize your custom ApiError class for reliable status checking
+      if (error instanceof ApiError) {
+        if (error.status === 401) {
+          throw new Error('Invalid username or password');
+        } else if (error.status === 403) {
+          throw new Error('Access forbidden');
+        }
+      }
+      
+      if (error.message) {
         throw new Error(error.message);
       } else {
         throw new Error('Login failed. Please try again.');
@@ -92,8 +96,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
-    // Optional: Call logout endpoint if exists
-    // apiClient.post('/auth/logout', {}).catch(() => {});
     localStorage.removeItem('accessToken');
     setUser(null);
     setToken(null);

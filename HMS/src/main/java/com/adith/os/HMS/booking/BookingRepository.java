@@ -235,6 +235,20 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
             @Param("date") LocalDate date
     );
 
+    @Query("""
+        SELECT b FROM Booking b 
+        WHERE b.property.id = :propertyId 
+        AND b.checkIn < :to 
+        AND b.checkOut > :from 
+        AND b.status NOT IN ('CANCELLED') 
+        ORDER BY b.checkIn ASC
+    """)
+    List<Booking> findOverlappingBookings(
+            @Param("propertyId") UUID propertyId,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to
+    );
+
     /**
      * Find all bookings for a property that are active on a specific date with specific statuses
      */

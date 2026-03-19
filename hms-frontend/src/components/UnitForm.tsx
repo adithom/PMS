@@ -1,7 +1,13 @@
-// src/components/UnitForm.tsx
 import { useState, useEffect } from 'react';
-
 import type { UnitDto } from '../types';
+
+/* ────────────────────────────────────────────────────────────── */
+/* Tokens & Styles                                              */
+/* ────────────────────────────────────────────────────────────── */
+const btnPrimary = 'inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
+const btnSecondary = 'inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-all hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
+const inputCls = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition-all placeholder:text-slate-400 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed';
+const labelCls = 'mb-1.5 block text-sm font-medium text-slate-700';
 
 interface UnitFormProps {
   propertyId: string;
@@ -26,11 +32,7 @@ export default function UnitForm({ propertyId, unit, onSave, onCancel }: UnitFor
         sortOrder: unit.sortOrder ?? 0,
       });
     } else {
-      // Reset for create mode
-      setFormData({
-        name: '',
-        sortOrder: 0,
-      });
+      setFormData({ name: '', sortOrder: 0 });
     }
   }, [unit]);
 
@@ -70,7 +72,6 @@ export default function UnitForm({ propertyId, unit, onSave, onCancel }: UnitFor
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!validate()) return;
 
     setSubmitting(true);
@@ -79,262 +80,45 @@ export default function UnitForm({ propertyId, unit, onSave, onCancel }: UnitFor
         name: formData.name.trim(),
         sortOrder: formData.sortOrder,
       });
-      // Parent will close modal on success
-    } catch (err) {
-      const errorMessage = (err as Error).message;
-      setErrors({ submit: errorMessage });
+    } catch (err: any) {
+      setErrors({ submit: err.message });
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <div 
-      className="modal-overlay" 
-      onClick={onCancel}
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: 'rgba(0,0,0,0.6)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000,
-      }}
-    >
-      <div 
-        className="modal-content" 
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          background: 'white',
-          borderRadius: '12px',
-          minWidth: '450px',
-          maxWidth: '500px',
-          boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)',
-        }}
-      >
-        <div 
-          className="modal-header"
-          style={{
-            padding: '1.5rem',
-            borderBottom: '1px solid #e2e8f0',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-          }}
-        >
-          <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '600' }}>
-            {unit ? 'Edit Unit' : 'Create Unit'}
-          </h2>
-          <button 
-            onClick={onCancel} 
-            className="modal-close"
-            style={{
-              background: 'none',
-              border: 'none',
-              fontSize: '1.5rem',
-              cursor: 'pointer',
-              color: '#64748b',
-              padding: '0.25rem',
-              lineHeight: 1,
-            }}
-            disabled={submitting}
-          >
-            ×
-          </button>
+    <form onSubmit={handleSubmit} className="space-y-4">
+      {errors.submit && (
+        <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+          {errors.submit}
         </div>
+      )}
 
-        <form onSubmit={handleSubmit}>
-          <div 
-            className="modal-body"
-            style={{
-              padding: '1.5rem',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '1.25rem',
-            }}
-          >
-            {/* Unit Name */}
-            <div className="form-group">
-              <label 
-                className="form-label"
-                style={{
-                  display: 'block',
-                  marginBottom: '0.5rem',
-                  fontWeight: '500',
-                  fontSize: '0.875rem',
-                  color: '#0f172a',
-                }}
-              >
-                Unit Name <span style={{ color: '#dc2626' }}>*</span>
-              </label>
-              <input
-                type="text"
-                name="name"
-                value={formData.name}
-                onChange={handleChange}
-                className="form-input"
-                placeholder="Building A, Tower 1, etc."
-                disabled={submitting}
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  border: '2px solid #e2e8f0',
-                  borderRadius: '6px',
-                  fontSize: '1rem',
-                  transition: 'border-color 0.2s',
-                }}
-                onFocus={(e) => e.target.style.borderColor = '#2563eb'}
-                onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
-              />
-              {errors.name && (
-                <div 
-                  className="form-error"
-                  style={{
-                    marginTop: '0.5rem',
-                    fontSize: '0.875rem',
-                    color: '#dc2626',
-                  }}
-                >
-                  {errors.name}
-                </div>
-              )}
-            </div>
+      <label>
+        <span className={labelCls}>Unit Name *</span>
+        <input type="text" name="name" value={formData.name} onChange={handleChange} disabled={submitting} placeholder="e.g. Tower 1, Main Building" className={inputCls} />
+        {errors.name && <p className="mt-1 text-xs text-rose-500">{errors.name}</p>}
+      </label>
 
-            {/* Sort Order */}
-            <div className="form-group">
-              <label 
-                className="form-label"
-                style={{
-                  display: 'block',
-                  marginBottom: '0.5rem',
-                  fontWeight: '500',
-                  fontSize: '0.875rem',
-                  color: '#0f172a',
-                }}
-              >
-                Sort Order
-              </label>
-              <input
-                type="number"
-                name="sortOrder"
-                value={formData.sortOrder}
-                onChange={handleChange}
-                className="form-input"
-                placeholder="0"
-                disabled={submitting}
-                min="0"
-                step="1"
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  border: '2px solid #e2e8f0',
-                  borderRadius: '6px',
-                  fontSize: '1rem',
-                  transition: 'border-color 0.2s',
-                }}
-                onFocus={(e) => e.target.style.borderColor = '#2563eb'}
-                onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
-              />
-              <div 
-                style={{ 
-                  fontSize: '0.75rem', 
-                  color: '#64748b', 
-                  marginTop: '0.25rem' 
-                }}
-              >
-                Lower numbers appear first in lists (0 = first)
-              </div>
-              {errors.sortOrder && (
-                <div 
-                  className="form-error"
-                  style={{
-                    marginTop: '0.5rem',
-                    fontSize: '0.875rem',
-                    color: '#dc2626',
-                  }}
-                >
-                  {errors.sortOrder}
-                </div>
-              )}
-            </div>
+      <label>
+        <span className={labelCls}>Sort Order</span>
+        <input type="number" name="sortOrder" value={formData.sortOrder} onChange={handleChange} disabled={submitting} min="0" step="1" className={inputCls} />
+        {errors.sortOrder ? (
+          <p className="mt-1 text-xs text-rose-500">{errors.sortOrder}</p>
+        ) : (
+          <p className="mt-1 text-[10px] text-slate-400">Lower numbers appear first in lists (0 = first)</p>
+        )}
+      </label>
 
-            {/* Submit Error */}
-            {errors.submit && (
-              <div 
-                style={{ 
-                  padding: '0.75rem', 
-                  background: '#fee2e2', 
-                  color: '#991b1b',
-                  borderRadius: '6px',
-                  fontSize: '0.875rem',
-                }}
-              >
-                {errors.submit}
-              </div>
-            )}
-          </div>
-
-          <div 
-            className="modal-footer"
-            style={{
-              padding: '1.5rem',
-              borderTop: '1px solid #e2e8f0',
-              display: 'flex',
-              justifyContent: 'flex-end',
-              gap: '0.75rem',
-            }}
-          >
-            <button
-              type="button"
-              onClick={onCancel}
-              className="btn btn-secondary"
-              disabled={submitting}
-              style={{
-                padding: '0.75rem 1.5rem',
-                background: 'white',
-                color: '#475569',
-                border: '2px solid #e2e8f0',
-                borderRadius: '6px',
-                cursor: submitting ? 'not-allowed' : 'pointer',
-                fontSize: '1rem',
-                fontWeight: '500',
-                transition: 'all 0.2s',
-                opacity: submitting ? 0.5 : 1,
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={submitting}
-              style={{
-                padding: '0.75rem 1.5rem',
-                background: submitting ? '#94a3b8' : '#2563eb',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: submitting ? 'not-allowed' : 'pointer',
-                fontSize: '1rem',
-                fontWeight: '500',
-                transition: 'background 0.2s',
-              }}
-              onMouseEnter={(e) => {
-                if (!submitting) e.currentTarget.style.background = '#1d4ed8';
-              }}
-              onMouseLeave={(e) => {
-                if (!submitting) e.currentTarget.style.background = '#2563eb';
-              }}
-            >
-              {submitting ? 'Saving...' : unit ? 'Update Unit' : 'Create Unit'}
-            </button>
-          </div>
-        </form>
+      <div className="mt-6 flex justify-end gap-3 border-t border-slate-100 pt-5">
+        <button type="button" onClick={onCancel} className={btnSecondary} disabled={submitting}>
+          Cancel
+        </button>
+        <button type="submit" className={btnPrimary} disabled={submitting}>
+          {submitting ? 'Saving...' : unit ? 'Update Unit' : 'Create Unit'}
+        </button>
       </div>
-    </div>
+    </form>
   );
 }

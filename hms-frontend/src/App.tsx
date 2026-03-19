@@ -14,6 +14,7 @@ import Bookings from './pages/Bookings';
 import Guests from './pages/Guests';
 import PosInterface from './pages/PosInterface';
 import BillingManager from './pages/BillingManager';
+import Sandbox from './pages/Sandbox';
 
 function AppRoutes() {
   const { user, isLoading } = useAuth();
@@ -118,6 +119,15 @@ function AppRoutes() {
         }
       />
 
+      {/* Developer Sandbox - Hidden from normal navigation */}
+      <Route
+        path="/sandbox"
+        element={
+          <ProtectedRoute allowedRoles={['ADMIN']}>
+            <Sandbox />
+          </ProtectedRoute>
+        }
+      />
 
       {/* Catch all - redirect to user's default page or login */}
       <Route

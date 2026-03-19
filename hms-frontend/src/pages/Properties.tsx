@@ -1,14 +1,45 @@
-// src/pages/Properties.tsx
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import propertyApi from '../api/propertyApi';
 import unitApi from '../api/unitApi';
 import type { Property, UnitDto } from '../types';
+
 import LoadingSpinner from '../components/LoadingSpinner';
-import ErrorMessage from '../components/ErrorMessage';
+import ModalShell from '../components/ModalShell';
 import PropertyForm from '../components/PropertyForm';
 import UnitForm from '../components/UnitForm';
-import ConfirmDialog from '../components/ConfirmDialog';
-import './Properties.css';
+
+/* ────────────────────────────────────────────────────────────── */
+/* Types & Tokens                                               */
+/* ────────────────────────────────────────────────────────────── */
+
+type DialogState =
+  | { type: 'view_property'; property: Property }
+  | { type: 'add_property' }
+  | { type: 'edit_property'; property: Property }
+  | { type: 'delete_property'; property: Property }
+  | { type: 'add_unit'; property: Property }
+  | { type: 'edit_unit'; property: Property; unit: UnitDto }
+  | null;
+
+function cn(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(' ');
+}
+
+const btnPrimary =
+  'inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
+
+const btnSecondary =
+  'inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-all hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
+
+const btnDanger =
+  'inline-flex items-center justify-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
+
+const inputCls =
+  'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition-all placeholder:text-slate-400 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100';
+
+/* ────────────────────────────────────────────────────────────── */
+/* Page Component                                               */
+/* ────────────────────────────────────────────────────────────── */
 
 export default function Properties() {
   const [properties, setProperties] = useState<Property[]>([]);
@@ -16,327 +47,315 @@ export default function Properties() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Modal states
-  const [showPropertyForm, setShowPropertyForm] = useState(false);
-  const [editingProperty, setEditingProperty] = useState<Property | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<Property | null>(null);
-
-  // Property detail modal states
-  const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
-  const [propertyUnits, setPropertyUnits] = useState<UnitDto[]>([]);
+  // Unified Dialog & Selection State
+  const [dialog, setDialog] = useState<DialogState>(null);
+  const [unitsForProperty, setUnitsForProperty] = useState<UnitDto[]>([]);
   const [loadingUnits, setLoadingUnits] = useState(false);
 
-  // Unit form states
-  const [showUnitForm, setShowUnitForm] = useState(false);
-  const [editingUnit, setEditingUnit] = useState<UnitDto | null>(null);
+  /* ═══════════════════════════════════════════════════════════ */
+  /* Data Loading                                                */
+  /* ═══════════════════════════════════════════════════════════ */
 
-  useEffect(() => {
-    loadProperties();
-  }, []);
-
-  const loadProperties = async () => {
+  const loadProperties = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const data = await propertyApi.getAll();
-      setProperties(data);
-    } catch (err) {
-      setError((err as Error).message);
+      setProperties(data || []);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load properties');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const loadPropertyUnits = async (propertyId: string) => {
+  useEffect(() => {
+    void loadProperties();
+  }, [loadProperties]);
+
+  const loadUnits = async (propertyId: string) => {
     setLoadingUnits(true);
     try {
       const units = await propertyApi.getUnits(propertyId);
-      setPropertyUnits(units);
-    } catch (err) {
-      setError((err as Error).message);
+      setUnitsForProperty(units || []);
+    } catch (err: any) {
+      // Non-fatal, just means units couldn't load
+      setUnitsForProperty([]);
     } finally {
       setLoadingUnits(false);
     }
   };
 
-  const handlePropertyClick = async (property: Property) => {
-    setSelectedProperty(property);
-    await loadPropertyUnits(property.id);
-  };
+  /* ═══════════════════════════════════════════════════════════ */
+  /* Actions                                                     */
+  /* ═══════════════════════════════════════════════════════════ */
 
-  const handleCreateProperty = () => {
-    setEditingProperty(null);
-    setShowPropertyForm(true);
-  };
-
-  const handleEditProperty = (property: Property) => {
-    setEditingProperty(property);
-    setShowPropertyForm(true);
+  const handleViewProperty = (property: Property) => {
+    setDialog({ type: 'view_property', property });
+    void loadUnits(property.id);
   };
 
   const handleSaveProperty = async (data: Partial<Property>) => {
-    if (editingProperty) {
-      await propertyApi.update(editingProperty.id, data);
-    } else {
-      await propertyApi.create(data);
+    try {
+      if (dialog?.type === 'edit_property') {
+        await propertyApi.update(dialog.property.id, data);
+      } else {
+        await propertyApi.create(data);
+      }
+      setDialog(null);
+      await loadProperties();
+    } catch (err: any) {
+      alert(`Failed to save: ${err.message}`);
     }
-    setShowPropertyForm(false);
-    setEditingProperty(null);
-    loadProperties();
   };
 
   const handleDeleteProperty = async () => {
-    if (!deleteConfirm) return;
-
+    if (dialog?.type !== 'delete_property') return;
     try {
-      await propertyApi.delete(deleteConfirm.id);
-      setDeleteConfirm(null);
-      setSelectedProperty(null);
-      loadProperties();
-    } catch (err) {
-      alert(`Failed to delete: ${(err as Error).message}`);
+      await propertyApi.delete(dialog.property.id);
+      setDialog(null);
+      await loadProperties();
+    } catch (err: any) {
+      alert(`Failed to delete: ${err.message}`);
     }
-  };
-
-  const handleCreateUnit = () => {
-    setEditingUnit(null);
-    setShowUnitForm(true);
-  };
-
-  const handleEditUnit = (unit: UnitDto) => {
-    setEditingUnit(unit);
-    setShowUnitForm(true);
   };
 
   const handleSaveUnit = async (data: { name: string; sortOrder: number }) => {
-    if (!selectedProperty) return;
-
-    if (editingUnit) {
-      await unitApi.partialUpdate(selectedProperty.id, editingUnit.id, data);
-    } else {
-      await unitApi.create(selectedProperty.id, data);
+    if (dialog?.type !== 'add_unit' && dialog?.type !== 'edit_unit') return;
+    const propId = dialog.property.id;
+    try {
+      if (dialog.type === 'edit_unit') {
+        await unitApi.partialUpdate(propId, dialog.unit.id, data);
+      } else {
+        await unitApi.create(propId, data);
+      }
+      // Return to view property state and refresh units
+      setDialog({ type: 'view_property', property: dialog.property });
+      await loadUnits(propId);
+    } catch (err: any) {
+      alert(`Failed to save unit: ${err.message}`);
     }
-    setShowUnitForm(false);
-    setEditingUnit(null);
-    await loadPropertyUnits(selectedProperty.id);
   };
 
-  const filteredProperties = properties.filter(p =>
-    p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    p.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    p.address?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  /* ═══════════════════════════════════════════════════════════ */
+  /* Rendering                                                   */
+  /* ═══════════════════════════════════════════════════════════ */
 
-  if (loading) return <LoadingSpinner />;
-  if (error) return <ErrorMessage message={error} onRetry={loadProperties} />;
+  const filteredProperties = useMemo(() => {
+    const q = searchQuery.toLowerCase();
+    return properties.filter(p =>
+      p.name.toLowerCase().includes(q) ||
+      p.code.toLowerCase().includes(q) ||
+      (p.address || '').toLowerCase().includes(q)
+    );
+  }, [properties, searchQuery]);
+
+  if (loading && properties.length === 0) {
+    return (
+      <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-slate-50">
+        <LoadingSpinner text="Loading properties…" />
+      </div>
+    );
+  }
+
+  const activeProperty = dialog && 'property' in dialog ? dialog.property : null;
 
   return (
-    <div className="properties-container">
-      {/* Header */}
-      <div className="properties-header">
-        <h1 className="properties-title">Properties</h1>
-        <button
-          onClick={handleCreateProperty}
-          className="btn btn-primary"
-        >
-          + Add Property
-        </button>
-      </div>
+    <div className="min-h-[calc(100vh-4rem)] bg-slate-50 pb-20">
+      <div className="mx-auto max-w-7xl px-8 pt-8 sm:px-12 lg:px-16">
 
-      {/* Search Bar */}
-      <div className="search-container">
-        <input
-          type="text"
-          placeholder="Search properties..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="input"
-        />
-      </div>
-
-      {/* Properties Grid */}
-      <div className="properties-grid">
-        {filteredProperties.map((property) => (
-          <div
-            key={property.code}
-            onClick={() => handlePropertyClick(property)}
-            className="property-card"
-          >
-            <div className="property-card-header">
-              <div>
-                <h3 className="property-name">{property.name}</h3>
-                <div className="property-details">
-                  <span className="property-detail-item">Code: {property.code}</span>
-                  <span className="property-detail-item">•</span>
-                  <span className="property-detail-item">{property.country}</span>
-                  <span className="property-detail-item">•</span>
-                  <span className="property-detail-item">{property.totalRooms} Rooms</span>
-                </div>
-              </div>
-              <div className="arrow-icon">→</div>
-            </div>
+        {/* ─── Page Header ─── */}
+        <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:items-center sm:justify-between sm:text-left">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-emerald-600">Administration</p>
+            <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
+              Properties
+            </h1>
           </div>
-        ))}
+          <button type="button" className={btnPrimary} onClick={() => setDialog({ type: 'add_property' })}>
+            + Add Property
+          </button>
+        </div>
+
+        {error && (
+          <div className="mt-6 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 shadow-sm">
+            <strong>Error:</strong> {error}
+          </div>
+        )}
+
+        {/* ─── Search ─── */}
+        <div className="mt-8 flex items-center max-w-md">
+          <input
+            type="text"
+            placeholder="Search by name, code, or location..."
+            className={inputCls}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+
+        {/* ─── Properties Grid ─── */}
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {filteredProperties.length === 0 && !loading && (
+            <div className="col-span-full rounded-2xl border-2 border-dashed border-slate-200 py-16 text-center">
+              <p className="text-sm font-medium text-slate-400">
+                {searchQuery ? 'No properties match your search.' : 'No properties configured yet.'}
+              </p>
+            </div>
+          )}
+
+          {filteredProperties.map((property) => (
+            <button
+              key={property.id}
+              type="button"
+              className="group flex flex-col items-start rounded-2xl border-2 border-slate-200 bg-white p-5 text-left transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-emerald-400 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2"
+              onClick={() => handleViewProperty(property)}
+            >
+              <div className="flex w-full items-start justify-between">
+                <div className="min-w-0 pr-4">
+                  <h3 className="truncate text-lg font-bold tracking-tight text-slate-900 group-hover:text-emerald-700">
+                    {property.name}
+                  </h3>
+                  <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                    {property.code}
+                  </p>
+                </div>
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-50 text-slate-400 transition-colors group-hover:bg-emerald-50 group-hover:text-emerald-600">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                  </svg>
+                </div>
+              </div>
+
+              <div className="mt-5 flex w-full flex-wrap items-center gap-2 text-[11px] font-semibold text-slate-500">
+                {property.country && (
+                  <span className="rounded-md bg-slate-100 px-2 py-1">{property.country}</span>
+                )}
+                <span className="rounded-md bg-slate-100 px-2 py-1">{property.totalRooms} Rooms</span>
+              </div>
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Empty State */}
-      {filteredProperties.length === 0 && (
-        <div className="empty-state">
-          <p>
-            {searchQuery ? 'No properties match your search' : 'No properties found'}
-          </p>
-        </div>
-      )}
+      {/* ═══════════════════════════════════════════════════════ */}
+      {/* MODALS                                                */}
+      {/* ═══════════════════════════════════════════════════════ */}
 
-      {/* Property Detail Modal */}
-      {selectedProperty && (
-        <div className="modal-overlay" onClick={() => {
-          setSelectedProperty(null);
-          setPropertyUnits([]);
-        }}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            {/* Header */}
-            <div className="modal-header">
-              <div>
-                <h2 className="modal-title">{selectedProperty.name}</h2>
-                <div className="modal-subtitle">{selectedProperty.code}</div>
+      {/* 1. View Property Details */}
+      {dialog?.type === 'view_property' && activeProperty && (
+        <ModalShell title={activeProperty.name} subtitle={activeProperty.code} onClose={() => setDialog(null)}>
+          <div className="space-y-6">
+            
+            {/* Property Info Grid */}
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4 sm:col-span-3">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Address</p>
+                <p className="mt-1 text-sm font-medium text-slate-900">{activeProperty.address || 'Not specified'}</p>
               </div>
-              <button
-                onClick={() => {
-                  setSelectedProperty(null);
-                  setPropertyUnits([]);
-                }}
-                className="close-btn"
-              >
-                ×
-              </button>
+              <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4 sm:col-span-2">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Country</p>
+                <p className="mt-1 text-sm font-semibold text-slate-900">{activeProperty.country}</p>
+              </div>
+              <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total Rooms</p>
+                <p className="mt-1 text-lg font-bold text-slate-900">{activeProperty.totalRooms}</p>
+              </div>
             </div>
 
-            {/* Content */}
-            <div className="modal-body">
-              {/* Property Information */}
-              <div className="modal-section">
-                <h3 className="section-title">Property Information</h3>
-                <div className="info-grid">
-                  <div>
-                    <div className="info-label">Address</div>
-                    <div className="info-value">{selectedProperty.address || 'Not specified'}</div>
-                  </div>
-                  <div>
-                    <div className="info-label">Country</div>
-                    <div className="info-value">{selectedProperty.country}</div>
-                  </div>
-                  <div>
-                    <div className="info-label">Total Rooms</div>
-                    <div className="info-value">{selectedProperty.totalRooms}</div>
-                  </div>
-                </div>
+            {/* Units Section */}
+            <div>
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <h3 className="text-sm font-bold tracking-tight text-slate-900">
+                  Units ({unitsForProperty.length})
+                </h3>
+                <button type="button" onClick={() => setDialog({ type: 'add_unit', property: activeProperty })}
+                  className="text-xs font-bold text-emerald-600 hover:text-emerald-700">
+                  + Add Unit
+                </button>
               </div>
 
-              {/* Units Section */}
-              <div>
-                <div className="units-header">
-                  <h3 className="section-title" style={{ margin: 0 }}>
-                    Units ({propertyUnits.length})
-                  </h3>
-                  <button
-                    onClick={handleCreateUnit}
-                    className="btn btn-primary"
-                    style={{ padding: '0.25rem 0.75rem', fontSize: '0.75rem' }}
-                  >
-                    + Add Unit
-                  </button>
-                </div>
-
+              <div className="mt-3 space-y-2">
                 {loadingUnits ? (
-                  <div className="text-center text-muted p-4">Loading units...</div>
-                ) : propertyUnits.length === 0 ? (
-                  <div className="empty-state" style={{ padding: '2rem' }}>
-                    No units created yet
+                  <p className="text-xs text-slate-400 animate-pulse py-4">Loading units...</p>
+                ) : unitsForProperty.length === 0 ? (
+                  <div className="rounded-lg border-2 border-dashed border-slate-100 py-6 text-center">
+                    <p className="text-xs font-medium text-slate-400">No units configured yet.</p>
                   </div>
                 ) : (
-                  <div className="units-list">
-                    {propertyUnits.map((unit) => (
-                      <div
-                        key={unit.id}
-                        onClick={() => handleEditUnit(unit)}
-                        className="unit-item"
-                      >
-                        <div>
-                          <div className="unit-name">{unit.name}</div>
-                          <div className="unit-details">
-                            Sort Order: {unit.sortOrder} • Rooms: {unit.totalRooms}
-                          </div>
-                        </div>
-                        <div className="arrow-icon" style={{ fontSize: '1rem' }}>→</div>
+                  unitsForProperty.map((unit) => (
+                    <button key={unit.id} type="button" onClick={() => setDialog({ type: 'edit_unit', property: activeProperty, unit })}
+                      className="group flex w-full items-center justify-between rounded-xl border border-slate-100 bg-white p-3 text-left transition-all hover:border-slate-300 hover:bg-slate-50">
+                      <div>
+                        <p className="text-sm font-bold text-slate-900">{unit.name}</p>
+                        <p className="text-[11px] font-medium text-slate-400 mt-0.5">
+                          Order: {unit.sortOrder} &nbsp;•&nbsp; Rooms: {unit.totalRooms}
+                        </p>
                       </div>
-                    ))}
-                  </div>
+                      <div className="text-slate-300 group-hover:text-slate-600">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                        </svg>
+                      </div>
+                    </button>
+                  ))
                 )}
               </div>
             </div>
 
-            {/* Footer Actions */}
-            <div className="modal-footer">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleEditProperty(selectedProperty);
-                  setSelectedProperty(null);
-                }}
-                className="btn btn-secondary"
-                style={{ flex: 1 }}
-              >
-                Edit Property
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setDeleteConfirm(selectedProperty);
-                }}
-                className="btn btn-danger"
-                style={{ flex: 1 }}
-              >
+            {/* Actions */}
+            <div className="flex flex-wrap justify-between gap-3 pt-4 border-t border-slate-100">
+              <button type="button" className={btnDanger} onClick={() => setDialog({ type: 'delete_property', property: activeProperty })}>
                 Delete Property
+              </button>
+              <button type="button" className={btnPrimary} onClick={() => setDialog({ type: 'edit_property', property: activeProperty })}>
+                Edit Property Info
               </button>
             </div>
           </div>
-        </div>
+        </ModalShell>
       )}
 
-      {/* Property Form Modal */}
-      {showPropertyForm && (
-        <PropertyForm
-          property={editingProperty}
-          onSave={handleSaveProperty}
-          onCancel={() => {
-            setShowPropertyForm(false);
-            setEditingProperty(null);
-          }}
-        />
+      {/* 2. Add / Edit Property Form */}
+      {(dialog?.type === 'add_property' || dialog?.type === 'edit_property') && (
+        <ModalShell title={dialog.type === 'add_property' ? 'Add New Property' : `Edit ${dialog.property.name}`} onClose={() => setDialog(null)}>
+          <PropertyForm
+            property={dialog.type === 'edit_property' ? dialog.property : null}
+            onSave={handleSaveProperty}
+            onCancel={() => setDialog(null)}
+          />
+        </ModalShell>
       )}
 
-      {/* Unit Form Modal */}
-      {showUnitForm && selectedProperty && (
-        <UnitForm
-          propertyId={selectedProperty.id}
-          unit={editingUnit}
-          onSave={handleSaveUnit}
-          onCancel={() => {
-            setShowUnitForm(false);
-            setEditingUnit(null);
-          }}
-        />
+      {/* 3. Add / Edit Unit Form */}
+      {(dialog?.type === 'add_unit' || dialog?.type === 'edit_unit') && activeProperty && (
+        <ModalShell title={dialog.type === 'add_unit' ? 'Add New Unit' : `Edit ${dialog.unit.name}`} subtitle={activeProperty.name} onClose={() => setDialog({ type: 'view_property', property: activeProperty })}>
+          <UnitForm
+            propertyId={activeProperty.id}
+            unit={dialog.type === 'edit_unit' ? dialog.unit : null}
+            onSave={handleSaveUnit}
+            onCancel={() => setDialog({ type: 'view_property', property: activeProperty })}
+          />
+        </ModalShell>
       )}
 
-      {/* Delete Confirmation Dialog */}
-      {deleteConfirm && (
-        <ConfirmDialog
-          title="Delete Property"
-          message={`Are you sure you want to delete "${deleteConfirm.name}"? This action cannot be undone.`}
-          onConfirm={handleDeleteProperty}
-          onCancel={() => setDeleteConfirm(null)}
-        />
+      {/* 4. Delete Confirmation */}
+      {dialog?.type === 'delete_property' && activeProperty && (
+        <ModalShell title={`Delete ${activeProperty.name}?`} onClose={() => setDialog({ type: 'view_property', property: activeProperty })}>
+          <div className="space-y-5">
+            <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm leading-6 text-rose-800">
+              <strong>Warning:</strong> This action cannot be undone. You are permanently removing this property and all its associations.
+            </div>
+            <div className="flex justify-end gap-3">
+              <button type="button" className={btnSecondary} onClick={() => setDialog({ type: 'view_property', property: activeProperty })}>
+                Cancel
+              </button>
+              <button type="button" className={btnDanger} onClick={handleDeleteProperty}>
+                Confirm Deletion
+              </button>
+            </div>
+          </div>
+        </ModalShell>
       )}
     </div>
   );

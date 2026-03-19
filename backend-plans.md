@@ -1,5 +1,7 @@
 ### immediate
 - [x] early checkouts 
+- [ ] no show should release room and clean up chart
+- [ ] release rooms after early checkout
 - [x] extend bookings
 - [x] group bookings
 
