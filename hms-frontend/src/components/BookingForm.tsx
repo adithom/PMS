@@ -59,18 +59,19 @@ export default function BookingForm({
   onCancel
 }: Props) {
   const isEditMode = !!booking;
+  const getRoomId = (r: Room | null): string | null => r ? r.roomId ?? (r as any).id ?? null : null;
 
+  // ── Hierarchy State ──
   const [properties, setProperties] = useState<Property[]>([]);
-  const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(
-    propPropertyId || booking?.propertyId || null
-  );
+  const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(propPropertyId || booking?.propertyId || null);
+  
   const [units, setUnits] = useState<UnitDto[]>([]);
-  const [selectedUnitId, setSelectedUnitId] = useState<string | null>(
-    booking?.unitId || (preselectedRoom as any)?.unitId || null
-  );
+  const [selectedUnitId, setSelectedUnitId] = useState<string | null>(booking?.unitId || (preselectedRoom as any)?.unitId || null);
+  
+  const [availableRooms, setAvailableRooms] = useState<Room[]>(preselectedRoom ? [preselectedRoom] : []);
   const [room, setRoom] = useState<Room | null>(preselectedRoom ?? null);
-  const [availableRooms, setAvailableRooms] = useState<Room[]>([]);
 
+  // ── Stay Parameters ──
   const [checkIn, setCheckIn] = useState<string>(booking?.checkIn ?? initialCheckIn ?? '');
   const [checkOut, setCheckOut] = useState<string>(booking?.checkOut ?? initialCheckOut ?? '');
   const [adults, setAdults] = useState<number>(booking?.adults ?? 1);
@@ -81,7 +82,7 @@ export default function BookingForm({
   const [specialRequests, setSpecialRequests] = useState<string>(booking?.specialRequests ?? '');
   const [status, setStatus] = useState<string>(booking?.status ?? 'PENDING');
 
-  // Guest State
+  // ── Guest State ──
   const defaultGuestName = initialGuest ? `${initialGuest.firstName} ${initialGuest.lastName}` : '';
   const [guestQuery, setGuestQuery] = useState<string>(booking?.guestName ?? defaultGuestName);
   const [guestResults, setGuestResults] = useState<GuestSearchResult[]>(initialGuest ? [initialGuest] : []);
@@ -94,35 +95,115 @@ export default function BookingForm({
   const [newGuestPhone, setNewGuestPhone] = useState<string>('');
   const [newGuestDocId, setNewGuestDocId] = useState<string>('');
 
+  // ── UI State ──
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [checkingAvailability, setCheckingAvailability] = useState<boolean>(false);
   const [availabilityMessage, setAvailabilityMessage] = useState<{ type: 'error' | 'success', text: string } | null>(null);
 
-  const getRoomId = (r: Room | null): string | null => r ? r.roomId ?? (r as any).id ?? null : null;
+  /* ═══════════════════════════════════════════════════════════ */
+  /* Cascading Data Effects                                      */
+  /* ═══════════════════════════════════════════════════════════ */
 
-  // Initial Data Load
+  // 1. Fetch Properties
   useEffect(() => {
     propertyApi.getAll().then(props => setProperties(props || [])).catch(() => {});
   }, []);
 
+  // 2. Fetch Units (Triggered when Property changes)
   useEffect(() => {
     if (!selectedPropertyId) { setUnits([]); return; }
     propertyApi.getUnits(selectedPropertyId).then(fetched => setUnits(fetched || [])).catch(() => setUnits([]));
   }, [selectedPropertyId]);
 
+  // 3. Auto-discover Unit from Preselected Room 
+  // (Fixes the issue where preselected room has unitName but no direct unitId)
   useEffect(() => {
-    if (!selectedPropertyId || !selectedUnitId) { setAvailableRooms([]); return; }
-    roomApi.getByUnit(selectedPropertyId, selectedUnitId).then(rooms => {
-      setAvailableRooms(rooms || []);
-      if (isEditMode && booking?.roomNumber) {
-        const match = rooms.find(r => r.number === booking.roomNumber);
-        if (match) setRoom(match);
+    if (units.length > 0 && preselectedRoom && !selectedUnitId) {
+      const r = preselectedRoom as any;
+      if (r.unitId) {
+        setSelectedUnitId(r.unitId);
+      } else if (r.unitName) {
+        const match = units.find(u => u.name === r.unitName);
+        if (match) setSelectedUnitId(match.id);
       }
-    }).catch(() => setAvailableRooms([]));
-  }, [selectedPropertyId, selectedUnitId, booking, isEditMode]);
+    }
+  }, [units, preselectedRoom, selectedUnitId]);
 
-  // Guest Search
+  // 4. Fetch Rooms & Check Availability (Unified to prevent race conditions)
+  useEffect(() => {
+    // Strict block: Do nothing until Unit is explicitly resolved
+    if (!selectedPropertyId || !selectedUnitId) { 
+      setAvailableRooms(preselectedRoom ? [preselectedRoom] : []);
+      setAvailabilityMessage(null);
+      return; 
+    }
+
+    let mounted = true;
+
+    const fetchRoomsAndAvailability = async () => {
+      try {
+        const hasDates = checkIn && checkOut && new Date(checkOut) > new Date(checkIn);
+        
+        // If we have dates, check availability first
+        if (!isEditMode && hasDates) {
+          setCheckingAvailability(true);
+          
+          // Parallel fetch: Get all rooms in unit + get availability constraints
+          const [allRoomsInUnit, availableList] = await Promise.all([
+            roomApi.getByUnit(selectedPropertyId, selectedUnitId),
+            availabilityApi.searchAvailableRoomsByUnit(selectedUnitId, checkIn, checkOut)
+          ]);
+          
+          if (!mounted) return;
+
+          const availIds = new Set(availableList.map((r: any) => r.roomId));
+          const filtered = allRoomsInUnit.filter(r => availIds.has(getRoomId(r)!));
+          
+          setAvailableRooms(filtered);
+          
+          if (filtered.length === 0) setAvailabilityMessage({ type: 'error', text: '⚠️ No rooms available for selected dates' });
+          else setAvailabilityMessage({ type: 'success', text: `✓ ${filtered.length} room(s) available` });
+
+          // Re-snap to the preselected room if it survived the availability filter
+          setRoom(prev => {
+            if (prev && availIds.has(getRoomId(prev)!)) return prev;
+            if (preselectedRoom && availIds.has(getRoomId(preselectedRoom)!)) {
+              return filtered.find(r => getRoomId(r) === getRoomId(preselectedRoom)) || null;
+            }
+            return null;
+          });
+          
+          setCheckingAvailability(false);
+        } else {
+          // No dates selected yet, just load the raw inventory for the Unit
+          setAvailabilityMessage(null);
+          const allRoomsInUnit = await roomApi.getByUnit(selectedPropertyId, selectedUnitId);
+          if (!mounted) return;
+          
+          setAvailableRooms(allRoomsInUnit);
+          
+          if (isEditMode && booking?.roomNumber) {
+            const match = allRoomsInUnit.find(r => r.number === booking.roomNumber);
+            if (match) setRoom(match);
+          } else if (preselectedRoom) {
+            const match = allRoomsInUnit.find(r => getRoomId(r) === getRoomId(preselectedRoom));
+            if (match) setRoom(match);
+          }
+        }
+      } catch (err) {
+        if (!mounted) return;
+        setAvailableRooms([]);
+        setCheckingAvailability(false);
+      }
+    };
+
+    fetchRoomsAndAvailability();
+
+    return () => { mounted = false; };
+  }, [selectedPropertyId, selectedUnitId, checkIn, checkOut, isEditMode, booking, preselectedRoom]);
+
+  // Guest Search Effect
   useEffect(() => {
     if (isEditMode || !guestQuery || guestQuery.length < 2) return;
     let mounted = true;
@@ -140,24 +221,9 @@ export default function BookingForm({
     return () => { mounted = false; };
   }, [guestQuery, isEditMode]);
 
-  // Check Availability
-  useEffect(() => {
-    if (isEditMode || !selectedUnitId || !checkIn || !checkOut || new Date(checkOut) <= new Date(checkIn)) {
-      setAvailabilityMessage(null); return;
-    }
-    setCheckingAvailability(true);
-    availabilityApi.searchAvailableRoomsByUnit(selectedUnitId, checkIn, checkOut).then(list => {
-      const availIds = new Set(list.map(r => r.roomId));
-      setAvailableRooms(prev => prev.filter(r => availIds.has(getRoomId(r)!)));
-      
-      if (list.length === 0) setAvailabilityMessage({ type: 'error', text: '⚠️ No rooms available for selected dates' });
-      else setAvailabilityMessage({ type: 'success', text: `✓ ${list.length} room(s) available` });
-
-      if (room && !availIds.has(getRoomId(room)!)) setRoom(null);
-    }).catch(() => {
-      setAvailabilityMessage({ type: 'error', text: 'Failed to check availability' });
-    }).finally(() => setCheckingAvailability(false));
-  }, [selectedUnitId, checkIn, checkOut, isEditMode]); // eslint-disable-line
+  /* ═══════════════════════════════════════════════════════════ */
+  /* Submission                                                  */
+  /* ═══════════════════════════════════════════════════════════ */
 
   const createGuestThenSelect = async (): Promise<string> => {
     setLoading(true); setError(null);
@@ -182,6 +248,7 @@ export default function BookingForm({
     try {
       if (creatingGuest && !isEditMode) await createGuestThenSelect();
 
+      // Strict Hierarchy Validations
       if (!selectedPropertyId) throw new Error('Property is required.');
       if (!selectedUnitId) throw new Error('Unit is required.');
       if (!selectedGuestId && !creatingGuest) throw new Error('Please select or create a guest.');
@@ -190,7 +257,7 @@ export default function BookingForm({
       const payload: BookingCreationDto = {
         roomId: getRoomId(room) ?? undefined,
         guestId: selectedGuestId!,
-        unitId: selectedUnitId!,
+        unitId: selectedUnitId, // Now strictly passed
         status: status as any,
         checkIn, checkOut, adults, children, currency, totalPrice, paidAmount, specialRequests
       };
@@ -210,14 +277,13 @@ export default function BookingForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
       
-      {/* ── Header & Errors ── */}
       {error && (
         <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 shadow-sm">
           <strong>Error:</strong> {error}
         </div>
       )}
 
-      {/* ── Core Association ── */}
+      {/* ── Location & Room (Strict Cascade) ── */}
       <div className="space-y-4 rounded-xl border border-slate-100 bg-slate-50/50 p-5">
         <h4 className="text-sm font-bold tracking-tight text-slate-900 border-b border-slate-200 pb-2">Location & Room</h4>
         
@@ -235,7 +301,7 @@ export default function BookingForm({
         <div className="grid gap-4 sm:grid-cols-2">
           <label>
             <span className={labelCls}>Unit *</span>
-            <select className={inputCls} value={selectedUnitId ?? ''} disabled={!selectedPropertyId}
+            <select className={inputCls} value={selectedUnitId ?? ''} disabled={!selectedPropertyId || isEditMode} required
               onChange={e => { setSelectedUnitId(e.target.value || null); setRoom(null); }}>
               <option value="">-- Select unit --</option>
               {units.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
@@ -251,11 +317,14 @@ export default function BookingForm({
                 {availableRooms.map(r => <option key={getRoomId(r)} value={getRoomId(r)!}>{r.number} {r.type ? `- ${r.type}` : ''}</option>)}
               </select>
             </label>
-            {availabilityMessage && !isEditMode && (
-              <p className={cn("mt-2 text-xs font-semibold px-2 py-1 rounded-md", 
+            {availabilityMessage && !isEditMode && selectedUnitId && (
+              <p className={cn("mt-2 text-xs font-semibold px-2 py-1 rounded-md inline-block", 
                 availabilityMessage.type === 'success' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800')}>
                 {availabilityMessage.text}
               </p>
+            )}
+            {checkingAvailability && (
+              <p className="mt-2 text-xs font-semibold text-slate-500 animate-pulse">Checking live availability...</p>
             )}
           </div>
         </div>

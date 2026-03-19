@@ -384,7 +384,7 @@ export default function Bookings() {
       const { rid, startCol, endCol } = prev;
       const from = Math.min(startCol, endCol), to = Math.max(startCol, endCol);
       const room = rooms.find(r => getRoomId(r) === rid);
-      if (room && to > from) setTimeout(() => openForm(room, toDS(dateCols[from]), toDS(addDays(dateCols[to], 1))), 0);
+      if (room && to > from) setTimeout(() => openForm(room, toDS(dateCols[from]), toDS(dateCols[to])), 0);
       return null;
     });
   }, [rooms, dateCols, openForm]);
@@ -739,11 +739,18 @@ export default function Bookings() {
 
       {/* ═══════════════════ MODALS ═══════════════════ */}
 
+      {/* ═══════════════════ MODALS ═══════════════════ */}
+
       {showForm && (
         <ModalShell title="Create Booking" subtitle={pfRoom ? `Room ${pfRoom.number}` : undefined} size="wide" onClose={() => setShowForm(false)}>
-          <BookingForm propertyId={selectedPropId} room={pfRoom}
+          <BookingForm 
+            propertyId={selectedPropId} 
+            room={pfRoom}
+            initialCheckIn={prefillCheckIn.current}   
+            initialCheckOut={prefillCheckOut.current} 
             onSuccess={async () => { setShowForm(false); await refresh(); }}
-            onCancel={() => setShowForm(false)} />
+            onCancel={() => setShowForm(false)} 
+          />
         </ModalShell>
       )}
 
