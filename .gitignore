@@ -3,6 +3,8 @@
 target/
 node_modules/
 
+hms-frontend/.agents/
+
 .frontend-plans.md
 .backend-plans.md
 
