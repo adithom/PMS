@@ -1,8 +1,12 @@
-// BookingsList.tsx
 import React, { useState } from 'react';
 import bookingApi from '../api/bookingApi';
 import BookingForm from './BookingForm';
+import ModalShell from './ModalShell';
 import type { Booking, BookingStatus } from '../types';
+
+/* ────────────────────────────────────────────────────────────── */
+/* Types & Tokens                                               */
+/* ────────────────────────────────────────────────────────────── */
 
 type StatType = 'incoming' | 'inhouse' | 'checkouts' | 'all';
 
@@ -14,13 +18,38 @@ interface BookingsListProps {
   onUpdate: () => void;
 }
 
-export default function BookingsList({
-  bookings,
-  propertyId,
-  listType,
-  onClose,
-  onUpdate
-}: BookingsListProps) {
+function cn(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(' ');
+}
+
+const btnSecondary = 'inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-all hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 disabled:cursor-not-allowed disabled:opacity-50';
+const btnDanger = 'inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-lg bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 shadow-sm transition-all hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 disabled:cursor-not-allowed disabled:opacity-50';
+const btnSuccess = 'inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 disabled:cursor-not-allowed disabled:opacity-50';
+const btnAction = 'inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:cursor-not-allowed disabled:opacity-50';
+const btnConfirmDanger = 'inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 disabled:cursor-not-allowed disabled:opacity-50';
+const btnConfirmPrimary = 'inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-not-allowed disabled:opacity-50';
+
+const getStatusColor = (status: BookingStatus) => {
+  switch (status) {
+    case 'CONFIRMED': return 'bg-blue-100 text-blue-800 border-blue-200';
+    case 'CHECKED_IN': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+    case 'CHECKED_OUT': return 'bg-indigo-100 text-indigo-800 border-indigo-200';
+    case 'CANCELLED': return 'bg-rose-100 text-rose-800 border-rose-200';
+    case 'PENDING': return 'bg-amber-100 text-amber-800 border-amber-200';
+    case 'NO_SHOW': return 'bg-red-100 text-red-800 border-red-200';
+    default: return 'bg-slate-100 text-slate-600 border-slate-200';
+  }
+};
+
+const formatDate = (dateStr: string) => {
+  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
+/* ────────────────────────────────────────────────────────────── */
+/* Component                                                    */
+/* ────────────────────────────────────────────────────────────── */
+
+export default function BookingsList({ bookings, propertyId, listType, onClose, onUpdate }: BookingsListProps) {
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
@@ -30,542 +59,169 @@ export default function BookingsList({
 
   const getTitle = () => {
     switch (listType) {
-      case 'incoming':
-        return 'Incoming Check-ins';
-      case 'inhouse':
-        return 'In-House Guests';
-      case 'checkouts':
-        return 'Checkouts';
-      case 'all':
-      default:
-        return 'All Bookings';
+      case 'incoming': return 'Arrivals';
+      case 'inhouse': return 'In-House Guests';
+      case 'checkouts': return 'Departures';
+      case 'all': default: return 'All Bookings';
     }
   };
 
   const handleStatusUpdate = async (booking: Booking, newStatus: BookingStatus) => {
-    setLoading(true);
-    setError(null);
+    setLoading(true); setError(null);
     try {
-      if (!booking.id) {
-        setError('Booking ID is missing.');
-        setLoading(false);
-        return;
-      }
+      if (!booking.id) throw new Error('Booking ID is missing.');
       await bookingApi.updateStatus(propertyId, booking.id, newStatus);
       await onUpdate();
       setShowConfirmDialog(false);
       setSelectedBooking(null);
       setConfirmAction(null);
-    } catch (err) {
-      setError((err as Error).message);
+    } catch (err: any) {
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCheckIn = (booking: Booking) => {
+  const triggerConfirm = (booking: Booking, action: 'checkin' | 'checkout' | 'cancel') => {
     setSelectedBooking(booking);
-    setConfirmAction('checkin');
+    setConfirmAction(action);
     setShowConfirmDialog(true);
-  };
-
-  const handleCheckOut = (booking: Booking) => {
-    setSelectedBooking(booking);
-    setConfirmAction('checkout');
-    setShowConfirmDialog(true);
-  };
-
-  const handleCancel = (booking: Booking) => {
-    setSelectedBooking(booking);
-    setConfirmAction('cancel');
-    setShowConfirmDialog(true);
-  };
-
-  const handleEdit = (booking: Booking) => {
-    setSelectedBooking(booking);
-    setShowEditForm(true);
   };
 
   const confirmActionHandler = async () => {
-  if (!selectedBooking || !confirmAction) return;
+    if (!selectedBooking || !confirmAction) return;
 
-  if (confirmAction === 'checkin') {
-    // Use dedicated check-in endpoint
-    setLoading(true);
-    setError(null);
-    try {
-      if (!selectedBooking.id) {
-        setError('Booking ID is missing.');
-        return;
+    if (confirmAction === 'checkin') {
+      setLoading(true); setError(null);
+      try {
+        if (!selectedBooking.id) throw new Error('Booking ID is missing.');
+        await bookingApi.checkIn(propertyId, selectedBooking.id);
+        await onUpdate();
+        setShowConfirmDialog(false);
+        setSelectedBooking(null);
+        setConfirmAction(null);
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
       }
-      await bookingApi.checkIn(propertyId, selectedBooking.id);
-      await onUpdate();
-      setShowConfirmDialog(false);
-      setSelectedBooking(null);
-      setConfirmAction(null);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setLoading(false);
+    } else if (confirmAction === 'checkout') {
+      handleStatusUpdate(selectedBooking, 'CHECKED_OUT');
+    } else if (confirmAction === 'cancel') {
+      handleStatusUpdate(selectedBooking, 'CANCELLED');
     }
-  } else {
-    // Use handleStatusUpdate for checkout and cancel
-    switch (confirmAction) {
-      case 'checkout':
-        handleStatusUpdate(selectedBooking, 'CHECKED_OUT');
-        break;
-      case 'cancel':
-        handleStatusUpdate(selectedBooking, 'CANCELLED');
-        break;
-    }
-  }
-};
-
-  const getStatusColor = (status: BookingStatus) => {
-    switch (status) {
-      case 'CONFIRMED':
-        return { bg: '#dbeafe', text: '#1e40af' };
-      case 'CHECKED_IN':
-        return { bg: '#d1fae5', text: '#065f46' };
-      case 'CHECKED_OUT':
-        return { bg: '#e0e7ff', text: '#4338ca' };
-      case 'CANCELLED':
-        return { bg: '#fee2e2', text: '#991b1b' };
-      case 'PENDING':
-        return { bg: '#fef3c7', text: '#92400e' };
-      case 'NO_SHOW':
-        return { bg: '#fecaca', text: '#7f1d1d' };
-      default:
-        return { bg: '#f1f5f9', text: '#475569' };
-    }
-  };
-
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  };
-
-  const getActionButtons = (booking: Booking) => {
-    const buttons = [];
-
-    // Check-in button (only for CONFIRMED bookings)
-    if (booking.status === 'CONFIRMED') {
-      buttons.push(
-        <button
-          key="checkin"
-          onClick={() => handleCheckIn(booking)}
-          style={{
-            padding: '0.5rem 1rem',
-            background: '#10b981',
-            color: 'white',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontSize: '0.875rem',
-            fontWeight: 500,
-            transition: 'background 0.2s'
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.background = '#059669'}
-          onMouseLeave={(e) => e.currentTarget.style.background = '#10b981'}
-        >
-          Check In
-        </button>
-      );
-    }
-
-    // Check-out button (only for CHECKED_IN bookings)
-    if (booking.status === 'CHECKED_IN') {
-      buttons.push(
-        <button
-          key="checkout"
-          onClick={() => handleCheckOut(booking)}
-          style={{
-            padding: '0.5rem 1rem',
-            background: '#6366f1',
-            color: 'white',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontSize: '0.875rem',
-            fontWeight: 500,
-            transition: 'background 0.2s'
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.background = '#4f46e5'}
-          onMouseLeave={(e) => e.currentTarget.style.background = '#6366f1'}
-        >
-          Check Out
-        </button>
-      );
-    }
-
-    // Cancel button (only for PENDING or CONFIRMED)
-    if (booking.status === 'PENDING' || booking.status === 'CONFIRMED') {
-      buttons.push(
-        <button
-          key="cancel"
-          onClick={() => handleCancel(booking)}
-          style={{
-            padding: '0.5rem 1rem',
-            background: '#fee2e2',
-            color: '#dc2626',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontSize: '0.875rem',
-            fontWeight: 500,
-            transition: 'background 0.2s'
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.background = '#fecaca'}
-          onMouseLeave={(e) => e.currentTarget.style.background = '#fee2e2'}
-        >
-          Cancel
-        </button>
-      );
-    }
-
-    // Edit button (available except for CANCELLED and CHECKED_OUT)
-    if (booking.status !== 'CANCELLED' && booking.status !== 'CHECKED_OUT') {
-      buttons.push(
-        <button
-          key="edit"
-          onClick={() => handleEdit(booking)}
-          style={{
-            padding: '0.5rem 1rem',
-            background: '#f3f4f6',
-            color: '#374151',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontSize: '0.875rem',
-            fontWeight: 500,
-            transition: 'background 0.2s'
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.background = '#e5e7eb'}
-          onMouseLeave={(e) => e.currentTarget.style.background = '#f3f4f6'}
-        >
-          Edit
-        </button>
-      );
-    }
-
-    return buttons;
   };
 
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      background: 'rgba(0,0,0,0.5)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000,
-      padding: 20
-    }}>
-      <div style={{
-        background: '#fff',
-        borderRadius: 12,
-        maxWidth: 900,
-        width: '100%',
-        maxHeight: '90vh',
-        display: 'flex',
-        flexDirection: 'column',
-        boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)'
-      }}>
-        {/* Header */}
-        <div style={{
-          padding: 24,
-          borderBottom: '1px solid #e5e7eb',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center'
-        }}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 24, fontWeight: 600 }}>
-              {getTitle()}
-            </h2>
-            <div style={{ marginTop: 4, fontSize: 14, color: '#6b7280' }}>
-              {bookings.length} {bookings.length === 1 ? 'booking' : 'bookings'}
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            style={{
-              background: '#f1f5f9',
-              border: 'none',
-              fontSize: 24,
-              cursor: 'pointer',
-              color: '#64748b',
-              width: 36,
-              height: 36,
-              borderRadius: 6,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.background = '#e2e8f0'}
-            onMouseLeave={(e) => e.currentTarget.style.background = '#f1f5f9'}
-          >
-            ×
-          </button>
-        </div>
-
-        {/* Error Message */}
+    <>
+      {/* 1. Main List Modal */}
+      <ModalShell 
+        title={getTitle()} 
+        subtitle={`${bookings.length} ${bookings.length === 1 ? 'booking' : 'bookings'}`} 
+        size="wide" 
+        onClose={onClose}
+      >
         {error && (
-          <div style={{
-            margin: 20,
-            padding: 12,
-            background: '#fee2e2',
-            color: '#991b1b',
-            borderRadius: 8,
-            fontSize: 14
-          }}>
+          <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 shadow-sm">
             {error}
           </div>
         )}
 
-        {/* Bookings List */}
-        <div style={{
-          flex: 1,
-          overflow: 'auto',
-          padding: 24
-        }}>
+        <div className="space-y-4">
           {bookings.length === 0 ? (
-            <div style={{
-              textAlign: 'center',
-              padding: 40,
-              color: '#6b7280'
-            }}>
-              <div style={{ fontSize: 48, marginBottom: 16 }}>📋</div>
-              <div style={{ fontSize: 16, fontWeight: 500 }}>No bookings found</div>
+            <div className="rounded-xl border-2 border-dashed border-slate-200 py-16 text-center">
+              <span className="text-4xl">📋</span>
+              <p className="mt-4 text-sm font-medium text-slate-400">No bookings found for this category.</p>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {bookings.map((booking) => {
-                const statusColors = getStatusColor(booking.status);
+            bookings.map((booking) => (
+              <div key={booking.id} className="flex flex-col justify-between gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-all sm:flex-row sm:items-start">
                 
-                return (
-                  <div
-                    key={booking.id}
-                    style={{
-                      background: '#f9fafb',
-                      border: '1px solid #e5e7eb',
-                      borderRadius: 10,
-                      padding: 16,
-                      transition: 'all 0.2s'
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      {/* Left side - Guest & Room Info */}
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-                          <div style={{ fontSize: 18, fontWeight: 600, color: '#111827' }}>
-                            {(booking as any).guestName || 'Guest'}
-                          </div>
-                          <div style={{
-                            padding: '4px 10px',
-                            background: statusColors.bg,
-                            color: statusColors.text,
-                            borderRadius: 6,
-                            fontSize: 12,
-                            fontWeight: 600
-                          }}>
-                            {booking.status}
-                          </div>
-                        </div>
-
-                        <div style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'repeat(2, 1fr)',
-                          gap: 12,
-                          fontSize: 14,
-                          color: '#6b7280'
-                        }}>
-                          <div>
-                            <span style={{ fontWeight: 500 }}>Room:</span> {(booking as any).roomNumber || 'Not assigned'}
-                          </div>
-                          <div>
-                            <span style={{ fontWeight: 500 }}>Unit:</span> {(booking as any).unitName || 'N/A'}
-                          </div>
-                          <div>
-                            <span style={{ fontWeight: 500 }}>Check-in:</span> {formatDate(booking.checkIn)}
-                          </div>
-                          <div>
-                            <span style={{ fontWeight: 500 }}>Check-out:</span> {formatDate(booking.checkOut)}
-                          </div>
-                          <div>
-                            <span style={{ fontWeight: 500 }}>Guests:</span> {booking.adults} adults, {booking.children} children
-                          </div>
-                          <div>
-                            <span style={{ fontWeight: 500 }}>Total:</span> {booking.currency} {booking.totalPrice?.toFixed(2) || '0.00'}
-                          </div>
-                        </div>
-
-                        {booking.specialRequests && (
-                          <div style={{
-                            marginTop: 8,
-                            padding: 8,
-                            background: '#fef3c7',
-                            borderRadius: 6,
-                            fontSize: 13,
-                            color: '#92400e'
-                          }}>
-                            <span style={{ fontWeight: 600 }}>Special Requests:</span> {booking.specialRequests}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Right side - Action Buttons */}
-                      <div style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 8,
-                        marginLeft: 16
-                      }}>
-                        {getActionButtons(booking)}
-                      </div>
-                    </div>
+                {/* Info Section */}
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <h3 className="text-lg font-bold text-slate-900">{(booking as any).guestName || 'Guest'}</h3>
+                    <span className={cn('rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider', getStatusColor(booking.status))}>
+                      {booking.status.replace('_', ' ')}
+                    </span>
                   </div>
-                );
-              })}
-            </div>
+
+                  <div className="grid grid-cols-2 gap-y-2 text-[11px] font-medium text-slate-500 sm:grid-cols-3">
+                    <p><span className="font-bold text-slate-400">Room:</span> {(booking as any).roomNumber || 'Not assigned'}</p>
+                    <p><span className="font-bold text-slate-400">Unit:</span> {(booking as any).unitName || 'N/A'}</p>
+                    <p><span className="font-bold text-slate-400">Total:</span> {booking.currency} {booking.totalPrice?.toFixed(2) || '0.00'}</p>
+                    <p><span className="font-bold text-slate-400">In:</span> {formatDate(booking.checkIn)}</p>
+                    <p><span className="font-bold text-slate-400">Out:</span> {formatDate(booking.checkOut)}</p>
+                    <p><span className="font-bold text-slate-400">Guests:</span> {booking.adults}A, {booking.children}C</p>
+                  </div>
+
+                  {booking.specialRequests && (
+                    <div className="mt-3 rounded-lg border border-amber-100 bg-amber-50/50 p-2.5 text-[11px] text-amber-800">
+                      <strong className="block text-[10px] uppercase tracking-wider text-amber-600/70 mb-0.5">Special Requests</strong>
+                      {booking.specialRequests}
+                    </div>
+                  )}
+                </div>
+
+                {/* Action Buttons Section */}
+                <div className="flex shrink-0 flex-col gap-2 sm:w-32 border-t border-slate-100 pt-4 sm:border-t-0 sm:border-l sm:pl-4 sm:pt-0">
+                  {booking.status === 'CONFIRMED' && (
+                    <button onClick={() => triggerConfirm(booking, 'checkin')} className={btnSuccess}>Check In</button>
+                  )}
+                  {booking.status === 'CHECKED_IN' && (
+                    <button onClick={() => triggerConfirm(booking, 'checkout')} className={btnAction}>Check Out</button>
+                  )}
+                  {(booking.status === 'PENDING' || booking.status === 'CONFIRMED') && (
+                    <button onClick={() => triggerConfirm(booking, 'cancel')} className={btnDanger}>Cancel</button>
+                  )}
+                  {booking.status !== 'CANCELLED' && booking.status !== 'CHECKED_OUT' && (
+                    <button onClick={() => { setSelectedBooking(booking); setShowEditForm(true); }} className={btnSecondary}>Edit</button>
+                  )}
+                </div>
+
+              </div>
+            ))
           )}
         </div>
-      </div>
+      </ModalShell>
 
-      {/* Edit Form Modal */}
+      {/* 2. Edit Booking Form Modal */}
       {showEditForm && selectedBooking && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0,0,0,0.6)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1002,
-          padding: 20,
-          overflow: 'auto'
-        }}>
-          <div style={{
-            background: '#fff',
-            borderRadius: 12,
-            padding: 24,
-            maxWidth: 800,
-            width: '100%',
-            maxHeight: '90vh',
-            overflow: 'auto',
-            boxShadow: '0 20px 25px -5px rgba(0,0,0,0.3)'
-          }} onClick={(e) => e.stopPropagation()}>
-            <BookingForm
-              propertyId={propertyId}
-              booking={selectedBooking}
-              onSuccess={(updated) => {
-                setShowEditForm(false);
-                setSelectedBooking(null);
-                onUpdate();
-              }}
-              onCancel={() => {
-                setShowEditForm(false);
-                setSelectedBooking(null);
-              }}
-            />
-          </div>
-        </div>
+        <ModalShell title={`Edit Booking — ${(selectedBooking as any).guestName}`} size="wide" onClose={() => { setShowEditForm(false); setSelectedBooking(null); }}>
+          <BookingForm
+            propertyId={propertyId}
+            booking={selectedBooking}
+            onSuccess={() => { setShowEditForm(false); setSelectedBooking(null); onUpdate(); }}
+            onCancel={() => { setShowEditForm(false); setSelectedBooking(null); }}
+          />
+        </ModalShell>
       )}
 
-      {/* Confirm Dialog */}
+      {/* 3. Confirm Dialog Modal */}
       {showConfirmDialog && selectedBooking && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0,0,0,0.6)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1001
-        }}>
-          <div style={{
-            background: '#fff',
-            borderRadius: 12,
-            padding: 24,
-            maxWidth: 400,
-            width: '100%',
-            boxShadow: '0 20px 25px -5px rgba(0,0,0,0.3)'
-          }}>
-            <h3 style={{ margin: '0 0 16px 0', fontSize: 20, fontWeight: 600 }}>
-              Confirm {confirmAction === 'checkin' ? 'Check-in' : confirmAction === 'checkout' ? 'Check-out' : 'Cancellation'}
-            </h3>
-            <p style={{ margin: '0 0 24px 0', color: '#6b7280', fontSize: 14 }}>
-              {confirmAction === 'checkin' && `Check in ${(selectedBooking as any).guestName || 'this guest'}?`}
-              {confirmAction === 'checkout' && `Check out ${(selectedBooking as any).guestName || 'this guest'}?`}
-              {confirmAction === 'cancel' && `Cancel booking for ${(selectedBooking as any).guestName || 'this guest'}? This action cannot be undone.`}
+        <ModalShell 
+          title={confirmAction === 'checkin' ? 'Confirm Check-in' : confirmAction === 'checkout' ? 'Confirm Check-out' : 'Cancel Booking'} 
+          onClose={() => { setShowConfirmDialog(false); setSelectedBooking(null); setConfirmAction(null); setError(null); }}
+        >
+          <div className="space-y-5">
+            <p className="text-sm text-slate-600 leading-relaxed">
+              {confirmAction === 'checkin' && `Are you sure you want to check in ${(selectedBooking as any).guestName || 'this guest'}?`}
+              {confirmAction === 'checkout' && `Are you sure you want to check out ${(selectedBooking as any).guestName || 'this guest'}?`}
+              {confirmAction === 'cancel' && `Are you sure you want to cancel the booking for ${(selectedBooking as any).guestName || 'this guest'}? This action cannot be undone.`}
             </p>
-
-            {error && (
-              <div style={{
-                marginBottom: 16,
-                padding: 10,
-                background: '#fee2e2',
-                color: '#991b1b',
-                borderRadius: 6,
-                fontSize: 13
-              }}>
-                {error}
-              </div>
-            )}
-
-            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => {
-                  setShowConfirmDialog(false);
-                  setSelectedBooking(null);
-                  setConfirmAction(null);
-                  setError(null);
-                }}
-                disabled={loading}
-                style={{
-                  padding: '10px 20px',
-                  background: '#f3f4f6',
-                  color: '#374151',
-                  border: 'none',
-                  borderRadius: 8,
-                  cursor: loading ? 'default' : 'pointer',
-                  fontSize: 14,
-                  fontWeight: 500
-                }}
-              >
-                Cancel
+            
+            <div className="flex justify-end gap-3 pt-2">
+              <button type="button" className={btnSecondary} disabled={loading}
+                onClick={() => { setShowConfirmDialog(false); setSelectedBooking(null); setConfirmAction(null); setError(null); }}>
+                Back
               </button>
-              <button
-                onClick={confirmActionHandler}
-                disabled={loading}
-                style={{
-                  padding: '10px 20px',
-                  background: confirmAction === 'cancel' ? '#dc2626' : '#2563eb',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: 8,
-                  cursor: loading ? 'default' : 'pointer',
-                  fontSize: 14,
-                  fontWeight: 500,
-                  opacity: loading ? 0.6 : 1
-                }}
-              >
-                {loading ? 'Processing...' : 'Confirm'}
+              <button type="button" className={confirmAction === 'cancel' ? btnConfirmDanger : btnConfirmPrimary} onClick={confirmActionHandler} disabled={loading}>
+                {loading ? 'Processing...' : 'Confirm Action'}
               </button>
             </div>
           </div>
-        </div>
+        </ModalShell>
       )}
-    </div>
+    </>
   );
 }
