@@ -3,6 +3,7 @@
 - [x] tailwind migration 
 - [x] admin billing console
 - [x] frontend billing manager
+- [ ] unassigned rooms task list
 - [ ] twin bedded rooms - check box while booking creation
 - [ ] birthday celebration pop up
 - [x] calender modification

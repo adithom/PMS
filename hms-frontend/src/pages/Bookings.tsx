@@ -7,6 +7,7 @@ import availabilityApi from '../api/availabilityApi';
 import BookingForm from '../components/Booking/BookingForm';
 import BookingsList from '../components/Booking/BookingsList';
 import GroupBookingModal from '../components/Booking/GroupBookingModal';
+import EarlyCheckoutModal from '../components/Booking/EarlyCheckoutModal';
 import LoadingSpinner from '../components/LoadingSpinner';
 import type { Property, Room, Booking } from '../types';
 
@@ -36,14 +37,10 @@ const BUFFER_BEFORE = 15;
 const BUFFER_AFTER = 16;
 const REFETCH_THRESHOLD = 3;
 const NAV_DEBOUNCE_MS = 300;
-const SCROLL_EDGE_PX = 80; // Trigger edge-scroll when within this many px of edge
-const SCROLL_COOLDOWN_MS = 600; // Prevent rapid fire edge-scroll
-const SCROLL_STEP_DAYS = 2; // How many days to advance per edge-scroll trigger
+const SCROLL_EDGE_PX = 80; 
+const SCROLL_COOLDOWN_MS = 600; 
+const SCROLL_STEP_DAYS = 2; 
 
-/*
- * Light, translucent status colors matched to BookingDto.status enum:
- * PENDING, CONFIRMED, CHECKED_IN, CHECKED_OUT, CANCELLED, NO_SHOW
- */
 const STATUS_COLORS: Record<string, { bar: string; text: string; label: string; legend: string }> = {
   CONFIRMED:   { bar: 'bg-blue-200/70',    text: 'text-blue-900',     legend: 'bg-blue-300',    label: 'Confirmed' },
   CHECKED_IN:  { bar: 'bg-green-200/70',   text: 'text-green-900',    legend: 'bg-green-300',   label: 'Checked In' },
@@ -70,11 +67,6 @@ const getRoomId = (room: Room): string => (room as any).roomId ?? (room as any).
 const shortDate = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 const dayLabel = (d: Date) => d.toLocaleDateString('en-US', { weekday: 'short' });
 
-/**
- * Extract the date string from a BookingDto date field.
- * The backend sends LocalDate as "yyyy-MM-dd" (no T).
- * But just in case there's a timestamp, strip it.
- */
 const dateStr = (v: string): string => v.split('T')[0];
 
 type StatType = 'incoming' | 'inhouse' | 'checkouts' | 'all';
@@ -106,8 +98,12 @@ function ModalShell({ title, subtitle, size = 'regular', children, onClose }: {
 /* Context Menu                                                  */
 /* ────────────────────────────────────────────────────────────── */
 
-function CtxMenu({ state, propertyId, onClose, onAction }: {
-  state: { x: number; y: number; booking: Booking } | null; propertyId: string; onClose: () => void; onAction: () => void;
+function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout }: {
+  state: { x: number; y: number; booking: Booking } | null; 
+  propertyId: string; 
+  onClose: () => void; 
+  onAction: () => void;
+  onEarlyCheckout: (bookingId: string) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -132,9 +128,23 @@ function CtxMenu({ state, propertyId, onClose, onAction }: {
         acts.push({ label: '✓ Check-in Guest', doFn: async () => { await bookingApi.checkIn(propertyId, booking.id!); onAction(); } });
         acts.push({ label: '⊘ Mark No Show', doFn: async () => { await bookingApi.updateStatus(propertyId, booking.id!, 'NO_SHOW'); onAction(); }, danger: true });
         break;
-      case 'CHECKED_IN':
-        acts.push({ label: '⏎ Check-out Guest', doFn: async () => { await bookingApi.updateStatus(propertyId, booking.id!, 'CHECKED_OUT'); onAction(); } });
+      case 'CHECKED_IN': {
+        const outDate = dateStr(booking.checkOut);
+        const today = toDS(new Date());
+        
+        if (today < outDate) {
+          acts.push({ 
+            label: '⏱ Early Checkout', 
+            doFn: async () => { onEarlyCheckout(booking.id!); onClose(); } 
+          });
+        } else {
+          acts.push({ 
+            label: '⏎ Check-out Guest', 
+            doFn: async () => { await bookingApi.checkOut(propertyId, booking.id!); onAction(); } 
+          });
+        }
         break;
+      }
     }
   }
 
@@ -202,7 +212,7 @@ export default function Bookings() {
   const winEndStr = useMemo(() => toDS(addDays(winStart, numDays - 1)), [winStart, numDays]);
   const todayStr = useMemo(() => toDS(new Date()), []);
 
-  // ── Bookings buffer (overscroll strategy)
+  // ── Bookings buffer
   const [bookingBuffer, setBookingBuffer] = useState<Booking[]>([]);
   const [bufferRange, setBufferRange] = useState<{ from: string; to: string } | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -228,7 +238,8 @@ export default function Bookings() {
   
   // Modal States
   const [showForm, setShowForm] = useState(false);
-  const [showGroupModal, setShowGroupModal] = useState(false); // NEW
+  const [showGroupModal, setShowGroupModal] = useState(false);
+  const [earlyCheckoutBookingId, setEarlyCheckoutBookingId] = useState<string | null>(null); // NEW
   const [showList, setShowList] = useState(false);
   
   const [listType, setListType] = useState<StatType>('all');
@@ -239,11 +250,9 @@ export default function Bookings() {
   const dragging = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // ── Prefill dates
   const prefillCheckIn = useRef('');
   const prefillCheckOut = useRef('');
 
-  // ── Debounce
   const fetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fetchIdRef = useRef(0);
 
@@ -346,7 +355,6 @@ export default function Bookings() {
     return Array.from(m.entries()).map(([type, rms]) => ({ type, rooms: rms }));
   }, [rooms]);
 
-  /* ── Bookings by room NUMBER ── */
   const byRoomNumber = useMemo(() => {
     const m: Record<string, Booking[]> = {};
     for (const b of rangeBookings) {
@@ -390,7 +398,6 @@ export default function Bookings() {
     });
   }, [rooms, dateCols, openForm]);
 
-  /* ── Scroll-based edge navigation ── */
   const scrollCooldownRef = useRef(false);
   const handleScroll = useCallback(() => {
     const el = scrollRef.current;
@@ -754,12 +761,29 @@ export default function Bookings() {
         />
       )}
 
+      {earlyCheckoutBookingId && selectedPropId && (
+        <EarlyCheckoutModal
+          propertyId={selectedPropId}
+          bookingId={earlyCheckoutBookingId}
+          onClose={() => setEarlyCheckoutBookingId(null)}
+          onSuccess={async () => { setEarlyCheckoutBookingId(null); await refresh(); }}
+        />
+      )}
+
       {showList && selectedPropId && (
         <BookingsList bookings={getFiltered()} propertyId={selectedPropId} listType={listType}
           onClose={() => setShowList(false)} onUpdate={refresh} />
       )}
 
-      {selectedPropId && <CtxMenu state={ctx} propertyId={selectedPropId} onClose={() => setCtx(null)} onAction={refresh} />}
+      {selectedPropId && (
+        <CtxMenu 
+          state={ctx} 
+          propertyId={selectedPropId} 
+          onClose={() => setCtx(null)} 
+          onAction={refresh} 
+          onEarlyCheckout={setEarlyCheckoutBookingId} 
+        />
+      )}
     </div>
   );
 }
