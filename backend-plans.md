@@ -4,6 +4,7 @@
 - [ ] release rooms after early checkout
 - [x] extend bookings
 - [x] group bookings
+- [ ] twin bedded field for booking
 
 > bulk check out, test routing manually
 - [x] room shifting

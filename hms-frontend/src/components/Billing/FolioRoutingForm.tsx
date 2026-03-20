@@ -1,14 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import folioApi from '../../api/folioApi';
-import type { ChargeDto } from '../../api/folioApi';
+import type { ChargeDto, FolioDto } from '../../api/folioApi';
 
 /* ────────────────────────────────────────────────────────────── */
 /* Tokens & Styles                                              */
 /* ────────────────────────────────────────────────────────────── */
 const btnPrimary = 'inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
 const btnSecondary = 'inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-all hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
-const inputCls = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition-all placeholder:text-slate-400 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed';
-const labelCls = 'mb-1.5 block text-sm font-medium text-slate-700';
+const inputCls = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition-all focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed';
 
 interface FolioRoutingFormProps {
   propertyId: string;
@@ -27,10 +26,32 @@ export default function FolioRoutingForm({ propertyId, folioId, charges, currenc
   
   const [selectedChargeIds, setSelectedChargeIds] = useState<Set<string>>(new Set());
   const [destination, setDestination] = useState<RoutingDestination>('PARENT');
+  
+  // New state for the dropdown
   const [targetFolioId, setTargetFolioId] = useState('');
+  const [openFolios, setOpenFolios] = useState<FolioDto[]>([]);
+  const [loadingFolios, setLoadingFolios] = useState(false);
   
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // Fetch available target folios when "SPECIFIC" is selected
+  useEffect(() => {
+    if (destination === 'SPECIFIC' && openFolios.length === 0) {
+      setLoadingFolios(true);
+      folioApi.getOpenFolios(propertyId)
+        .then(folios => {
+          // Filter out the current folio so they can't route to themselves
+          setOpenFolios(folios.filter(f => f.id !== folioId));
+        })
+        .catch(() => {
+          setError('Failed to load available folios. Please try again.');
+        })
+        .finally(() => {
+          setLoadingFolios(false);
+        });
+    }
+  }, [destination, propertyId, folioId, openFolios.length]);
 
   const handleToggleCharge = (chargeId: string) => {
     setSelectedChargeIds(prev => {
@@ -57,8 +78,8 @@ export default function FolioRoutingForm({ propertyId, folioId, charges, currenc
       setError('Please select at least one charge to route.');
       return;
     }
-    if (destination === 'SPECIFIC' && !targetFolioId.trim()) {
-      setError('Target Folio ID is required when routing to a specific folio.');
+    if (destination === 'SPECIFIC' && !targetFolioId) {
+      setError('Please select a target folio from the list.');
       return;
     }
 
@@ -70,14 +91,14 @@ export default function FolioRoutingForm({ propertyId, folioId, charges, currenc
           propertyId, 
           folioId, 
           chargeId, 
-          destination === 'SPECIFIC' ? targetFolioId.trim() : undefined
+          destination === 'SPECIFIC' ? targetFolioId : undefined
         )
       );
 
       await Promise.all(routePromises);
       onSuccess();
     } catch (err: any) {
-      setError(err.message || 'Failed to route some or all charges. Please check IDs and try again.');
+      setError(err.message || 'Failed to route some or all charges. Please check selections and try again.');
     } finally {
       setSubmitting(false);
     }
@@ -118,20 +139,36 @@ export default function FolioRoutingForm({ propertyId, folioId, charges, currenc
               onChange={() => { setDestination('SPECIFIC'); setError(''); }}
               className="h-4 w-4 text-indigo-600 focus:ring-indigo-500"
             />
-            <span className="text-sm font-medium text-slate-900">Route to a Specific Folio ID</span>
+            <span className="text-sm font-medium text-slate-900">Route to a Specific Active Folio</span>
           </label>
 
           {destination === 'SPECIFIC' && (
             <div className="ml-7 mt-2 animate-in slide-in-from-top-2 fade-in duration-200">
-              <input 
-                type="text" 
-                value={targetFolioId} 
-                onChange={(e) => { setTargetFolioId(e.target.value); setError(''); }}
-                placeholder="e.g. 550e8400-e29b-41d4-a716-446655440000" 
-                className={inputCls} 
-                disabled={submitting}
-              />
-              <p className="mt-1 text-[10px] text-slate-500">Paste the exact Folio System ID (UUID) of the target account.</p>
+              {loadingFolios ? (
+                <div className="text-sm text-slate-500 italic">Loading available folios...</div>
+              ) : (
+                <select 
+                  value={targetFolioId} 
+                  onChange={(e) => { setTargetFolioId(e.target.value); setError(''); }}
+                  className={inputCls}
+                  disabled={submitting || openFolios.length === 0}
+                >
+                  <option value="" disabled>-- Select a Target Folio --</option>
+                  {openFolios.map(f => {
+                    // Use notes if they exist, otherwise fallback to the folio number
+                    const identifier = f.notes ? `"${f.notes}"` : `#${f.folioNumber}`;
+                    
+                    return (
+                      <option key={f.id} value={f.id}>
+                        {f.guestName} - {f.folioType} ({identifier})
+                      </option>
+                    );
+                  })}
+                </select>
+              )}
+              {openFolios.length === 0 && !loadingFolios && (
+                <p className="mt-1 text-xs text-rose-500">No other open folios found at this property.</p>
+              )}
             </div>
           )}
         </div>

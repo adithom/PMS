@@ -11,8 +11,6 @@ import FolioDetailModal from '../components/Billing/FolioDetailModal';
 /* Types & Tokens                                               */
 /* ────────────────────────────────────────────────────────────── */
 
-// todo: remove folio id requirement from routing charges to target
-
 interface GlobalFolio extends FolioDto {
   propertyName: string;
   propertyId: string;

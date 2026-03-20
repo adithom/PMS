@@ -4,7 +4,7 @@ import roomApi from '../api/roomApi';
 import type { RoomAvailabilityCheckDto } from '../api/roomApi';
 import type { Property, Room, UnitDto } from '../types';
 
-import BookingForm from '../components/BookingForm'; 
+import BookingForm from "../components/Booking/BookingForm";
 import LoadingSpinner from '../components/LoadingSpinner';
 import ModalShell from '../components/ModalShell';
 import RoomDetailsView from '../components/RoomDetailView';

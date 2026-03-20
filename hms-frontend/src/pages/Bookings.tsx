@@ -4,8 +4,9 @@ import propertyApi from '../api/propertyApi';
 import roomApi from '../api/roomApi';
 import bookingApi from '../api/bookingApi';
 import availabilityApi from '../api/availabilityApi';
-import BookingForm from '../components/BookingForm';
-import BookingsList from '../components/BookingsList';
+import BookingForm from '../components/Booking/BookingForm';
+import BookingsList from '../components/Booking/BookingsList';
+import GroupBookingModal from '../components/Booking/GroupBookingModal';
 import LoadingSpinner from '../components/LoadingSpinner';
 import type { Property, Room, Booking } from '../types';
 
@@ -105,10 +106,8 @@ function ModalShell({ title, subtitle, size = 'regular', children, onClose }: {
 /* Context Menu                                                  */
 /* ────────────────────────────────────────────────────────────── */
 
-type CtxState = { x: number; y: number; booking: Booking } | null;
-
 function CtxMenu({ state, propertyId, onClose, onAction }: {
-  state: CtxState; propertyId: string; onClose: () => void; onAction: () => void;
+  state: { x: number; y: number; booking: Booking } | null; propertyId: string; onClose: () => void; onAction: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -136,7 +135,6 @@ function CtxMenu({ state, propertyId, onClose, onAction }: {
       case 'CHECKED_IN':
         acts.push({ label: '⏎ Check-out Guest', doFn: async () => { await bookingApi.updateStatus(propertyId, booking.id!, 'CHECKED_OUT'); onAction(); } });
         break;
-      // CHECKED_OUT, CANCELLED, NO_SHOW → no actions
     }
   }
 
@@ -226,9 +224,13 @@ export default function Bookings() {
   // ── UI
   const [loading, setLoading] = useState(true);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const [ctx, setCtx] = useState<CtxState>(null);
+  const [ctx, setCtx] = useState<{ x: number; y: number; booking: Booking } | null>(null);
+  
+  // Modal States
   const [showForm, setShowForm] = useState(false);
+  const [showGroupModal, setShowGroupModal] = useState(false); // NEW
   const [showList, setShowList] = useState(false);
+  
   const [listType, setListType] = useState<StatType>('all');
   const [pfRoom, setPfRoom] = useState<Room | null>(null);
 
@@ -344,11 +346,10 @@ export default function Bookings() {
     return Array.from(m.entries()).map(([type, rms]) => ({ type, rooms: rms }));
   }, [rooms]);
 
-  /* ── Bookings by room NUMBER (matches BookingDto.roomNumber → Room.number) ── */
+  /* ── Bookings by room NUMBER ── */
   const byRoomNumber = useMemo(() => {
     const m: Record<string, Booking[]> = {};
     for (const b of rangeBookings) {
-      // BookingDto has roomNumber (e.g. "101"), NOT roomId.
       const rn = b.roomNumber || '';
       if (rn) { (m[rn] ??= []).push(b); }
     }
@@ -389,7 +390,7 @@ export default function Bookings() {
     });
   }, [rooms, dateCols, openForm]);
 
-  /* ── Scroll-based edge navigation (with cooldown) ── */
+  /* ── Scroll-based edge navigation ── */
   const scrollCooldownRef = useRef(false);
   const handleScroll = useCallback(() => {
     const el = scrollRef.current;
@@ -417,24 +418,21 @@ export default function Bookings() {
 
   const occRate = totalRooms > 0 ? (houseCount / totalRooms) * 100 : 0;
 
-  // How many visible room rows (for min-height)
   const visibleRoomCount = useMemo(() => {
     let count = 0;
     for (const g of groups) {
-      count++; // group header
+      count++;
       if (!collapsed.has(g.type)) count += g.rooms.length;
     }
     return count;
   }, [groups, collapsed]);
 
-  /* ── Loading screen ── */
   if (loading && rooms.length === 0) {
     return <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-slate-50"><LoadingSpinner text="Loading tape chart…" /></div>;
   }
 
   const gridW = LABEL_W + numDays * CELL_W;
-  // Ensure chart fills viewport even with few rooms
-  const chartMinH = Math.max(visibleRoomCount, MIN_CHART_ROWS) * CELL_H + 70; // +70 for header row
+  const chartMinH = Math.max(visibleRoomCount, MIN_CHART_ROWS) * CELL_H + 70;
 
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-slate-50 pb-20">
@@ -446,6 +444,8 @@ export default function Bookings() {
             <p className="text-xs font-bold uppercase tracking-widest text-emerald-600">Front Desk</p>
             <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">Tape Chart</h1>
           </div>
+          
+          {/* Action Buttons */}
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Property</span>
@@ -454,7 +454,17 @@ export default function Bookings() {
                 {properties.map(p => <option key={p.id} value={p.id}>{p.name} ({p.code})</option>)}
               </select>
             </div>
-            <button type="button" className={btnPrimary} onClick={() => openForm(null, '', '')}>+ Create Booking</button>
+            
+            <button type="button" className={btnSecondary} onClick={() => setShowGroupModal(true)}>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-indigo-500" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
+              </svg>
+              New Group Block
+            </button>
+            
+            <button type="button" className={btnPrimary} onClick={() => openForm(null, '', '')}>
+              + New Booking
+            </button>
           </div>
         </div>
 
@@ -478,10 +488,8 @@ export default function Bookings() {
         {/* ─── Main: Grid + Sidebar ─── */}
         <div className="mt-6 flex gap-6">
 
-          {/* ─── Gantt Grid (flex column so bottom bar sticks) ─── */}
+          {/* ─── Gantt Grid ─── */}
           <div className="flex-1 flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-
-            {/* Scrollable area — tall to fill viewport */}
             <div ref={scrollRef}
               className="relative flex-1 overflow-auto"
               style={{ minHeight: chartMinH, maxHeight: 'calc(100vh - 300px)' }}
@@ -492,7 +500,6 @@ export default function Bookings() {
               <DragOverlay drag={drag} />
 
               <div style={{ minWidth: gridW, minHeight: chartMinH }}>
-
                 {/* ─── Header Row ─── */}
                 <div className="sticky top-0 z-20 flex" style={{ minWidth: gridW }}>
                   <div className="sticky left-0 z-30 flex items-end border-b border-r border-slate-200 bg-slate-50 px-4 py-2"
@@ -529,7 +536,6 @@ export default function Bookings() {
                   const isC = collapsed.has(g.type);
                   return (
                     <div key={g.type}>
-                      {/* Group header */}
                       <div className="sticky left-0 z-10 flex items-center gap-2 border-b border-slate-200 bg-slate-100/80 px-4 py-2 cursor-pointer select-none"
                         style={{ minWidth: gridW }} onClick={() => toggle(g.type)}>
                         <svg xmlns="http://www.w3.org/2000/svg" className={cn('h-3.5 w-3.5 text-slate-400 transition-transform', !isC && 'rotate-90')}
@@ -540,23 +546,18 @@ export default function Bookings() {
                         <span className="rounded-md bg-slate-200 px-1.5 py-0.5 text-[10px] font-bold text-slate-500">{g.rooms.length}</span>
                       </div>
 
-                      {/* Room rows */}
                       {!isC && g.rooms.map(room => {
                         const rid = getRoomId(room);
-                        // KEY FIX: BookingDto has roomNumber (e.g. "101"), not roomId (UUID).
-                        // Match by room.number which is what the backend sends.
                         const rBks = byRoomNumber[room.number] || [];
 
                         return (
                           <div key={rid || room.number} className="relative flex" style={{ height: CELL_H, minWidth: gridW }}>
-                            {/* Room label */}
                             <div className="sticky left-0 z-10 flex items-center gap-2 border-b border-r border-slate-200 bg-white px-4"
                               style={{ width: LABEL_W, minWidth: LABEL_W, height: CELL_H }}>
                               <span className="text-sm font-bold text-slate-800">{room.number}</span>
                               <span className="text-[10px] text-slate-400 truncate">{room.type || ''}</span>
                             </div>
 
-                            {/* Date cells */}
                             {dateCols.map((d, ci) => {
                               const ds = toDS(d);
                               const isT = ds === todayStr;
@@ -581,12 +582,10 @@ export default function Bookings() {
                               );
                             })}
 
-                            {/* ─── Booking bars ─── */}
                             {rBks.map(bk => {
                               const ci = dateStr(bk.checkIn);
                               const co = dateStr(bk.checkOut);
 
-                              // Clamp to visible window
                               const clampedStart = ci < winStartStr ? winStartStr : ci;
                               const clampedEnd = co > toDS(addDays(winStart, numDays)) ? toDS(addDays(winStart, numDays)) : co;
 
@@ -608,13 +607,11 @@ export default function Bookings() {
                                   className={cn(
                                     'absolute top-[4px] shadow-sm cursor-pointer transition-all hover:shadow-md hover:brightness-95 border',
                                     sc.bar,
-                                    // Subtle border for translucent bars
                                     bk.status === 'CHECKED_IN' ? 'border-green-300' :
                                     bk.status === 'CONFIRMED' ? 'border-blue-300' :
                                     bk.status === 'PENDING' ? 'border-amber-300' :
                                     bk.status === 'CANCELLED' ? 'border-gray-300' :
                                     'border-slate-300',
-                                    // Clamped border-radius
                                     bleedsLeft && bleedsRight ? 'rounded-none' :
                                     bleedsLeft ? 'rounded-r-md rounded-l-none' :
                                     bleedsRight ? 'rounded-l-md rounded-r-none' :
@@ -639,7 +636,6 @@ export default function Bookings() {
                   );
                 })}
 
-                {/* Empty state */}
                 {rooms.length === 0 && (
                   <div className="flex items-center justify-center py-20 text-slate-400">
                     <div className="text-center">
@@ -653,7 +649,6 @@ export default function Bookings() {
 
             {/* ─── Sticky Bottom Controls ─── */}
             <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50/90 backdrop-blur-sm px-5 py-3">
-              {/* View toggle */}
               <div className="flex items-center gap-2">
                 <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">View</span>
                 <div className="flex rounded-lg border border-slate-200 bg-white p-0.5">
@@ -672,7 +667,6 @@ export default function Bookings() {
                 </div>
               </div>
 
-              {/* Navigation */}
               <div className="flex items-center gap-2">
                 <button type="button" className={btnSecondary + ' !py-1.5 !text-xs'} onClick={() => navigate(-numDays)}>
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
@@ -739,8 +733,6 @@ export default function Bookings() {
 
       {/* ═══════════════════ MODALS ═══════════════════ */}
 
-      {/* ═══════════════════ MODALS ═══════════════════ */}
-
       {showForm && (
         <ModalShell title="Create Booking" subtitle={pfRoom ? `Room ${pfRoom.number}` : undefined} size="wide" onClose={() => setShowForm(false)}>
           <BookingForm 
@@ -752,6 +744,14 @@ export default function Bookings() {
             onCancel={() => setShowForm(false)} 
           />
         </ModalShell>
+      )}
+      
+      {showGroupModal && selectedPropId && (
+        <GroupBookingModal
+          propertyId={selectedPropId}
+          onClose={() => setShowGroupModal(false)}
+          onSuccess={async () => { setShowGroupModal(false); await refresh(); }}
+        />
       )}
 
       {showList && selectedPropId && (

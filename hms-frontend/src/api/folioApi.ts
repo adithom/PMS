@@ -37,6 +37,7 @@ export interface FolioDto {
   paidAmount?: number;
   balanceDue?: number;
   currency?: string;
+  notes?: string;
   createdAt?: string;
   closedAt?: string;
   routedToFolioId?: string;

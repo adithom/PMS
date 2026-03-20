@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import propertyApi from '../api/propertyApi';
-import guestApi from '../api/guestApi';
-import bookingApi, { type BookingCreationDto } from '../api/bookingApi';
-import roomApi from '../api/roomApi';
-import availabilityApi from '../api/availabilityApi';
-import type { Property, Room, UnitDto, Booking } from '../types';
+import propertyApi from '../../api/propertyApi';
+import guestApi from '../../api/guestApi';
+import bookingApi, { type BookingCreationDto } from '../../api/bookingApi';
+import roomApi from '../../api/roomApi';
+import availabilityApi from '../../api/availabilityApi';
+import type { Property, Room, UnitDto, Booking } from '../../types';
 
 /* ────────────────────────────────────────────────────────────── */
 /* Types & Tokens                                               */

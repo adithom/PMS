@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import bookingApi from '../api/bookingApi';
+import bookingApi from '../../api/bookingApi';
 import BookingForm from './BookingForm';
-import ModalShell from './ModalShell';
-import type { Booking, BookingStatus } from '../types';
+import ModalShell from '../ModalShell';
+import type { Booking, BookingStatus } from '../../types';
 
 /* ────────────────────────────────────────────────────────────── */
 /* Types & Tokens                                               */

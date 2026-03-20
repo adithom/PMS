@@ -6,7 +6,7 @@
 - [ ] twin bedded rooms - check box while booking creation
 - [ ] birthday celebration pop up
 - [x] calender modification
-- [ ] separate booking form for group booking
+- [x] separate booking form for group booking
 - [ ] admin console - bills ledger(pdfs), restart button, user management, password resets
 
 ### next
