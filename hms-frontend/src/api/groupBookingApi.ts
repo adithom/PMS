@@ -12,6 +12,7 @@ export interface GroupRoomRequestDto {
   children?: number;
   totalPrice?: number;
   specialRequests?: string;
+  isTwinBed?: boolean;     
 }
 
 export interface GroupBookingCreationDto {
@@ -25,19 +26,40 @@ export interface GroupBookingCreationDto {
   billingMode?: 'SEPARATE' | 'CONSOLIDATED';
 }
 
-// You can expand this later based on your actual Java GroupBookingSummaryDto
+// Strongly typed Child Booking to match the Java backend
+export interface ChildBookingSummaryDto {
+  bookingId: string;
+  guestId: string;
+  guestName: string;
+  unitId: string;
+  unitName: string;
+  roomNumber: string | null;
+  status: string;
+  totalPrice: number;
+  balanceDue: number;
+  folioId: string;
+  folioNumber: string;
+  folioIsRouted: boolean;
+  specialRequests: string | null;
+  isTwinBed: boolean;
+}
+
+// Strongly typed Group Booking Summary to match the Java backend
 export interface GroupBookingSummaryDto {
-  id: string;
-  groupReference?: string;
-  organizerName?: string;
-  checkIn?: string;
-  checkOut?: string;
-  currency?: string;
-  billingMode?: string;
-  groupSubtotal?: number;
-  groupTotalAmount?: number;
-  groupBalanceDue?: number;
-  roomSections?: any[]; 
+  parentBookingId: string;
+  groupReference: string | null;
+  organizerGuestId: string;
+  organizerGuestName: string;
+  checkIn: string;
+  checkOut: string;
+  overallStatus: string;
+  totalRooms: number;
+  totalGroupPrice: number;
+  currency: string;
+  createdAt: string;
+  billingMode: string;
+  masterFolioId: string;
+  childBookings: ChildBookingSummaryDto[]; // Array containing individual rooms and their twin bed status
   [key: string]: any; 
 }
 

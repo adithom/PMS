@@ -59,6 +59,7 @@ export interface Booking {
   isFullyPaid?: boolean;
   specialRequests?: string;
   createdAt?: string;
+  isTwinBed: boolean;
 }
 
 export type BookingStatus =
