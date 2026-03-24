@@ -730,7 +730,7 @@ public class BookingService {
         try {
             booking.setStatus(status);
 
-            if (status == BookingStatus.CANCELLED) {
+            if (status == BookingStatus.CANCELLED || status == BookingStatus.NO_SHOW) {
                 roomAssignmentService.cancelAssignmentsForBooking(bookingId);
             }
 

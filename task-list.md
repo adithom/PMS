@@ -1,7 +1,7 @@
 ### task calender
 
 ##### 24/3/26
-- [ ] twin bedded field
+- [x] twin bedded field
 - [ ] unassigned rooms task
 
 ##### 25/3/26

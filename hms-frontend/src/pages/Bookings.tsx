@@ -1,4 +1,4 @@
-// src/pages/Bookings.tsx — Gantt-chart tape chart (v3 — matched to BookingDto)
+// src/pages/Bookings.tsx — Gantt-chart tape chart
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import propertyApi from '../api/propertyApi';
 import roomApi from '../api/roomApi';
@@ -15,6 +15,8 @@ import type { Property, Room, Booking } from '../types';
 /* Design Tokens                                                */
 /* ────────────────────────────────────────────────────────────── */
 
+//todo: fix occupancy rate status bars
+
 const cn = (...c: Array<string | false | null | undefined>) => c.filter(Boolean).join(' ');
 
 const btnPrimary =
@@ -30,9 +32,8 @@ const btnSecondary =
 const CELL_W = 110;
 const CELL_H = 40;
 const LABEL_W = 160;
-const MIN_CHART_ROWS = 18; // Ensures chart fills viewport even with few rooms
+const MIN_CHART_ROWS = 18; 
 
-// Buffer: fetch extra days before/after for smooth scroll
 const BUFFER_BEFORE = 15;
 const BUFFER_AFTER = 16;
 const REFETCH_THRESHOLD = 3;
@@ -41,13 +42,13 @@ const SCROLL_EDGE_PX = 80;
 const SCROLL_COOLDOWN_MS = 600; 
 const SCROLL_STEP_DAYS = 2; 
 
-const STATUS_COLORS: Record<string, { bar: string; text: string; label: string; legend: string }> = {
-  CONFIRMED:   { bar: 'bg-blue-200/70',    text: 'text-blue-900',     legend: 'bg-blue-300',    label: 'Confirmed' },
-  CHECKED_IN:  { bar: 'bg-green-200/70',   text: 'text-green-900',    legend: 'bg-green-300',   label: 'Checked In' },
-  PENDING:     { bar: 'bg-amber-200/70',   text: 'text-amber-900',    legend: 'bg-amber-300',   label: 'Pending' },
-  CHECKED_OUT: { bar: 'bg-slate-200/70',   text: 'text-slate-700',    legend: 'bg-slate-300',   label: 'Checked Out' },
+const STATUS_COLORS: Record<string, { bar: string; text: string; legend: string; label: string }> = {
+  CONFIRMED:   { bar: 'bg-blue-200/90',    text: 'text-blue-900',     legend: 'bg-blue-300',    label: 'Confirmed' },
+  CHECKED_IN:  { bar: 'bg-green-200/90',   text: 'text-green-900',    legend: 'bg-green-300',   label: 'Checked In' },
+  PENDING:     { bar: 'bg-amber-200/90',   text: 'text-amber-900',    legend: 'bg-amber-300',   label: 'Pending' },
+  CHECKED_OUT: { bar: 'bg-slate-300/90',   text: 'text-slate-800',    legend: 'bg-slate-300',   label: 'Checked Out' },
   CANCELLED:   { bar: 'bg-gray-200/50',    text: 'text-gray-500',     legend: 'bg-gray-300',    label: 'Cancelled' },
-  NO_SHOW:     { bar: 'bg-red-200/60',     text: 'text-red-800',      legend: 'bg-red-300',     label: 'No Show' },
+  NO_SHOW:     { bar: 'bg-rose-200/90',    text: 'text-rose-900',     legend: 'bg-rose-300',    label: 'No Show / Available' },
 };
 
 /* ────────────────────────────────────────────────────────────── */
@@ -66,7 +67,6 @@ const diffDays = (a: string, b: string): number =>
 const getRoomId = (room: Room): string => (room as any).roomId ?? (room as any).id ?? '';
 const shortDate = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 const dayLabel = (d: Date) => d.toLocaleDateString('en-US', { weekday: 'short' });
-
 const dateStr = (v: string): string => v.split('T')[0];
 
 type StatType = 'incoming' | 'inhouse' | 'checkouts' | 'all';
@@ -110,14 +110,15 @@ function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout }: {
     const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) onClose(); };
     document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h);
   }, [onClose]);
+  
   if (!state) return null;
   const { x, y, booking } = state;
   const sc = STATUS_COLORS[booking.status] ?? STATUS_COLORS.PENDING;
-
   const guestName = booking.guestName || 'Guest';
 
   type Act = { label: string; doFn: () => Promise<void>; danger?: boolean };
   const acts: Act[] = [];
+  
   if (booking.id) {
     switch (booking.status) {
       case 'PENDING':
@@ -179,9 +180,7 @@ function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout }: {
 /* Drag Overlay                                                  */
 /* ────────────────────────────────────────────────────────────── */
 
-function DragOverlay({ drag }: {
-  drag: { rid: string; startCol: number; endCol: number; rowTop: number } | null;
-}) {
+function DragOverlay({ drag }: { drag: { rid: string; startCol: number; endCol: number; rowTop: number } | null }) {
   if (!drag) return null;
   const from = Math.min(drag.startCol, drag.endCol);
   const to = Math.max(drag.startCol, drag.endCol);
@@ -198,13 +197,11 @@ function DragOverlay({ drag }: {
 /* ────────────────────────────────────────────────────────────── */
 
 export default function Bookings() {
-  // ── Property / Rooms
   const [properties, setProperties] = useState<Property[]>([]);
   const [selectedPropId, setSelectedPropId] = useState<string | null>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [totalRooms, setTotalRooms] = useState(0);
 
-  // ── Date window
   const [numDays, setNumDays] = useState(14);
   const [winStart, setWinStart] = useState<Date>(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; });
   const dateCols = useMemo(() => Array.from({ length: numDays }, (_, i) => addDays(winStart, i)), [winStart, numDays]);
@@ -212,7 +209,6 @@ export default function Bookings() {
   const winEndStr = useMemo(() => toDS(addDays(winStart, numDays - 1)), [winStart, numDays]);
   const todayStr = useMemo(() => toDS(new Date()), []);
 
-  // ── Bookings buffer
   const [bookingBuffer, setBookingBuffer] = useState<Booking[]>([]);
   const [bufferRange, setBufferRange] = useState<{ from: string; to: string } | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -223,40 +219,32 @@ export default function Bookings() {
     return bookingBuffer;
   }, [bookingBuffer, bufferRange]);
 
-  // ── Occupancy buffer
   const [occMap, setOccMap] = useState<Record<string, number>>({});
-
-  // ── Daily stats
   const [inCount, setInCount] = useState(0);
   const [houseCount, setHouseCount] = useState(0);
   const [outCount, setOutCount] = useState(0);
 
-  // ── UI
   const [loading, setLoading] = useState(true);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [ctx, setCtx] = useState<{ x: number; y: number; booking: Booking } | null>(null);
   
-  // Modal States
   const [showForm, setShowForm] = useState(false);
   const [showGroupModal, setShowGroupModal] = useState(false);
-  const [earlyCheckoutBookingId, setEarlyCheckoutBookingId] = useState<string | null>(null); // NEW
+  const [earlyCheckoutBookingId, setEarlyCheckoutBookingId] = useState<string | null>(null);
   const [showList, setShowList] = useState(false);
   
   const [listType, setListType] = useState<StatType>('all');
   const [pfRoom, setPfRoom] = useState<Room | null>(null);
 
-  // ── Drag state
   const [drag, setDrag] = useState<{ rid: string; startCol: number; endCol: number; rowTop: number } | null>(null);
   const dragging = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const prefillCheckIn = useRef('');
   const prefillCheckOut = useRef('');
-
   const fetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fetchIdRef = useRef(0);
 
-  /* ── Load properties ── */
   useEffect(() => {
     (async () => {
       try {
@@ -267,7 +255,6 @@ export default function Bookings() {
     })();
   }, []);
 
-  /* ── Load rooms ── */
   useEffect(() => {
     if (!selectedPropId) return;
     (async () => {
@@ -280,10 +267,6 @@ export default function Bookings() {
       } catch (e) { console.error(e); }
     })();
   }, [selectedPropId, properties]);
-
-  /* ═══════════════════════════════════════════════════════════ */
-  /* Buffered data loading                                      */
-  /* ═══════════════════════════════════════════════════════════ */
 
   const fetchBuffer = useCallback(async (propId: string, visStart: string, visEnd: string, immediate = false) => {
     const bufFrom = toDS(addDays(new Date(visStart + 'T00:00:00'), -BUFFER_BEFORE));
@@ -333,7 +316,6 @@ export default function Bookings() {
 
   useEffect(() => { setBufferRange(null); }, [selectedPropId]);
 
-  /* ── Daily stats ── */
   useEffect(() => {
     if (!selectedPropId) return;
     const ds = toDS(selectedDate);
@@ -348,7 +330,6 @@ export default function Bookings() {
     })();
   }, [selectedPropId, selectedDate]);
 
-  /* ── Grouped rooms ── */
   const groups = useMemo(() => {
     const m = new Map<string, Room[]>();
     for (const r of rooms) { const t = r.type || 'Standard'; if (!m.has(t)) m.set(t, []); m.get(t)!.push(r); }
@@ -364,7 +345,6 @@ export default function Bookings() {
     return m;
   }, [rangeBookings]);
 
-  /* ── Handlers ── */
   const toggle = useCallback((t: string) => setCollapsed(p => { const n = new Set(p); n.has(t) ? n.delete(t) : n.add(t); return n; }), []);
   const openForm = useCallback((room: Room | null, ci: string, co: string) => {
     setPfRoom(room); prefillCheckIn.current = ci; prefillCheckOut.current = co; setShowForm(true);
@@ -377,7 +357,6 @@ export default function Bookings() {
   }, [selectedPropId, winStartStr, winEndStr, fetchBuffer]);
   const statClick = useCallback((t: StatType) => { setListType(t); setShowList(true); }, []);
 
-  /* ── Drag handlers ── */
   const handleDragStart = useCallback((rid: string, col: number, rowTop: number) => {
     dragging.current = true; setDrag({ rid, startCol: col, endCol: col, rowTop });
   }, []);
@@ -427,10 +406,7 @@ export default function Bookings() {
 
   const visibleRoomCount = useMemo(() => {
     let count = 0;
-    for (const g of groups) {
-      count++;
-      if (!collapsed.has(g.type)) count += g.rooms.length;
-    }
+    for (const g of groups) { count++; if (!collapsed.has(g.type)) count += g.rooms.length; }
     return count;
   }, [groups, collapsed]);
 
@@ -444,15 +420,11 @@ export default function Bookings() {
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-slate-50 pb-20">
       <div className="mx-auto max-w-[1800px] px-8 pt-8 sm:px-12 lg:px-16">
-
-        {/* ─── Header ─── */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs font-bold uppercase tracking-widest text-emerald-600">Front Desk</p>
             <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">Tape Chart</h1>
           </div>
-          
-          {/* Action Buttons */}
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Property</span>
@@ -461,21 +433,18 @@ export default function Bookings() {
                 {properties.map(p => <option key={p.id} value={p.id}>{p.name} ({p.code})</option>)}
               </select>
             </div>
-            
             <button type="button" className={btnSecondary} onClick={() => setShowGroupModal(true)}>
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-indigo-500" viewBox="0 0 20 20" fill="currentColor">
                 <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
               </svg>
               New Group Block
             </button>
-            
             <button type="button" className={btnPrimary} onClick={() => openForm(null, '', '')}>
               + New Booking
             </button>
           </div>
         </div>
 
-        {/* ─── Top Date Nav ─── */}
         <div className="mt-6 flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1">
             <button type="button" className={btnSecondary} onClick={() => navigate(-numDays)}>
@@ -492,10 +461,7 @@ export default function Bookings() {
           {loading && <span className="text-xs text-slate-400 animate-pulse">Refreshing…</span>}
         </div>
 
-        {/* ─── Main: Grid + Sidebar ─── */}
         <div className="mt-6 flex gap-6">
-
-          {/* ─── Gantt Grid ─── */}
           <div className="flex-1 flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div ref={scrollRef}
               className="relative flex-1 overflow-auto"
@@ -507,7 +473,6 @@ export default function Bookings() {
               <DragOverlay drag={drag} />
 
               <div style={{ minWidth: gridW, minHeight: chartMinH }}>
-                {/* ─── Header Row ─── */}
                 <div className="sticky top-0 z-20 flex" style={{ minWidth: gridW }}>
                   <div className="sticky left-0 z-30 flex items-end border-b border-r border-slate-200 bg-slate-50 px-4 py-2"
                     style={{ width: LABEL_W, minWidth: LABEL_W }}>
@@ -538,7 +503,6 @@ export default function Bookings() {
                   })}
                 </div>
 
-                {/* ─── Data Rows ─── */}
                 {groups.map(g => {
                   const isC = collapsed.has(g.type);
                   return (
@@ -592,28 +556,46 @@ export default function Bookings() {
                             {rBks.map(bk => {
                               const ci = dateStr(bk.checkIn);
                               const co = dateStr(bk.checkOut);
+                              const isNoShow = bk.status === 'NO_SHOW';
+                              const isCancelled = bk.status === 'CANCELLED';
+                              const hasMaintenance = !isNoShow && !isCancelled;
 
-                              const clampedStart = ci < winStartStr ? winStartStr : ci;
-                              const clampedEnd = co > toDS(addDays(winStart, numDays)) ? toDS(addDays(winStart, numDays)) : co;
+                              const unClampedStartOff = diffDays(winStartStr, ci);
+                              const unClampedEndOff = diffDays(winStartStr, co);
+                              
+                              // Total occupied width in days (including the 1-day maintenance buffer if applicable)
+                              const unClampedTotalEndOff = hasMaintenance ? unClampedEndOff + 1 : unClampedEndOff;
 
-                              const startOff = diffDays(winStartStr, clampedStart);
-                              const endOff = diffDays(winStartStr, clampedEnd);
-                              if (endOff <= 0 || startOff >= numDays) return null;
+                              // Visual start/end constrained to the visible 0..numDays window
+                              const visStartOff = Math.max(0, unClampedStartOff);
+                              
+                              // NO_SHOW is forced to exactly 0.5 cells wide.
+                              const visEndOff = Math.min(numDays, isNoShow ? unClampedStartOff + 0.5 : unClampedTotalEndOff);
 
-                              const leftPx = LABEL_W + startOff * CELL_W + 2;
-                              const widthPx = (endOff - startOff) * CELL_W - 4;
+                              if (visEndOff <= 0 || visStartOff >= numDays) return null;
+
+                              const leftPx = LABEL_W + visStartOff * CELL_W + 2;
+                              const widthPx = (visEndOff - visStartOff) * CELL_W - 4;
                               if (widthPx <= 0) return null;
 
+                              const bleedsLeft = unClampedStartOff < 0;
+                              const bleedsRight = isNoShow ? false : (unClampedTotalEndOff > numDays);
+                              const bookingBleedsRight = hasMaintenance ? (unClampedEndOff + 0.5) > numDays : unClampedEndOff > numDays;
+
+                              // The exact pixel line where the guest stay ends and maintenance stripes begin
+                              // We use +0.5 to push the booking color halfway into the checkout day.
+                              const boundaryPx = hasMaintenance 
+                                ? (unClampedEndOff + 0.5 - visStartOff) * CELL_W 
+                                : (unClampedEndOff - visStartOff) * CELL_W;
+
                               const sc = STATUS_COLORS[bk.status] ?? STATUS_COLORS.PENDING;
-                              const bleedsLeft = ci < winStartStr;
-                              const bleedsRight = co > toDS(addDays(winStart, numDays));
                               const guestName = bk.guestName || 'Guest';
 
                               return (
                                 <div key={bk.id}
                                   className={cn(
-                                    'absolute top-[4px] shadow-sm cursor-pointer transition-all hover:shadow-md hover:brightness-95 border',
-                                    sc.bar,
+                                    'absolute flex overflow-hidden shadow-sm cursor-pointer transition-all hover:shadow-md hover:brightness-95 border',
+                                    isNoShow ? 'bg-rose-100 border-rose-300' : 'bg-white',
                                     bk.status === 'CHECKED_IN' ? 'border-green-300' :
                                     bk.status === 'CONFIRMED' ? 'border-blue-300' :
                                     bk.status === 'PENDING' ? 'border-amber-300' :
@@ -622,17 +604,47 @@ export default function Bookings() {
                                     bleedsLeft && bleedsRight ? 'rounded-none' :
                                     bleedsLeft ? 'rounded-r-md rounded-l-none' :
                                     bleedsRight ? 'rounded-l-md rounded-r-none' :
-                                    'rounded-md',
+                                    'rounded-md'
                                   )}
-                                  style={{ left: leftPx, width: widthPx, height: CELL_H - 8, zIndex: 5 }}
+                                  style={{ 
+                                    left: leftPx, 
+                                    width: widthPx, 
+                                    height: isNoShow ? CELL_H - 16 : CELL_H - 8, 
+                                    top: isNoShow ? 8 : 4,
+                                    zIndex: isNoShow ? 4 : 5
+                                  }}
                                   title={`${guestName} • ${bk.status.replace('_', ' ')} • ${ci} → ${co}`}
                                   onClick={e => { e.stopPropagation(); setCtx({ x: e.clientX, y: e.clientY, booking: bk }); }}
                                   onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtx({ x: e.clientX, y: e.clientY, booking: bk }); }}>
-                                  <div className={cn('flex items-center h-full px-2 overflow-hidden whitespace-nowrap', sc.text)}>
-                                    {bleedsLeft && <span className="mr-1 text-[10px] opacity-70">◂</span>}
-                                    <span className="text-[11px] font-bold truncate">{guestName}</span>
-                                    {bleedsRight && <span className="ml-auto pl-1 text-[10px] opacity-70">▸</span>}
-                                  </div>
+                                  
+                                  {/* NO SHOW View */}
+                                  {isNoShow && (
+                                    <div className={cn('flex w-full items-center justify-center h-full', sc.text, sc.bar)}>
+                                      <span className="text-[9px] font-bold">NO SHOW</span>
+                                    </div>
+                                  )}
+
+                                  {/* Standard Guest Stay Part */}
+                                  {!isNoShow && boundaryPx > 0 && (
+                                    <div style={{ width: Math.min(boundaryPx, widthPx) }} 
+                                         className={cn("h-full flex items-center px-2 relative shrink-0", 
+                                          hasMaintenance && boundaryPx < widthPx ? 'border-r border-white/20' : '', sc.bar, sc.text)}>
+                                      {bleedsLeft && <span className="mr-1 text-[10px] opacity-70">◂</span>}
+                                      <span className="text-[11px] font-bold truncate">{guestName}</span>
+                                      {bookingBleedsRight && <span className="ml-auto pl-1 text-[10px] opacity-70">▸</span>}
+                                    </div>
+                                  )}
+
+                                  {/* Post-Checkout Maintenance Block Part */}
+                                  {!isNoShow && hasMaintenance && boundaryPx < widthPx && (
+                                    <div style={{ 
+                                          width: widthPx - Math.max(0, boundaryPx), 
+                                          background: 'repeating-linear-gradient(45deg, #f8fafc, #f8fafc 8px, #e2e8f0 8px, #e2e8f0 16px)' 
+                                        }}
+                                        className="h-full flex items-center justify-center shrink-0 border-l border-black/5">
+                                      <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest hidden sm:block">Maint</span>
+                                    </div>
+                                  )}
                                 </div>
                               );
                             })}
@@ -642,19 +654,9 @@ export default function Bookings() {
                     </div>
                   );
                 })}
-
-                {rooms.length === 0 && (
-                  <div className="flex items-center justify-center py-20 text-slate-400">
-                    <div className="text-center">
-                      <p className="text-lg font-semibold">No rooms found</p>
-                      <p className="mt-1 text-sm">Select a different property or add rooms first.</p>
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
 
-            {/* ─── Sticky Bottom Controls ─── */}
             <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50/90 backdrop-blur-sm px-5 py-3">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">View</span>
@@ -673,7 +675,6 @@ export default function Bookings() {
                   </button>
                 </div>
               </div>
-
               <div className="flex items-center gap-2">
                 <button type="button" className={btnSecondary + ' !py-1.5 !text-xs'} onClick={() => navigate(-numDays)}>
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
@@ -688,7 +689,6 @@ export default function Bookings() {
             </div>
           </div>
 
-          {/* ─── Daily Stats Sidebar ─── */}
           <div className="hidden lg:block w-72 shrink-0 space-y-4">
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
@@ -698,31 +698,26 @@ export default function Bookings() {
                 {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
               </p>
             </div>
-
             <button type="button" className="w-full rounded-xl border border-amber-200 bg-amber-50 p-4 text-left transition-all hover:shadow-md hover:border-amber-300"
               onClick={() => statClick('incoming')}>
               <p className="text-3xl font-extrabold text-amber-900">{inCount}</p>
               <p className="mt-0.5 text-xs font-bold uppercase tracking-wider text-amber-700">Arrivals</p>
             </button>
-
             <button type="button" className="w-full rounded-xl border border-blue-200 bg-blue-50 p-4 text-left transition-all hover:shadow-md hover:border-blue-300"
               onClick={() => statClick('inhouse')}>
               <p className="text-3xl font-extrabold text-blue-900">{houseCount}</p>
               <p className="mt-0.5 text-xs font-bold uppercase tracking-wider text-blue-700">In-House</p>
             </button>
-
             <button type="button" className="w-full rounded-xl border border-rose-200 bg-rose-50 p-4 text-left transition-all hover:shadow-md hover:border-rose-300"
               onClick={() => statClick('checkouts')}>
               <p className="text-3xl font-extrabold text-rose-900">{outCount}</p>
               <p className="mt-0.5 text-xs font-bold uppercase tracking-wider text-rose-700">Checkouts</p>
             </button>
-
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
               <p className="text-3xl font-extrabold text-emerald-900">{Number.isFinite(occRate) ? occRate.toFixed(1) + '%' : '—'}</p>
               <p className="mt-0.5 text-xs font-bold uppercase tracking-wider text-emerald-700">Occupancy</p>
               <p className="mt-1 text-[11px] text-emerald-600">{houseCount} / {totalRooms} rooms</p>
             </div>
-
             <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">Status Legend</p>
               <div className="space-y-2">
@@ -738,51 +733,30 @@ export default function Bookings() {
         </div>
       </div>
 
-      {/* ═══════════════════ MODALS ═══════════════════ */}
-
       {showForm && (
         <ModalShell title="Create Booking" subtitle={pfRoom ? `Room ${pfRoom.number}` : undefined} size="wide" onClose={() => setShowForm(false)}>
           <BookingForm 
-            propertyId={selectedPropId} 
-            room={pfRoom}
-            initialCheckIn={prefillCheckIn.current}   
-            initialCheckOut={prefillCheckOut.current} 
-            onSuccess={async () => { setShowForm(false); await refresh(); }}
-            onCancel={() => setShowForm(false)} 
+            propertyId={selectedPropId} room={pfRoom}
+            initialCheckIn={prefillCheckIn.current} initialCheckOut={prefillCheckOut.current} 
+            onSuccess={async () => { setShowForm(false); await refresh(); }} onCancel={() => setShowForm(false)} 
           />
         </ModalShell>
       )}
-      
       {showGroupModal && selectedPropId && (
-        <GroupBookingModal
-          propertyId={selectedPropId}
-          onClose={() => setShowGroupModal(false)}
-          onSuccess={async () => { setShowGroupModal(false); await refresh(); }}
-        />
+        <GroupBookingModal propertyId={selectedPropId} onClose={() => setShowGroupModal(false)}
+          onSuccess={async () => { setShowGroupModal(false); await refresh(); }} />
       )}
-
       {earlyCheckoutBookingId && selectedPropId && (
-        <EarlyCheckoutModal
-          propertyId={selectedPropId}
-          bookingId={earlyCheckoutBookingId}
-          onClose={() => setEarlyCheckoutBookingId(null)}
-          onSuccess={async () => { setEarlyCheckoutBookingId(null); await refresh(); }}
-        />
+        <EarlyCheckoutModal propertyId={selectedPropId} bookingId={earlyCheckoutBookingId}
+          onClose={() => setEarlyCheckoutBookingId(null)} onSuccess={async () => { setEarlyCheckoutBookingId(null); await refresh(); }} />
       )}
-
       {showList && selectedPropId && (
         <BookingsList bookings={getFiltered()} propertyId={selectedPropId} listType={listType}
           onClose={() => setShowList(false)} onUpdate={refresh} />
       )}
-
       {selectedPropId && (
-        <CtxMenu 
-          state={ctx} 
-          propertyId={selectedPropId} 
-          onClose={() => setCtx(null)} 
-          onAction={refresh} 
-          onEarlyCheckout={setEarlyCheckoutBookingId} 
-        />
+        <CtxMenu state={ctx} propertyId={selectedPropId} onClose={() => setCtx(null)} 
+          onAction={refresh} onEarlyCheckout={setEarlyCheckoutBookingId} />
       )}
     </div>
   );
