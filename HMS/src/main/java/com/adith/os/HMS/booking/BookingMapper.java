@@ -38,7 +38,8 @@ public class BookingMapper {
                 bookingCreationDto.totalPrice(),  // Already defaults to 0.0 in DTO
                 bookingCreationDto.specialRequests(),  // ADDED: Special requests mapping
                 bookingCreationDto.status(),      // Already defaults to PENDING in DTO
-                bookingCreationDto.paidAmount()  // Already defaults to ZERO in DTO
+                bookingCreationDto.paidAmount(),  // Already defaults to ZERO in DTO
+                bookingCreationDto.isTwinBed()
         );
     }
 
@@ -69,7 +70,8 @@ public class BookingMapper {
                 booking.getPaymentProgress(),
                 booking.getParentBooking() != null ? booking.getParentBooking().getId() : null,
                 booking.isGroupMaster(),
-                booking.getChildBookings() != null ? booking.getChildBookings().size() : 0
+                booking.getChildBookings() != null ? booking.getChildBookings().size() : 0,
+                booking.isTwinBed()
         );
     }
 

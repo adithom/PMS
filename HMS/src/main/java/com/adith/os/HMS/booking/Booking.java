@@ -107,6 +107,9 @@ public class Booking {
         return parentBooking != null;
     }
 
+    @Column(name = "is_twin_bed", nullable = false, columnDefinition = "boolean default false")
+    private boolean isTwinBed = false;
+
     @PrePersist
     protected void onCreate() {
         if (createdAt == null) {
@@ -128,7 +131,7 @@ public class Booking {
     public Booking(Property property, Room room, Guest guest, Unit unit,
                    LocalDate checkIn, LocalDate checkOut, Integer adults,
                    Integer children, String currency, BigDecimal totalPrice,
-                   String specialRequests, BookingStatus status, BigDecimal paidAmount) {
+                   String specialRequests, BookingStatus status, BigDecimal paidAmount, Boolean isTwinBed) {
         this.property = property;
         this.room = room;
         this.guest = guest;
@@ -142,6 +145,7 @@ public class Booking {
         this.specialRequests = specialRequests;
         this.status = status != null ? status : BookingStatus.PENDING;
         this.paidAmount = paidAmount != null ? paidAmount : BigDecimal.ZERO;
+        this.isTwinBed = isTwinBed != null ? isTwinBed : false;
     }
 
     // Getters and Setters
@@ -279,6 +283,9 @@ public class Booking {
 
     public List<RoomAssignment> getRoomAssignments() { return roomAssignments; }
     public void setRoomAssignments(List<RoomAssignment> roomAssignments) { this.roomAssignments = roomAssignments; }
+
+    public boolean isTwinBed() { return isTwinBed; }
+    public void setTwinBed(boolean twinBed) { isTwinBed = twinBed; }
 
     // Calculated fields - these compute values dynamically
 

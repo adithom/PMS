@@ -33,6 +33,8 @@ public record BookingUpdateDto(
 
         BookingStatus status,
 
-        String specialRequests
-) {
+        String specialRequests,
+      
+        Boolean isTwinBed
+  ) {
 }
