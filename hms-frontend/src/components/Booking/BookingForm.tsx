@@ -10,6 +10,8 @@ import type { Property, Room, UnitDto, Booking } from '../../types';
 /* Types & Tokens                                               */
 /* ────────────────────────────────────────────────────────────── */
 
+//todo: new guest creation doesn't work, no create button
+
 export type GuestSearchResult = {
   id: string;
   firstName: string;

@@ -72,9 +72,11 @@ public record BookingDto(
 
         UUID parentBookingId, // null if not a child booking
 
-        boolean isGroupMaster,
+        Boolean isGroupMaster,
 
-        int childBookingCount // 0 for regular/child bookings
+        int childBookingCount, // 0 for regular/child bookings
+        
+        Boolean isTwinBed
 ) {
     // Compact constructor for validation and defaults
     public BookingDto {
@@ -86,5 +88,7 @@ public record BookingDto(
         if (isFullyPaid == null) {
             isFullyPaid = balanceDue.compareTo(BigDecimal.ZERO) <= 0;
         }
+
+        
     }
 }

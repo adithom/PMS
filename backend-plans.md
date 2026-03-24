@@ -14,11 +14,12 @@
 
 #### some tests
 - [ ] room shifting bill generation
+
 - [ ] tax rate implementation
 - [ ] group bookings charge routing
 
 ### next
-- **==Hosting on Railway?==**
+- **Hosting on Railway?**
 - reports
 > financial (incoming revenue - cash, cc, upi account transfer, endpoint: transferred to folio) daily sales report, mtd report, country, domestic states, meal plan, months, ytd, mtd (compare to last year)
 - birthday in calender

@@ -448,6 +448,9 @@ public class BookingService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Check-out date must be after check-in date");
         }
+        if (dto.isTwinBed() == null) {
+          throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Twin Bedded Status is required for full update");
+        }
 
         // Validate guest
         Guest guest = guestRepository.findById(dto.guestId())
@@ -517,6 +520,7 @@ public class BookingService {
             booking.setTotalPrice(dto.totalPrice() != null ? dto.totalPrice() : BigDecimal.ZERO);
             booking.setPaidAmount(dto.paidAmount()!= null ? dto.paidAmount() : BigDecimal.ZERO);
             booking.setSpecialRequests(dto.specialRequests());
+            booking.setTwinBed(dto.isTwinBed());
 
             // Sync dates before saving
             roomAssignmentService.syncDatesForBookingUpdate(bookingId, dto.checkIn(), dto.checkOut());
@@ -678,6 +682,10 @@ public class BookingService {
 
             if (dto.specialRequests() != null) {
                 booking.setSpecialRequests(dto.specialRequests());
+            }
+
+            if (dto.isTwinBed() != null) {
+              booking.setTwinBed(dto.isTwinBed());
             }
 
             if (datesChanged) {

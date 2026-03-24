@@ -142,6 +142,7 @@ public class GroupBookingService {
             child.setStatus(BookingStatus.CONFIRMED);
             child.setGroupMaster(false);
             child.setParentBooking(savedParent);
+            child.setTwinBed(vr.request().isTwinBed() != null ? vr.request().isTwinBed() : false);
 
             Booking savedChild = bookingRepository.save(child);
             savedChildren.add(savedChild);
@@ -618,7 +619,8 @@ public class GroupBookingService {
                             childFolio != null ? childFolio.getId() : null,
                             childFolio != null ? childFolio.getFolioNumber() : null,
                             childFolio != null && childFolio.isRouted(),
-                            child.getSpecialRequests()
+                            child.getSpecialRequests(),
+                            child.isTwinBed()
                     );
                 })
                 .collect(Collectors.toList());
