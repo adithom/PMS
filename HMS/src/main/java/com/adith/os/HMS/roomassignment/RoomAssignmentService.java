@@ -55,7 +55,7 @@ public class RoomAssignmentService {
      * Called from BookingService.createBooking() and assignRoomToBooking().
      */
     @Transactional
-    public RoomAssignment createInitialAssignment(Booking booking) {
+    public RoomAssignment createInitialAssignment(Booking booking, BigDecimal customTotalPrice) {
         if (booking.getRoom() == null) {
             return null; // No room assigned yet, skip
         }
@@ -66,6 +66,20 @@ public class RoomAssignmentService {
             return existing.get(0); // Already has assignments
         }
 
+        // Derive nightly rate: if a custom total was provided, divide by nights;
+        // otherwise fall back to the room's base rate.
+        BigDecimal baseRate = booking.getRoom().getBaseRate();
+        BigDecimal nightlyRate = baseRate;
+
+        if (customTotalPrice != null && customTotalPrice.compareTo(BigDecimal.ZERO) > 0) {
+            long nights = java.time.temporal.ChronoUnit.DAYS.between(booking.getCheckIn(), booking.getCheckOut());
+            if (nights > 0) {
+                BigDecimal derived = customTotalPrice.divide(BigDecimal.valueOf(nights), 2, java.math.RoundingMode.HALF_UP);
+                // Only use the derived rate if it differs from base rate (i.e. user overrode the price)
+                nightlyRate = derived;
+            }
+        }
+
         RoomAssignment assignment = new RoomAssignment(
                 booking,
                 booking.getRoom(),
@@ -73,7 +87,7 @@ public class RoomAssignmentService {
                 booking.getCheckOut(),
                 RoomAssignmentStatus.SCHEDULED,
                 "Initial room assignment",
-                booking.getRoom().getBaseRate()
+                nightlyRate
         );
 
         return roomAssignmentRepository.save(assignment);

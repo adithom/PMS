@@ -8,5 +8,7 @@ HMS/hms-data/.DS_Store
 
 hms-frontend/.agents/
 
-.frontend-plans.md
-.backend-plans.md
+frontend-plans.md
+backend-plans.md
+
+CLAUDE.md

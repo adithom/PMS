@@ -180,6 +180,7 @@ export default function Bookings() {
   const [pfRoom, setPfRoom] = useState<Room | null>(null);
 
   const [drag, setDrag] = useState<{ rid: string; startCol: number; endCol: number; rowTop: number } | null>(null);
+  const dragRef = useRef<{ rid: string; startCol: number; endCol: number; rowTop: number } | null>(null);
   const dragging = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -301,23 +302,31 @@ export default function Bookings() {
   const statClick = useCallback((t: StatType) => { setListType(t); setShowList(true); }, []);
 
   const handleDragStart = useCallback((rid: string, col: number, rowTop: number) => {
-    dragging.current = true; setDrag({ rid, startCol: col, endCol: col, rowTop });
+    const d = { rid, startCol: col, endCol: col, rowTop };
+    console.log('[DRAG] start', d);
+    dragging.current = true; dragRef.current = d; setDrag(d);
   }, []);
   const handleDragMove = useCallback((rid: string, col: number) => {
-    if (!dragging.current) return;
-    setDrag(p => { if (!p || p.rid !== rid || p.endCol === col) return p; return { ...p, endCol: col }; });
+    if (!dragging.current || !dragRef.current) return;
+    if (dragRef.current.rid !== rid || dragRef.current.endCol === col) return;
+    const updated = { ...dragRef.current, endCol: col };
+    console.log('[DRAG] move', { rid, col, updated });
+    dragRef.current = updated;
+    setDrag(updated);
   }, []);
   const handleDragEnd = useCallback(() => {
+    console.log('[DRAG] end called', { isDragging: dragging.current, dragRef: dragRef.current });
     if (!dragging.current) return;
     dragging.current = false;
-    setDrag(prev => {
-      if (!prev) return null;
-      const { rid, startCol, endCol } = prev;
-      const from = Math.min(startCol, endCol), to = Math.max(startCol, endCol);
-      const room = rooms.find(r => getRoomId(r) === rid);
-      if (room && to > from) setTimeout(() => openForm(room, toDS(dateCols[from]), toDS(dateCols[to])), 0);
-      return null;
-    });
+    const prev = dragRef.current;
+    dragRef.current = null;
+    setDrag(null);
+    if (!prev) return;
+    const { rid, startCol, endCol } = prev;
+    const from = Math.min(startCol, endCol), to = Math.max(startCol, endCol);
+    const room = rooms.find(r => (getRoomId(r) || r.number) === rid);
+    console.log('[DRAG] end result', { rid, from, to, roomFound: !!room, roomsCount: rooms.length });
+    if (room && to > from) setTimeout(() => openForm(room, toDS(dateCols[from]), toDS(dateCols[to])), 0);
   }, [rooms, dateCols, openForm]);
 
   const scrollCooldownRef = useRef(false);

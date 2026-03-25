@@ -196,7 +196,7 @@ public class BookingService {
             folioService.createFolio(propertyId, folioDto);
 
             // Create initial room assignment if room is assigned
-            roomAssignmentService.createInitialAssignment(savedBooking);
+            roomAssignmentService.createInitialAssignment(savedBooking, bookingCreationDto.totalPrice());
 
             return bookingMapper.toDto(savedBooking);
         } catch (Exception e) {
@@ -838,7 +838,7 @@ public class BookingService {
         Booking savedBooking = bookingRepository.save(booking);
 
         // Create room assignment if none exists
-        roomAssignmentService.createInitialAssignment(savedBooking);
+        roomAssignmentService.createInitialAssignment(savedBooking, savedBooking.getTotalPrice());
 
         return bookingMapper.toDto(savedBooking);
     }
