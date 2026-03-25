@@ -3,8 +3,8 @@
 - [x] tailwind migration 
 - [x] admin billing console
 - [x] frontend billing manager
-- [ ] unassigned rooms task list
-- [ ] twin bedded rooms - check box while booking creation
+- [x] unassigned rooms task list
+- [x] twin bedded rooms - check box while booking creation
 - [ ] birthday celebration pop up
 - [x] calender modification
 - [x] separate booking form for group booking
@@ -13,5 +13,5 @@
 - [ ] make sure new guest button works in both booking forms
 
 ### next
-- reports
-
+- [ ] deploy frontend on vercel
+- [ ] reports

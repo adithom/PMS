@@ -2,18 +2,19 @@
 
 ##### 24/3/26
 - [x] twin bedded field
-- [ ] unassigned rooms task
+- [x] inventory releasing after early checkout, no show etc
+- [ ] generated bills supplied to frontend
 
 ##### 25/3/26
 - [ ] task list calender - rooms to be maintained, guest birthday celebration
-- [ ] inventory releasing after early checkout, no show etc
+- [ ] meal plan and automated price estimate on creation 
 
 ##### 26/3/26
 - [ ] pos interfaces
 
 ##### 27/3/26
-- [ ] meal plan and automated price estimate on creation 
 - [ ] reservation number for manual booking
+- [ ] unassigned rooms checklist
 
 ##### 28/3/26
 - [ ] test finances flow, routing, group and room shifting bill generation

@@ -16,6 +16,7 @@ import PosInterface from './pages/PosInterface';
 import AdminBillingManager from './pages/AdminBillingManager';
 import FrontDeskBillingManager from './pages/FrontDeskBillingManager';
 import Sandbox from './pages/Sandbox';
+import Reports from './pages/Reports.tsx'
 
 
 function AppRoutes() {
@@ -129,6 +130,17 @@ function AppRoutes() {
         }
       />
 
+       <Route
+        path="/reports"
+        element={
+          <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER', 'FRONTDESK', 'HOUSEKEEPING']}>
+            <>
+              <Navigation allowedRoutes={allowedRoutes} />
+              <Reports />
+            </>
+          </ProtectedRoute>
+        }
+      />
     
 
       <Route

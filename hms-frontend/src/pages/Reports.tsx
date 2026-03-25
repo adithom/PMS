@@ -1,10 +1,10 @@
 // src/pages/Reports.tsx
 import UpcomingFeature from '../components/UpcomingFeature';
 
-export default function PosInterface() {
+export default function Reports() {
   return (
     <UpcomingFeature 
-      title="POS is under construction." 
+      title="Reports is under construction." 
     />
   );
 }
