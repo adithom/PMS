@@ -14,10 +14,6 @@ class ApiError extends Error {
   }
 }
 
-interface FetchOptions extends RequestInit {
-  params?: Record<string, any>;
-}
-
 const buildOptions = (method: string, body?: any): RequestInit => {
   const token = localStorage.getItem('accessToken');
   
@@ -55,8 +51,14 @@ const fetchApi = async <T>(endpoint: string, options: RequestInit = {}): Promise
     }
 
     if (!response.ok) {
+      // Auto-logout on expired/invalid token
+      if (response.status === 401) {
+        localStorage.removeItem('accessToken');
+        window.location.href = '/login';
+      }
+
       const errorMessage = data?.message || data?.error || `HTTP ${response.status}`;
-      
+
       console.error(`API Error [${response.status}]:`, errorMessage);
 
       throw new ApiError(errorMessage, response.status, data);
@@ -77,7 +79,9 @@ const api = {
   get: <T>(endpoint: string, params?: Record<string, any>): Promise<T> => {
     const queryString = params
       ? '?' + new URLSearchParams(
-          Object.entries(params).filter(([_, v]) => v != null) as [string, string][]
+          Object.entries(params)
+            .filter(([_, v]) => v != null)
+            .map(([k, v]) => [k, String(v)])
         ).toString()
       : '';
     return fetchApi<T>(endpoint + queryString, buildOptions('GET'));

@@ -186,13 +186,13 @@ public class GuestService {
         }
 
         try {
-            // Full update (PUT semantics)
             guest.setFirstName(dto.firstName().trim());
             guest.setLastName(dto.lastName().trim());
             guest.setEmail(dto.email() != null && !dto.email().isBlank() ? dto.email().trim().toLowerCase() : null);
             guest.setPhone(dto.phone() != null && !dto.phone().isBlank() ? dto.phone().trim() : null);
             guest.setIdNumber(dto.idNumber() != null && !dto.idNumber().isBlank() ? dto.idNumber().trim() : null);
             guest.setPreferences(dto.preferences() != null && !dto.preferences().isBlank() ? dto.preferences().trim() : null);
+            guest.setDateOfBirth(dto.dateOfBirth());
 
             Guest savedGuest = guestRepository.save(guest);
             return guestMapper.toDto(savedGuest);
@@ -265,6 +265,10 @@ public class GuestService {
 
             if (dto.preferences() != null && !dto.preferences().isBlank()) {
                 guest.setPreferences(dto.preferences().trim());
+            }
+
+            if (dto.dateOfBirth() != null) {
+                guest.setDateOfBirth(dto.dateOfBirth());
             }
 
             Guest savedGuest = guestRepository.save(guest);

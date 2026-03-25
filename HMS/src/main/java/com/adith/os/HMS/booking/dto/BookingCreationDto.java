@@ -42,7 +42,10 @@ public record BookingCreationDto(
         String specialRequests,
 
         UUID parentBookingId,       // Set when creating a child booking individually
-        String groupReference       // e.g. "WEDDING-SHARMA-2025", purely informational
+        String groupReference,       // e.g. "WEDDING-SHARMA-2025", purely informational
+
+        Boolean isTwinBed
+
 ) {
     public BookingCreationDto {
         if (adults == null) {

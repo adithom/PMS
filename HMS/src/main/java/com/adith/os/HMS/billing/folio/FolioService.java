@@ -87,6 +87,10 @@ public class FolioService {
             if (!routedToFolio.getProperty().getId().equals(propertyId)) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Routing target folio does not belong to this property");
             }
+            if (routedToFolio.isRouted()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Cannot route to a folio that is itself routed to another folio (routing chains are not supported)");
+            }
         }
 
         try {
@@ -256,7 +260,11 @@ public class FolioService {
         try {
             FolioCharge charge = new FolioCharge();
             charge.setFolio(folio);
-            charge.setChargeDate(dto.chargeDate() != null ? dto.chargeDate() : LocalDate.now());
+            LocalDate chargeDate = dto.chargeDate() != null ? dto.chargeDate() : LocalDate.now();
+            if (chargeDate.isAfter(LocalDate.now())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Charge date cannot be in the future");
+            }
+            charge.setChargeDate(chargeDate);
             charge.setChargeCode(dto.chargeCode());
             charge.setDescription(dto.description());
             charge.setUnitPrice(dto.unitPrice());
@@ -380,6 +388,16 @@ public class FolioService {
         if (!folio.getProperty().getId().equals(propertyId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Folio does not belong to the specified property");
+        }
+
+        // Prevent closing a parent folio while routed children are still open
+        if (folio.getRoutedFolios() != null && !folio.getRoutedFolios().isEmpty()) {
+            boolean hasOpenChildren = folio.getRoutedFolios().stream()
+                    .anyMatch(child -> child.getStatus() == FolioStatus.OPEN);
+            if (hasOpenChildren) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Cannot close this folio while routed child folios are still open");
+            }
         }
 
         try {
@@ -580,6 +598,10 @@ public class FolioService {
         }
         if (targetFolio.getId().equals(sourceFolio.getId())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Source and target folios cannot be the same");
+        }
+        if (targetFolio.isRouted()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Cannot route charges to a folio that is itself routed to another folio (routing chains are not supported)");
         }
 
         try {

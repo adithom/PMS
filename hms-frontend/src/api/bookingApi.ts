@@ -15,6 +15,19 @@ export interface BookingCreationDto {
   totalPrice?: number;
   paidAmount?: number;
   specialRequests?: string;
+  isTwinBed?: boolean;  
+}
+
+export interface ExtendBookingRequestDto {
+  newCheckOutDate: string; // Format: YYYY-MM-DD
+  extensionNightlyRate?: number; // How much to charge per extra night
+  notes?: string;
+}
+
+export interface EarlyCheckoutRequestDto {
+  newCheckOutDate: string; // Format: YYYY-MM-DD
+  policy: 'NO_CHANGE' | 'REFUND_UNUSED_NIGHTS' | 'CUSTOM';
+  customRoomCharge?: number; // Optional penalty/adjusted rate, used if policy is 'CUSTOM'
 }
 
 const bookingApi = {
@@ -74,7 +87,9 @@ const bookingApi = {
   delete: (propertyId: string, bookingId: string) =>
     api.delete<void>(`/properties/${propertyId}/bookings/${bookingId}`),
 
+  // ═══════════════════════════════════════════════════════════
   // SPECIAL OPERATIONS
+  // ═══════════════════════════════════════════════════════════
 
   // Assign room to booking
   // POST /api/properties/{propertyId}/bookings/{id}/assign-room?roomId={roomId}
@@ -90,6 +105,30 @@ const bookingApi = {
     api.post<Booking>(
       `/properties/${propertyId}/bookings/${bookingId}/check-in`,
       null
+    ),
+
+  // Standard Check-out
+  // POST /api/properties/{propertyId}/bookings/{id}/checkout
+  checkOut: (propertyId: string, bookingId: string) =>
+    api.post<Booking>(
+      `/properties/${propertyId}/bookings/${bookingId}/checkout`,
+      null
+    ),
+
+  // Early Check-out
+  // POST /api/properties/{propertyId}/bookings/{id}/checkout-early
+  checkoutEarly: (propertyId: string, bookingId: string, data: EarlyCheckoutRequestDto) =>
+    api.post<Booking>(
+      `/properties/${propertyId}/bookings/${bookingId}/checkout-early`,
+      data
+    ),
+
+  // Extend Booking
+  // POST /api/properties/{propertyId}/bookings/{id}/extend
+  extend: (propertyId: string, bookingId: string, data: ExtendBookingRequestDto) =>
+    api.post<Booking>(
+      `/properties/${propertyId}/bookings/${bookingId}/extend`,
+      data
     ),
 
   // Fetch all bookings overlapping a date range (single server call).

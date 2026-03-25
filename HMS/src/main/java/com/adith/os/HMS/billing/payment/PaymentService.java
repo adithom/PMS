@@ -70,10 +70,11 @@ public class PaymentService {
         folio.getPayments().add(savedPayment);
         folio.recalculateTotals();
 
-        // Auto-close Folio if fully settled!
-        if (folio.getBalanceDue().compareTo(BigDecimal.ZERO) <= 0) {
-            folio.setStatus(com.adith.os.HMS.billing.folio.FolioStatus.POSTED);
-            folio.setClosedAt(OffsetDateTime.now());
+        // Auto-close folio if fully settled (skip for routed folios — their balance is handled by the parent)
+        if (!folio.isRouted()
+                && folio.getStatus() == com.adith.os.HMS.billing.folio.FolioStatus.OPEN
+                && folio.getBalanceDue().compareTo(BigDecimal.ZERO) <= 0) {
+            folio.close();
         }
 
         Folio savedFolio = folioRepository.save(folio);

@@ -74,7 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.warn('Could not fetch full user info, using temp user:', fetchError);
         return tempUser;
       }
-    } catch (error: any) {
+    } catch (error) {
       // Clear any stored token on login failure
       localStorage.removeItem('accessToken');
       setToken(null);
@@ -88,8 +88,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           throw new Error('Access forbidden');
         }
       }
-      
-      if (error.message) {
+
+      if (error instanceof Error) {
         throw new Error(error.message);
       } else {
         throw new Error('Login failed. Please try again.');

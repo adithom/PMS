@@ -92,7 +92,7 @@ public class Folio {
     @OneToMany(mappedBy = "folio", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<FolioCharge> charges;
 
-    @OneToMany(mappedBy = "folio", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "folio", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Payment> payments;
 
     @OneToMany(mappedBy = "folio")

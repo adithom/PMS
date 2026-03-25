@@ -51,6 +51,7 @@ public record GroupBookingSummaryDto(
             UUID folioId,
             String folioNumber,
             boolean folioIsRouted,      // true if routed to master folio
-            String specialRequests
+            String specialRequests,
+            Boolean isTwinBed
     ) {}
 }

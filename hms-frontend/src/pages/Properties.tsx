@@ -51,6 +51,7 @@ export default function Properties() {
   const [dialog, setDialog] = useState<DialogState>(null);
   const [unitsForProperty, setUnitsForProperty] = useState<UnitDto[]>([]);
   const [loadingUnits, setLoadingUnits] = useState(false);
+  const [unitsError, setUnitsError] = useState<string | null>(null);
 
   /* ═══════════════════════════════════════════════════════════ */
   /* Data Loading                                                */
@@ -75,12 +76,13 @@ export default function Properties() {
 
   const loadUnits = async (propertyId: string) => {
     setLoadingUnits(true);
+    setUnitsError(null);
     try {
       const units = await propertyApi.getUnits(propertyId);
       setUnitsForProperty(units || []);
-    } catch (err: any) {
-      // Non-fatal, just means units couldn't load
+    } catch {
       setUnitsForProperty([]);
+      setUnitsError('Failed to load units');
     } finally {
       setLoadingUnits(false);
     }
@@ -278,6 +280,10 @@ export default function Properties() {
               <div className="mt-3 space-y-2">
                 {loadingUnits ? (
                   <p className="text-xs text-slate-400 animate-pulse py-4">Loading units...</p>
+                ) : unitsError ? (
+                  <div className="rounded-lg border border-rose-200 bg-rose-50 py-4 text-center">
+                    <p className="text-xs font-medium text-rose-600">{unitsError}</p>
+                  </div>
                 ) : unitsForProperty.length === 0 ? (
                   <div className="rounded-lg border-2 border-dashed border-slate-100 py-6 text-center">
                     <p className="text-xs font-medium text-slate-400">No units configured yet.</p>

@@ -7,7 +7,7 @@ import availabilityApi from '../../api/availabilityApi';
 import type { Property, Room, UnitDto, Booking } from '../../types';
 
 /* ────────────────────────────────────────────────────────────── */
-/* Types & Tokens                                               */
+/* Types & Tokens                                                 */
 /* ────────────────────────────────────────────────────────────── */
 
 export type GuestSearchResult = {
@@ -45,7 +45,7 @@ const inputCls =
 const labelCls = 'mb-1.5 block text-sm font-medium text-slate-700';
 
 /* ────────────────────────────────────────────────────────────── */
-/* Component                                                    */
+/* Component                                                      */
 /* ────────────────────────────────────────────────────────────── */
 
 export default function BookingForm({
@@ -81,6 +81,9 @@ export default function BookingForm({
   const [paidAmount, setPaidAmount] = useState<number>(booking?.paidAmount ?? 0);
   const [specialRequests, setSpecialRequests] = useState<string>(booking?.specialRequests ?? '');
   const [status, setStatus] = useState<string>(booking?.status ?? 'PENDING');
+  
+  // ---> NEW STATE FOR TWIN BED <---
+  const [isTwinBed, setIsTwinBed] = useState<boolean>(booking?.isTwinBed ?? false);
 
   // ── Guest State ──
   const defaultGuestName = initialGuest ? `${initialGuest.firstName} ${initialGuest.lastName}` : '';
@@ -203,6 +206,19 @@ export default function BookingForm({
     return () => { mounted = false; };
   }, [selectedPropertyId, selectedUnitId, checkIn, checkOut, isEditMode, booking, preselectedRoom]);
 
+  // Auto-calculate total price from room baseRate × nights
+  useEffect(() => {
+    if (isEditMode) return;
+    if (room && checkIn && checkOut) {
+      const inDate = new Date(checkIn);
+      const outDate = new Date(checkOut);
+      if (outDate > inDate) {
+        const nights = Math.round((outDate.getTime() - inDate.getTime()) / (1000 * 60 * 60 * 24));
+        setTotalPrice(room.baseRate * nights);
+      }
+    }
+  }, [room, checkIn, checkOut, isEditMode]);
+
   // Guest Search Effect
   useEffect(() => {
     if (isEditMode || !guestQuery || guestQuery.length < 2) return;
@@ -259,7 +275,8 @@ export default function BookingForm({
         guestId: selectedGuestId!,
         unitId: selectedUnitId, // Now strictly passed
         status: status as any,
-        checkIn, checkOut, adults, children, currency, totalPrice, paidAmount, specialRequests
+        checkIn, checkOut, adults, children, currency, totalPrice, paidAmount, specialRequests,
+        isTwinBed // ---> ADDED TO PAYLOAD <---
       };
 
       const result = (isEditMode && booking?.id) 
@@ -410,8 +427,36 @@ export default function BookingForm({
 
         <div className="grid gap-4 sm:grid-cols-3">
           <label><span className={labelCls}>Currency</span><input className={inputCls} value={currency} onChange={e => setCurrency(e.target.value)} /></label>
-          <label><span className={labelCls}>Total Price</span><input type="number" min={0} className={inputCls} value={totalPrice} onChange={e => setTotalPrice(Number(e.target.value) || 0)} /></label>
+          <div>
+            <label><span className={labelCls}>Total Price</span><input type="number" min={0} className={inputCls} value={totalPrice} onChange={e => setTotalPrice(Number(e.target.value) || 0)} /></label>
+            {(() => {
+              if (!room || !checkIn || !checkOut) return null;
+              const inD = new Date(checkIn), outD = new Date(checkOut);
+              if (outD <= inD) return null;
+              const nights = Math.round((outD.getTime() - inD.getTime()) / (1000 * 60 * 60 * 24));
+              const expected = room.baseRate * nights;
+              return (
+                <p className="mt-1.5 text-xs text-slate-500">
+                  Room {room.number} — {currency} {room.baseRate.toLocaleString()}/night × {nights} night{nights !== 1 ? 's' : ''} = {currency} {expected.toLocaleString()}
+                </p>
+              );
+            })()}
+          </div>
           <label><span className={labelCls}>Amount Paid</span><input type="number" min={0} className={inputCls} value={paidAmount} onChange={e => setPaidAmount(Number(e.target.value) || 0)} /></label>
+        </div>
+
+        {/* ---> NEW CHECKBOX FOR TWIN BED <--- */}
+        <div className="flex items-center pt-2">
+          <input
+            id="isTwinBed"
+            type="checkbox"
+            checked={isTwinBed}
+            onChange={(e) => setIsTwinBed(e.target.checked)}
+            className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900 cursor-pointer"
+          />
+          <label htmlFor="isTwinBed" className="ml-2 block text-sm font-medium text-slate-700 cursor-pointer select-none">
+            Twin Bedded Room
+          </label>
         </div>
 
         <label>

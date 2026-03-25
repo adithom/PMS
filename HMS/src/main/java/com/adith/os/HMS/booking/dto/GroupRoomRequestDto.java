@@ -36,7 +36,9 @@ public record GroupRoomRequestDto(
         @PositiveOrZero(message = "Total price cannot be negative")
         BigDecimal totalPrice,
 
-        String specialRequests
+        String specialRequests,
+
+        Boolean isTwinBed
 ) {
     public GroupRoomRequestDto {
         if (adults == null) adults = 1;

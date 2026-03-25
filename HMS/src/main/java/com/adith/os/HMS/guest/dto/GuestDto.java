@@ -25,6 +25,8 @@ public record GuestDto(
 
         @NotNull OffsetDateTime createdAt,
 
-        String preferences
+        String preferences,
+        
+        java.time.LocalDate dateOfBirth
 ) {
 }

@@ -33,6 +33,7 @@ export interface Guest {
   email?: string;
   phone?: string;
   docId?: string;
+  dateOfBirth?: string;
   createdAt?: string;
   preferences?: string;
 }
@@ -59,6 +60,7 @@ export interface Booking {
   isFullyPaid?: boolean;
   specialRequests?: string;
   createdAt?: string;
+  isTwinBed: boolean;
 }
 
 export type BookingStatus =

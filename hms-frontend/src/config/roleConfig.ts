@@ -44,6 +44,12 @@ export const routes: RouteConfig[] = [
     label: 'POS',
     component: 'PosInterface',
     allowedRoles: ['ADMIN', 'MANAGER', 'POS']
+  },
+  {
+    path: '/reports',
+    label: 'Reports',
+    component: 'Reports',
+    allowedRoles: ['ADMIN', 'MANAGER', 'POS']
   }
 ];
 

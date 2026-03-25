@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import bookingApi from '../../api/bookingApi';
 import BookingForm from './BookingForm';
+import EarlyCheckoutModal from './EarlyCheckoutModal';
 import ModalShell from '../ModalShell';
 import type { Booking, BookingStatus } from '../../types';
 
@@ -45,6 +46,11 @@ const formatDate = (dateStr: string) => {
   return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
+const getTodayStr = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
 /* ────────────────────────────────────────────────────────────── */
 /* Component                                                    */
 /* ────────────────────────────────────────────────────────────── */
@@ -53,6 +59,8 @@ export default function BookingsList({ bookings, propertyId, listType, onClose, 
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
+  const [earlyCheckoutBooking, setEarlyCheckoutBooking] = useState<Booking | null>(null);
+  
   const [confirmAction, setConfirmAction] = useState<'checkin' | 'checkout' | 'cancel' | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,23 +74,17 @@ export default function BookingsList({ bookings, propertyId, listType, onClose, 
     }
   };
 
-  const handleStatusUpdate = async (booking: Booking, newStatus: BookingStatus) => {
-    setLoading(true); setError(null);
-    try {
-      if (!booking.id) throw new Error('Booking ID is missing.');
-      await bookingApi.updateStatus(propertyId, booking.id, newStatus);
-      await onUpdate();
-      setShowConfirmDialog(false);
-      setSelectedBooking(null);
-      setConfirmAction(null);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const triggerConfirm = (booking: Booking, action: 'checkin' | 'checkout' | 'cancel') => {
+    // Intercept checkout to check if it's an Early Checkout
+    if (action === 'checkout') {
+      const today = getTodayStr();
+      const checkOutDate = booking.checkOut.split('T')[0];
+      if (today < checkOutDate) {
+        setEarlyCheckoutBooking(booking);
+        return; // Don't show standard confirmation dialog
+      }
+    }
+
     setSelectedBooking(booking);
     setConfirmAction(action);
     setShowConfirmDialog(true);
@@ -106,9 +108,34 @@ export default function BookingsList({ bookings, propertyId, listType, onClose, 
         setLoading(false);
       }
     } else if (confirmAction === 'checkout') {
-      handleStatusUpdate(selectedBooking, 'CHECKED_OUT');
+      setLoading(true); setError(null);
+      try {
+        if (!selectedBooking.id) throw new Error('Booking ID is missing.');
+        // Call the proper standard checkOut endpoint instead of standard updateStatus
+        await bookingApi.checkOut(propertyId, selectedBooking.id);
+        await onUpdate();
+        setShowConfirmDialog(false);
+        setSelectedBooking(null);
+        setConfirmAction(null);
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
     } else if (confirmAction === 'cancel') {
-      handleStatusUpdate(selectedBooking, 'CANCELLED');
+      setLoading(true); setError(null);
+      try {
+        if (!selectedBooking.id) throw new Error('Booking ID is missing.');
+        await bookingApi.updateStatus(propertyId, selectedBooking.id, 'CANCELLED');
+        await onUpdate();
+        setShowConfirmDialog(false);
+        setSelectedBooking(null);
+        setConfirmAction(null);
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -221,6 +248,16 @@ export default function BookingsList({ bookings, propertyId, listType, onClose, 
             </div>
           </div>
         </ModalShell>
+      )}
+
+      {/* 4. Early Checkout Modal */}
+      {earlyCheckoutBooking && earlyCheckoutBooking.id && (
+        <EarlyCheckoutModal
+          propertyId={propertyId}
+          bookingId={earlyCheckoutBooking.id}
+          onClose={() => setEarlyCheckoutBooking(null)}
+          onSuccess={() => { setEarlyCheckoutBooking(null); onUpdate(); }}
+        />
       )}
     </>
   );

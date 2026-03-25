@@ -196,7 +196,7 @@ public class BookingService {
             folioService.createFolio(propertyId, folioDto);
 
             // Create initial room assignment if room is assigned
-            roomAssignmentService.createInitialAssignment(savedBooking);
+            roomAssignmentService.createInitialAssignment(savedBooking, bookingCreationDto.totalPrice());
 
             return bookingMapper.toDto(savedBooking);
         } catch (Exception e) {
@@ -448,6 +448,9 @@ public class BookingService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Check-out date must be after check-in date");
         }
+        if (dto.isTwinBed() == null) {
+          throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Twin Bedded Status is required for full update");
+        }
 
         // Validate guest
         Guest guest = guestRepository.findById(dto.guestId())
@@ -517,6 +520,7 @@ public class BookingService {
             booking.setTotalPrice(dto.totalPrice() != null ? dto.totalPrice() : BigDecimal.ZERO);
             booking.setPaidAmount(dto.paidAmount()!= null ? dto.paidAmount() : BigDecimal.ZERO);
             booking.setSpecialRequests(dto.specialRequests());
+            booking.setTwinBed(dto.isTwinBed());
 
             // Sync dates before saving
             roomAssignmentService.syncDatesForBookingUpdate(bookingId, dto.checkIn(), dto.checkOut());
@@ -680,6 +684,10 @@ public class BookingService {
                 booking.setSpecialRequests(dto.specialRequests());
             }
 
+            if (dto.isTwinBed() != null) {
+              booking.setTwinBed(dto.isTwinBed());
+            }
+
             if (datesChanged) {
                 roomAssignmentService.syncDatesForBookingUpdate(bookingId, newCheckIn, newCheckOut);
             }
@@ -722,7 +730,7 @@ public class BookingService {
         try {
             booking.setStatus(status);
 
-            if (status == BookingStatus.CANCELLED) {
+            if (status == BookingStatus.CANCELLED || status == BookingStatus.NO_SHOW) {
                 roomAssignmentService.cancelAssignmentsForBooking(bookingId);
             }
 
@@ -830,7 +838,7 @@ public class BookingService {
         Booking savedBooking = bookingRepository.save(booking);
 
         // Create room assignment if none exists
-        roomAssignmentService.createInitialAssignment(savedBooking);
+        roomAssignmentService.createInitialAssignment(savedBooking, savedBooking.getTotalPrice());
 
         return bookingMapper.toDto(savedBooking);
     }

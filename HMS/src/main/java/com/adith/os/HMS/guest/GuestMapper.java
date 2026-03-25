@@ -47,6 +47,8 @@ public class GuestMapper {
                 ? guestCreationDto.preferences().trim()
                 : null);
 
+        guest.setDateOfBirth(guestCreationDto.dateOfBirth());
+
         return guest;
     }
 
@@ -63,7 +65,8 @@ public class GuestMapper {
                 guest.getIdNumber(),
                 guest.getGuestIdType(),
                 guest.getCreatedAt(),
-                guest.getPreferences()
+                guest.getPreferences(),
+                guest.getDateOfBirth()
         );
     }
 

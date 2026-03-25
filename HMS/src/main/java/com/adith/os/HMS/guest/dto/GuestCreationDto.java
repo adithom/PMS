@@ -20,6 +20,8 @@ public record GuestCreationDto(
 
         GuestIdType guestIdType,
 
-        String preferences
+        String preferences,
+        
+        java.time.LocalDate dateOfBirth
 ) {
 }
