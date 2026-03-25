@@ -16,7 +16,7 @@ import PosInterface from './pages/PosInterface';
 import AdminBillingManager from './pages/AdminBillingManager';
 import FrontDeskBillingManager from './pages/FrontDeskBillingManager';
 import Sandbox from './pages/Sandbox';
-import Reports from './pages/Reports.tsx'
+import Reports from './pages/Reports'
 
 
 function AppRoutes() {

@@ -11,6 +11,7 @@
 
 ##### 26/3/26
 - [ ] pos interfaces
+- [ ] fix create guest form in booking form
 
 ##### 27/3/26
 - [ ] reservation number for manual booking
@@ -24,3 +25,8 @@
 - [ ] travel agent stuff
 - [ ] select travel agent on booking
 - [ ] travel agent booking interface
+
+##### 30/3/26
+- [ ] fix frontdesk billing
+- [ ] fix N+M api calls on rooms page ui, add batched api in backend
+- [ ] shared styling token duplication

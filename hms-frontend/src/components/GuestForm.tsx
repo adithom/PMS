@@ -36,7 +36,7 @@ export default function GuestForm({ guest, onSave, onCancel }: GuestFormProps) {
         email: guest.email || '',
         phone: guest.phone || '',
         docId: guest.docId || '',
-        preferences: (guest as any).preferences || ''
+        preferences: guest.preferences || ''
       });
     }
   }, [guest]);

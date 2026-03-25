@@ -1,4 +1,3 @@
-import React from 'react';
 import duck from '../assets/duck.png';
 
 interface UpcomingFeatureProps {

@@ -4,8 +4,10 @@ import com.adith.os.HMS.billing.folio.*;
 import com.adith.os.HMS.billing.folio.dto.ChargeDto;
 import com.adith.os.HMS.billing.bills.dto.*;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -41,12 +43,13 @@ public class BillService {
     public DoubleBillDto generateDoubleBill(UUID folioId, String guestGstNumber) {
 
         Folio folio = folioRepository.findById(folioId)
-                .orElseThrow(() -> new RuntimeException("Folio not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Folio not found"));
 
-        // NEW: Prevent generating bills if active (non-voided) bills already exist
+        // Prevent generating bills if active (non-voided) bills already exist
         long activeBills = billRepository.countByFolioIdAndIsVoidedFalse(folioId);
         if (activeBills > 0) {
-            throw new IllegalStateException("Active bills already exist for this folio. Void them before generating new ones.");
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Active bills already exist for this folio. Void them before generating new ones.");
         }
 
         // NEW: Generate ONE batch ID to link both bills together
@@ -54,11 +57,12 @@ public class BillService {
 
         // 1. Segregate the actual ENTITIES, ignoring voided ones AND charges already billed
         List<FolioCharge> unbilledValidCharges = folio.getCharges().stream()
-                .filter(c -> !c.isVoided() && c.getBill() == null)
+                .filter(c -> !c.isVoided() && c.getBill() == null && c.getGroupBill() == null)
                 .toList();
 
         if (unbilledValidCharges.isEmpty()) {
-            throw new IllegalStateException("No unbilled charges available to generate a bill.");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "No unbilled charges available to generate a bill.");
         }
 
         List<FolioCharge> roomCharges = unbilledValidCharges.stream()
@@ -98,10 +102,10 @@ public class BillService {
     @Transactional
     public BillDto voidBill(UUID billId, String reason, String username) {
         Bill bill = billRepository.findById(billId)
-                .orElseThrow(() -> new RuntimeException("Bill not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Bill not found"));
 
         if (bill.isVoided()) {
-            throw new IllegalStateException("Bill is already voided");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Bill is already voided");
         }
 
         // Mark the bill as voided
@@ -119,8 +123,13 @@ public class BillService {
 
         Bill savedBill = billRepository.save(bill);
 
+        // Recalculate folio totals to keep balance in sync
+        Folio folio = savedBill.getFolio();
+        folio.recalculateTotals();
+        folioRepository.save(folio);
+
         // Map to DTO (passing empty charges since they are detached, or map the existing ones if preferred)
-        return BillMapper.toBillDto(savedBill, savedBill.getFolio(), chargeMapper.toDtos(charges), savedBill.getGuestGstNumber());
+        return BillMapper.toBillDto(savedBill, folio, chargeMapper.toDtos(charges), savedBill.getGuestGstNumber());
     }
 
     @Transactional
@@ -129,7 +138,7 @@ public class BillService {
         List<Bill> activeBills = billRepository.findByFolioIdAndIsVoidedFalse(folioId);
 
         if (activeBills.isEmpty()) {
-            throw new IllegalStateException("No active bills found for this folio.");
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No active bills found for this folio.");
         }
 
         // Void them all using your existing method!

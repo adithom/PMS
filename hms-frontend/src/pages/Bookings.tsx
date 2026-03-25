@@ -1,5 +1,5 @@
 // src/pages/Bookings.tsx — Gantt-chart tape chart
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import propertyApi from '../api/propertyApi';
 import roomApi from '../api/roomApi';
 import bookingApi from '../api/bookingApi';
@@ -10,90 +10,20 @@ import GroupBookingModal from '../components/Booking/GroupBookingModal';
 import EarlyCheckoutModal from '../components/Booking/EarlyCheckoutModal';
 import TaskListModal from '../components/Booking/TaskListModal';
 import LoadingSpinner from '../components/LoadingSpinner';
+import ModalShell from '../components/ModalShell';
 import type { Property, Room, Booking } from '../types';
-
-/* ────────────────────────────────────────────────────────────── */
-/* Design Tokens                                                */
-/* ────────────────────────────────────────────────────────────── */
+import { toDS, addDays, diffDays, shortDate, dayLabel, dateStr } from '../utils/dateHelpers';
+import { getRoomId } from '../utils/roomHelpers';
+import {
+  CELL_W, CELL_H, LABEL_W, MIN_CHART_ROWS,
+  BUFFER_BEFORE, BUFFER_AFTER, REFETCH_THRESHOLD,
+  NAV_DEBOUNCE_MS, SCROLL_EDGE_PX, SCROLL_COOLDOWN_MS, SCROLL_STEP_DAYS,
+  STATUS_COLORS, cn, btnPrimary, btnSecondary,
+} from '../components/Booking/TapeChartConstants';
 
 //todo: fix occupancy rate status bars
 
-const cn = (...c: Array<string | false | null | undefined>) => c.filter(Boolean).join(' ');
-
-const btnPrimary =
-  'inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
-
-const btnSecondary =
-  'inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-all hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
-
-/* ────────────────────────────────────────────────────────────── */
-/* Constants                                                    */
-/* ────────────────────────────────────────────────────────────── */
-
-const CELL_W = 110;
-const CELL_H = 40;
-const LABEL_W = 160;
-const MIN_CHART_ROWS = 18; 
-
-const BUFFER_BEFORE = 15;
-const BUFFER_AFTER = 16;
-const REFETCH_THRESHOLD = 3;
-const NAV_DEBOUNCE_MS = 300;
-const SCROLL_EDGE_PX = 80; 
-const SCROLL_COOLDOWN_MS = 600; 
-const SCROLL_STEP_DAYS = 2; 
-
-const STATUS_COLORS: Record<string, { bar: string; text: string; legend: string; label: string }> = {
-  CONFIRMED:   { bar: 'bg-blue-200/90',    text: 'text-blue-900',     legend: 'bg-blue-300',    label: 'Confirmed' },
-  CHECKED_IN:  { bar: 'bg-green-200/90',   text: 'text-green-900',    legend: 'bg-green-300',   label: 'Checked In' },
-  PENDING:     { bar: 'bg-amber-200/90',   text: 'text-amber-900',    legend: 'bg-amber-300',   label: 'Pending' },
-  CHECKED_OUT: { bar: 'bg-slate-300/90',   text: 'text-slate-800',    legend: 'bg-slate-300',   label: 'Checked Out' },
-  CANCELLED:   { bar: 'bg-gray-200/50',    text: 'text-gray-500',     legend: 'bg-gray-300',    label: 'Cancelled' },
-  NO_SHOW:     { bar: 'bg-rose-200/90',    text: 'text-rose-900',     legend: 'bg-rose-300',    label: 'No Show / Available' },
-};
-
-/* ────────────────────────────────────────────────────────────── */
-/* Helpers                                                      */
-/* ────────────────────────────────────────────────────────────── */
-
-const toDS = (d: Date): string => {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${dd}`;
-};
-const addDays = (d: Date, n: number): Date => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
-const diffDays = (a: string, b: string): number =>
-  Math.round((new Date(b + 'T00:00:00').getTime() - new Date(a + 'T00:00:00').getTime()) / 86400000);
-const getRoomId = (room: Room): string => (room as any).roomId ?? (room as any).id ?? '';
-const shortDate = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-const dayLabel = (d: Date) => d.toLocaleDateString('en-US', { weekday: 'short' });
-const dateStr = (v: string): string => v.split('T')[0];
-
 type StatType = 'incoming' | 'inhouse' | 'checkouts' | 'all';
-
-/* ────────────────────────────────────────────────────────────── */
-/* ModalShell                                                   */
-/* ────────────────────────────────────────────────────────────── */
-
-function ModalShell({ title, subtitle, size = 'regular', children, onClose }: {
-  title: string; subtitle?: string; size?: 'regular' | 'wide'; children: ReactNode; onClose: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className={cn('w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl', size === 'wide' ? 'max-w-5xl' : 'max-w-lg')} onClick={e => e.stopPropagation()}>
-        <div className="flex items-start justify-between gap-4 border-b border-slate-100 bg-slate-50/80 px-6 py-5">
-          <div>
-            <h2 className="text-lg font-bold tracking-tight text-slate-900">{title}</h2>
-            {subtitle && <p className="mt-0.5 text-sm text-slate-500">{subtitle}</p>}
-          </div>
-          <button type="button" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-700" onClick={onClose}>✕</button>
-        </div>
-        <div className="max-h-[calc(100vh-10rem)] overflow-y-auto px-6 py-6">{children}</div>
-      </div>
-    </div>
-  );
-}
 
 /* ────────────────────────────────────────────────────────────── */
 /* Context Menu                                                  */

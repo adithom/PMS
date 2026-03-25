@@ -1,4 +1,5 @@
 // src/components/Booking/TapeChartConstants.ts
+import type { BookingStatus } from '../../types';
 
 export const CELL_W = 110;
 export const CELL_H = 40;
@@ -13,7 +14,7 @@ export const SCROLL_EDGE_PX = 80;
 export const SCROLL_COOLDOWN_MS = 600;
 export const SCROLL_STEP_DAYS = 2;
 
-export const STATUS_COLORS: Record<string, { bar: string; text: string; legend: string; label: string }> = {
+export const STATUS_COLORS: Record<BookingStatus, { bar: string; text: string; legend: string; label: string }> = {
   CONFIRMED:   { bar: 'bg-blue-200/90',    text: 'text-blue-900',     legend: 'bg-blue-300',    label: 'Confirmed' },
   CHECKED_IN:  { bar: 'bg-green-200/90',   text: 'text-green-900',    legend: 'bg-green-300',   label: 'Checked In' },
   PENDING:     { bar: 'bg-amber-200/90',   text: 'text-amber-900',    legend: 'bg-amber-300',   label: 'Pending' },

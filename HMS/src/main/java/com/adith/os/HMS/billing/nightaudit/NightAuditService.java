@@ -107,6 +107,15 @@ public class NightAuditService {
                     continue;
                 }
 
+                if (masterFolio.getStatus() != com.adith.os.HMS.billing.folio.FolioStatus.OPEN) {
+                    if (!manualRun) {
+                        log.warn("Night Audit: Folio {} for booking {} is {} (not OPEN). Skipping.",
+                                masterFolio.getId(), booking.getId(), masterFolio.getStatus());
+                    }
+                    chargesSkipped++;
+                    continue;
+                }
+
                 boolean chargeExists = masterFolio.getCharges() != null && masterFolio.getCharges().stream()
                         .filter(c -> !c.isVoided())
                         .filter(c -> c.getChargeCode() == ChargeCode.ROOM_RENT)

@@ -1,5 +1,5 @@
 // src/components/Booking/TapeChartCtxMenu.tsx
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import bookingApi from '../../api/bookingApi';
 import type { Booking } from '../../types';
 import { STATUS_COLORS, cn } from './TapeChartConstants';
@@ -21,6 +21,7 @@ export default function TapeChartCtxMenu({
   onEarlyCheckout,
 }: TapeChartCtxMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const h = (e: MouseEvent) => {
@@ -128,6 +129,9 @@ export default function TapeChartCtxMenu({
         </p>
       </div>
       <div className="py-1">
+        {error && (
+          <p className="px-4 py-2 text-xs text-rose-600">{error}</p>
+        )}
         {acts.length === 0 && <p className="px-4 py-2 text-xs text-slate-400">No actions available</p>}
         {acts.map((a) => (
           <button
@@ -138,8 +142,13 @@ export default function TapeChartCtxMenu({
               a.danger ? 'text-rose-600 hover:bg-rose-50' : 'text-slate-700',
             )}
             onClick={async () => {
-              await a.doFn();
-              onClose();
+              try {
+                setError(null);
+                await a.doFn();
+                onClose();
+              } catch (err) {
+                setError(err instanceof Error ? err.message : 'Action failed');
+              }
             }}
           >
             {a.label}
