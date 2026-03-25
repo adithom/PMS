@@ -6,7 +6,7 @@
 - [ ] generated bills supplied to frontend
 
 ##### 25/3/26
-- [ ] task list calender - rooms to be maintained, guest birthday celebration
+- [x] task list calender - rooms to be maintained, guest birthday celebration
 - [ ] meal plan and automated price estimate on creation 
 
 ##### 26/3/26

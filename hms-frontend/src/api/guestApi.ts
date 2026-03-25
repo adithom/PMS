@@ -8,6 +8,7 @@ export interface GuestCreationDto {
   email?: string;
   phone?: string;
   docId?: string;
+  dateOfBirth?: string;
 }
 
 const guestApi = {

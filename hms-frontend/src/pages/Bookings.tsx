@@ -8,6 +8,7 @@ import BookingForm from '../components/Booking/BookingForm';
 import BookingsList from '../components/Booking/BookingsList';
 import GroupBookingModal from '../components/Booking/GroupBookingModal';
 import EarlyCheckoutModal from '../components/Booking/EarlyCheckoutModal';
+import TaskListModal from '../components/Booking/TaskListModal';
 import LoadingSpinner from '../components/LoadingSpinner';
 import type { Property, Room, Booking } from '../types';
 
@@ -167,7 +168,18 @@ function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout }: {
         {acts.map(a => (
           <button key={a.label} type="button"
             className={cn('w-full px-4 py-2 text-left text-sm transition-colors hover:bg-slate-50', a.danger ? 'text-rose-600 hover:bg-rose-50' : 'text-slate-700')}
-            onClick={async () => { await a.doFn(); onClose(); }}>
+            onClick={async (e) => { 
+              e.preventDefault();
+              e.stopPropagation();
+              try {
+                await a.doFn(); 
+              } catch (err) {
+                console.error(`Action "${a.label}" failed:`, err);
+                alert(`Failed to perform action. Check your developer console for details.`);
+              } finally {
+                onClose(); 
+              }
+            }}>
             {a.label}
           </button>
         ))}
@@ -232,6 +244,7 @@ export default function Bookings() {
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [earlyCheckoutBookingId, setEarlyCheckoutBookingId] = useState<string | null>(null);
   const [showList, setShowList] = useState(false);
+  const [showTasksModal, setShowTasksModal] = useState(false);
   
   const [listType, setListType] = useState<StatType>('all');
   const [pfRoom, setPfRoom] = useState<Room | null>(null);
@@ -433,6 +446,12 @@ export default function Bookings() {
                 {properties.map(p => <option key={p.id} value={p.id}>{p.name} ({p.code})</option>)}
               </select>
             </div>
+            <button type="button" className={btnSecondary} onClick={() => setShowTasksModal(true)}>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-emerald-500" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+              </svg>
+              Daily Tasks
+            </button>
             <button type="button" className={btnSecondary} onClick={() => setShowGroupModal(true)}>
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-indigo-500" viewBox="0 0 20 20" fill="currentColor">
                 <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
@@ -745,6 +764,13 @@ export default function Bookings() {
       {showGroupModal && selectedPropId && (
         <GroupBookingModal propertyId={selectedPropId} onClose={() => setShowGroupModal(false)}
           onSuccess={async () => { setShowGroupModal(false); await refresh(); }} />
+      )}
+      {showTasksModal && selectedPropId && (
+        <TaskListModal 
+          propertyId={selectedPropId} 
+          onClose={() => setShowTasksModal(false)} 
+          onBookingUpdated={refresh} 
+        />
       )}
       {earlyCheckoutBookingId && selectedPropId && (
         <EarlyCheckoutModal propertyId={selectedPropId} bookingId={earlyCheckoutBookingId}

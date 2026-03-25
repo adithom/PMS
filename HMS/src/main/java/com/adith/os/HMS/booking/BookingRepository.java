@@ -271,4 +271,11 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
     @Query("SELECT b FROM Booking b WHERE b.property.id = :propertyId AND b.isGroupMaster = true ORDER BY b.checkIn DESC")
     List<Booking> findGroupMastersByPropertyId(@Param("propertyId") UUID propertyId);
 
+    @Query("SELECT b FROM Booking b WHERE b.property.id = :propertyId AND b.room IS NULL AND b.status IN :statuses AND b.checkIn BETWEEN :startDate AND :endDate ORDER BY b.checkIn ASC")
+    List<Booking> findUnassignedUpcomingBookings(
+            @Param("propertyId") UUID propertyId,
+            @Param("statuses") List<BookingStatus> statuses,
+            @Param("startDate") java.time.LocalDate startDate,
+            @Param("endDate") java.time.LocalDate endDate
+    );
 }

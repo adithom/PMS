@@ -33,6 +33,7 @@ export interface Guest {
   email?: string;
   phone?: string;
   docId?: string;
+  dateOfBirth?: string;
   createdAt?: string;
   preferences?: string;
 }

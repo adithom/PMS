@@ -22,6 +22,7 @@ export default function GuestForm({ guest, onSave, onCancel }: GuestFormProps) {
     email: '',
     phone: '',
     docId: '',
+    dateOfBirth: '',
     preferences: ''
   });
   const [errors, setErrors] = useState<Record<string, string>>({});

@@ -17,6 +17,8 @@ public record GuestUpdateDto(
 
         GuestIdType guestIdType,
 
-        String preferences
+        String preferences,
+        
+        java.time.LocalDate dateOfBirth
 ) {
 }

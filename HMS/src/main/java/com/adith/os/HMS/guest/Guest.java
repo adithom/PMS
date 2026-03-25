@@ -37,6 +37,9 @@ public class Guest {
 
     private String preferences;
 
+    @Column(name = "date_of_birth")
+    private java.time.LocalDate dateOfBirth;
+
     @Column(name = "created_at", nullable = false, columnDefinition = "timestamp with time zone default now()")
     private OffsetDateTime createdAt;
 
@@ -133,6 +136,14 @@ public class Guest {
 
     public void setPreferences(String preferences) {
         this.preferences = preferences;
+    }
+
+    public java.time.LocalDate getDateOfBirth() {
+        return dateOfBirth;
+    }
+
+    public void setDateOfBirth(java.time.LocalDate dateOfBirth) {
+        this.dateOfBirth = dateOfBirth;
     }
 
     public String getFullName() {
