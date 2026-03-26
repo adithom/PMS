@@ -1,7 +1,6 @@
 export interface PosLocation {
   id: string;
   name: string;
-  code: string;
   locationType: 'RESTAURANT' | 'BAR' | 'SPA' | 'BAKERY' | 'LAUNDRY' | 'SHOP';
   propertyId: string;
   defaultChargeCode: string;
@@ -13,16 +12,25 @@ export interface PosLocation {
   currentWalkInFolioId?: string;
 }
 
+export interface PosItemCategory {
+  id: string;
+  locationId: string;
+  name: string;
+  displayOrder: number;
+  isActive: boolean;
+}
+
 export interface PosProduct {
   id: string;
   name: string;
-  code: string;
   description?: string;
   price: number;
   cost?: number;
-  category: string;
+  categoryId: string;
+  categoryName: string;
   posLocationId: string;
   taxRate: number;
+  discountRate?: number;
   isAvailable: boolean;
   preparationTime?: number;
   imageUrl?: string;
@@ -53,6 +61,7 @@ export interface PosOrder {
   subtotal: number;
   taxAmount: number;
   serviceCharge: number;
+  discountRate?: number;
   discountAmount: number;
   folioId?: string;
   bookingId?: string;
@@ -75,12 +84,12 @@ export interface PosOrderCreationDto {
     posProductId: string;
     quantity: number;
   }[];
+  discountRate?: number;
 }
 
 export interface PosLocationCreationDto {
   propertyId: string;
   name: string;
-  code: string;
   locationType: string;
   defaultTaxRate: number;
   serviceChargeRate?: number;
@@ -90,7 +99,6 @@ export interface PosLocationCreationDto {
 
 export interface PosLocationUpdateDto {
   name?: string;
-  code?: string;
   locationType?: string;
   defaultTaxRate?: number;
   serviceChargeRate?: number;
@@ -99,15 +107,27 @@ export interface PosLocationUpdateDto {
   isActive?: boolean;
 }
 
+export interface PosItemCategoryCreationDto {
+  locationId: string;
+  name: string;
+  displayOrder?: number;
+}
+
+export interface PosItemCategoryUpdateDto {
+  name?: string;
+  displayOrder?: number;
+  isActive?: boolean;
+}
+
 export interface PosProductCreationDto {
   locationId: string;
   name: string;
-  code: string;
   description?: string;
-  category: string;
+  categoryId: string;
   price: number;
   cost?: number;
   taxRate?: number;
+  discountRate?: number;
   isAvailable: boolean;
   preparationTime?: number;
   imageUrl?: string;
@@ -116,10 +136,11 @@ export interface PosProductCreationDto {
 export interface PosProductUpdateDto {
   name?: string;
   description?: string;
-  category?: string;
+  categoryId?: string;
   price?: number;
   cost?: number;
   taxRate?: number;
+  discountRate?: number;
   isAvailable?: boolean;
   preparationTime?: number;
   imageUrl?: string;
@@ -133,6 +154,12 @@ export interface PosSettleDto {
   cardLastFour?: string;
   upiId?: string;
   notes?: string;
+}
+
+export interface OrderSummary {
+  orderCount: number;
+  totalRevenue: number;
+  avgOrderValue: number;
 }
 
 // Local cart state — not sent to API directly

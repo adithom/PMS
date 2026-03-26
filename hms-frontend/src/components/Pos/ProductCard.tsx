@@ -25,7 +25,7 @@ export default function ProductCard({ product, onAdd }: ProductCardProps) {
             )}
             <div>
                 <h4 className="font-semibold text-lg text-gray-800">{product.name}</h4>
-                <p className="text-sm text-gray-500 mb-2">{product.category}</p>
+                <p className="text-sm text-gray-500 mb-2">{product.categoryName}</p>
                 {product.description && (
                     <p className="text-xs text-gray-400 mb-1 line-clamp-2">{product.description}</p>
                 )}

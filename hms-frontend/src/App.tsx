@@ -13,10 +13,12 @@ import Rooms from './pages/Rooms';
 import Bookings from './pages/Bookings';
 import Guests from './pages/Guests';
 import PosInterface from './pages/PosInterface';
+import PosManagement from './pages/PosManagement';
 import AdminBillingManager from './pages/AdminBillingManager';
 import FrontDeskBillingManager from './pages/FrontDeskBillingManager';
 import Sandbox from './pages/Sandbox';
 import Reports from './pages/Reports'
+import AdminConsole from './pages/AdminConsole'
 
 
 function AppRoutes() {
@@ -101,10 +103,22 @@ function AppRoutes() {
       <Route
         path="/pos"
         element={
-          <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER', 'POS']}>
+          <ProtectedRoute allowedRoles={['POS']}>
             <>
               <Navigation allowedRoutes={allowedRoutes} />
               <PosInterface />
+            </>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/pos/manage"
+        element={
+          <ProtectedRoute allowedRoles={['MANAGER']}>
+            <>
+              <Navigation allowedRoutes={allowedRoutes} />
+              <PosManagement />
             </>
           </ProtectedRoute>
         }
@@ -156,6 +170,18 @@ function AppRoutes() {
         }
       />
 
+
+      <Route
+        path="/console"
+        element={
+          <ProtectedRoute allowedRoles={['ADMIN']}>
+            <>
+              <Navigation allowedRoutes={allowedRoutes} />
+              <AdminConsole />
+            </>
+          </ProtectedRoute>
+        }
+      />
 
       {/* Developer Sandbox - Hidden from normal navigation */}
       <Route

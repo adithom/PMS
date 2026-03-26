@@ -1,32 +1,25 @@
 import api from './fetchClient';
 import type {
   PosLocation,
+  PosItemCategory,
   PosProduct,
   PosOrder,
   PosOrderCreationDto,
   PosLocationCreationDto,
   PosLocationUpdateDto,
+  PosItemCategoryCreationDto,
+  PosItemCategoryUpdateDto,
   PosProductCreationDto,
   PosProductUpdateDto,
   PosSettleDto,
+  OrderSummary,
 } from '../types/pos';
 import type { FolioDto } from './folioApi';
 
 const posApi = {
+  // Locations
   getLocations: (propertyId: string) =>
     api.get<PosLocation[]>('/pos/locations', { propertyId }),
-
-  getProducts: (locationId: string) =>
-    api.get<PosProduct[]>('/pos/products', { locationId }),
-
-  createOrder: (data: PosOrderCreationDto) =>
-    api.post<PosOrder>('/pos/orders', data),
-
-  chargeOrder: (orderId: string, folioId: string) =>
-    api.post<PosOrder>(`/pos/orders/${orderId}/charge?folioId=${folioId}`, null),
-
-  settleOrder: (orderId: string, data: PosSettleDto) =>
-    api.post<PosOrder>(`/pos/orders/${orderId}/settle`, data),
 
   createLocation: (data: PosLocationCreationDto) =>
     api.post<PosLocation>('/pos/locations', data),
@@ -37,6 +30,23 @@ const posApi = {
   postWalkInFolio: (locationId: string) =>
     api.post<FolioDto>(`/pos/locations/${locationId}/post-walkin-folio`, null),
 
+  // Categories
+  getCategories: (locationId: string) =>
+    api.get<PosItemCategory[]>('/pos/categories', { locationId }),
+
+  createCategory: (data: PosItemCategoryCreationDto) =>
+    api.post<PosItemCategory>('/pos/categories', data),
+
+  updateCategory: (id: string, data: PosItemCategoryUpdateDto) =>
+    api.put<PosItemCategory>(`/pos/categories/${id}`, data),
+
+  deleteCategory: (id: string) =>
+    api.delete<void>(`/pos/categories/${id}`),
+
+  // Products
+  getProducts: (locationId: string) =>
+    api.get<PosProduct[]>('/pos/products', { locationId }),
+
   createProduct: (data: PosProductCreationDto) =>
     api.post<PosProduct>('/pos/products', data),
 
@@ -45,6 +55,28 @@ const posApi = {
 
   deleteProduct: (id: string) =>
     api.delete<void>(`/pos/products/${id}`),
+
+  // Orders
+  createOrder: (data: PosOrderCreationDto) =>
+    api.post<PosOrder>('/pos/orders', data),
+
+  chargeOrder: (orderId: string, folioId: string) =>
+    api.post<PosOrder>(`/pos/orders/${orderId}/charge?folioId=${folioId}`, null),
+
+  settleOrder: (orderId: string, data: PosSettleDto) =>
+    api.post<PosOrder>(`/pos/orders/${orderId}/settle`, data),
+
+  // Order history (MANAGER)
+  getOrders: (locationId: string, from: string, to: string, status?: string) =>
+    api.get<PosOrder[]>('/pos/orders', {
+      locationId,
+      from,
+      to,
+      ...(status ? { status } : {}),
+    }),
+
+  getOrderSummary: (locationId: string, from: string, to: string) =>
+    api.get<OrderSummary>('/pos/orders/summary', { locationId, from, to }),
 };
 
 export default posApi;

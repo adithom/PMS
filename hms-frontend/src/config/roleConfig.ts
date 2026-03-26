@@ -37,7 +37,13 @@ export const routes: RouteConfig[] = [
     path: '/pos',
     label: 'POS',
     component: 'PosInterface',
-    allowedRoles: ['ADMIN', 'MANAGER', 'POS']
+    allowedRoles: ['POS']
+  },
+  {
+    path: '/pos/manage',
+    label: 'POS',
+    component: 'PosManagement',
+    allowedRoles: ['MANAGER']
   },
   {
     path: '/billing',
@@ -50,6 +56,12 @@ export const routes: RouteConfig[] = [
     label: 'Reports',
     component: 'Reports',
     allowedRoles: ['ADMIN', 'MANAGER']
+  },
+  {
+    path: '/console',
+    label: 'Console',
+    component: 'AdminConsole',
+    allowedRoles: ['ADMIN']
   }
 ];
 
