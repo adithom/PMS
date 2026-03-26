@@ -1,5 +1,6 @@
 package com.adith.os.HMS.billing.pos;
 
+import com.adith.os.HMS.billing.folio.Folio;
 import com.adith.os.HMS.property.Property;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
@@ -11,7 +12,9 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "pos_location")
+@Table(name = "pos_location", uniqueConstraints = {
+        @UniqueConstraint(columnNames = {"property_id", "code"})
+})
 public class PosLocation {
 
     @Id
@@ -28,7 +31,7 @@ public class PosLocation {
     private String name;
 
     @NotBlank
-    @Column(nullable = false, length = 20, unique = true)
+    @Column(nullable = false, length = 20)
     private String code;
 
     @NotNull
@@ -51,6 +54,10 @@ public class PosLocation {
 
     @Column(name = "closing_time")
     private LocalTime closingTime;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "current_walk_in_folio_id")
+    private Folio currentWalkInFolio;
 
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
@@ -143,6 +150,14 @@ public class PosLocation {
 
     public void setClosingTime(LocalTime closingTime) {
         this.closingTime = closingTime;
+    }
+
+    public Folio getCurrentWalkInFolio() {
+        return currentWalkInFolio;
+    }
+
+    public void setCurrentWalkInFolio(Folio currentWalkInFolio) {
+        this.currentWalkInFolio = currentWalkInFolio;
     }
 
     public OffsetDateTime getCreatedAt() {

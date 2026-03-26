@@ -9,7 +9,9 @@ public record AuthResponse(
         String username,
         String email,
         Role role,
-        Set<PropertyInfo> properties
+        Set<PropertyInfo> properties,
+        String posLocationId,
+        String posLocationName
 ) {
     public record PropertyInfo(String id, String name) {}
 }

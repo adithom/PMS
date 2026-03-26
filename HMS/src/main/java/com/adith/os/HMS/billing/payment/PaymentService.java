@@ -70,8 +70,9 @@ public class PaymentService {
         folio.getPayments().add(savedPayment);
         folio.recalculateTotals();
 
-        // Auto-close folio if fully settled (skip for routed folios — their balance is handled by the parent)
+        // Auto-close folio if fully settled (skip for routed folios and WALK_IN folios — walk-in folios are posted manually)
         if (!folio.isRouted()
+                && folio.getFolioType() != com.adith.os.HMS.billing.folio.FolioType.WALK_IN
                 && folio.getStatus() == com.adith.os.HMS.billing.folio.FolioStatus.OPEN
                 && folio.getBalanceDue().compareTo(BigDecimal.ZERO) <= 0) {
             folio.close();

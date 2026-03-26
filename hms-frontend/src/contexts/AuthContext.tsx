@@ -61,7 +61,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         username: response.username,
         email: response.email,
         role: response.role,
-        properties: response.properties
+        properties: response.properties,
+        posLocationId: response.posLocationId,
+        posLocationName: response.posLocationName,
       };
       setUser(tempUser);
 

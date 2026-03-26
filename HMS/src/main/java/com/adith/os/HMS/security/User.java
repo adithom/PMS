@@ -1,5 +1,6 @@
 package com.adith.os.HMS.security;
 
+import com.adith.os.HMS.billing.pos.PosLocation;
 import com.adith.os.HMS.property.Property;
 import jakarta.persistence.*;
 import java.util.HashSet;
@@ -45,6 +46,10 @@ public class User {
             inverseJoinColumns = @JoinColumn(name = "property_id")
     )
     private Set<Property> properties = new HashSet<>();
+
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "pos_location_id", nullable = true)
+    private PosLocation posLocation;
 
 
     // ========== Constructors ==========
@@ -106,6 +111,14 @@ public class User {
 
     public void setProperties(Set<Property> properties) {
         this.properties = properties;
+    }
+
+    public PosLocation getPosLocation() {
+        return posLocation;
+    }
+
+    public void setPosLocation(PosLocation posLocation) {
+        this.posLocation = posLocation;
     }
 
     // ========== Helper Methods ==========

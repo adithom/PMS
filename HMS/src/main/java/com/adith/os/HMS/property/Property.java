@@ -44,6 +44,9 @@ public class Property {
     @Column(name = "gst_number")
     private String gstNumber;
 
+    @Column(name = "walk_in_guest_id")
+    private java.util.UUID walkInGuestId;
+
     @Column(name = "checkin_time", columnDefinition = "time default '10:00:00'")
     private Time checkInTime;
 
@@ -153,6 +156,14 @@ public class Property {
 
     public void setGstNumber(String gstNumber) {
         this.gstNumber = gstNumber;
+    }
+
+    public java.util.UUID getWalkInGuestId() {
+        return walkInGuestId;
+    }
+
+    public void setWalkInGuestId(java.util.UUID walkInGuestId) {
+        this.walkInGuestId = walkInGuestId;
     }
 
     public Time getCheckInTime() {

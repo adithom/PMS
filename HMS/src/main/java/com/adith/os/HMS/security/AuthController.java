@@ -37,6 +37,9 @@ public class AuthController {
     public ResponseEntity<UserInfoDto> getCurrentUser(@AuthenticationPrincipal UserPrincipal userPrincipal) {
         User user = userPrincipal.getUser();
 
+        String posLocationId = user.getPosLocation() != null ? user.getPosLocation().getId().toString() : null;
+        String posLocationName = user.getPosLocation() != null ? user.getPosLocation().getName() : null;
+
         UserInfoDto userInfo = new UserInfoDto(
                 user.getId().toString(),
                 user.getUsername(),
@@ -47,7 +50,9 @@ public class AuthController {
                                 p.getId().toString(),
                                 p.getName()
                         ))
-                        .toList()
+                        .toList(),
+                posLocationId,
+                posLocationName
         );
 
         return ResponseEntity.ok(userInfo);

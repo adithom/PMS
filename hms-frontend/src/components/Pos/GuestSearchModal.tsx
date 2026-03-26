@@ -13,7 +13,7 @@ export default function GuestSearchModal({ isOpen, onClose, onSelectBooking, pro
     const [query, setQuery] = useState('');
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [loading, setLoading] = useState(false);
-    // const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<string | null>(null);
 
     // Load active bookings for property on mount
     useEffect(() => {

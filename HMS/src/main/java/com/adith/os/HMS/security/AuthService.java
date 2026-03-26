@@ -1,5 +1,7 @@
 package com.adith.os.HMS.security;
 
+import com.adith.os.HMS.billing.pos.PosLocation;
+import com.adith.os.HMS.billing.pos.PosLocationRepository;
 import com.adith.os.HMS.property.Property;
 import com.adith.os.HMS.property.PropertyRepository;
 import com.adith.os.HMS.security.dto.AuthResponse;
@@ -23,6 +25,7 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final PropertyRepository propertyRepository;
+    private final PosLocationRepository posLocationRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
@@ -30,11 +33,13 @@ public class AuthService {
     public AuthService(
             UserRepository userRepository,
             PropertyRepository propertyRepository,
+            PosLocationRepository posLocationRepository,
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
             AuthenticationManager authenticationManager) {
         this.userRepository = userRepository;
         this.propertyRepository = propertyRepository;
+        this.posLocationRepository = posLocationRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.authenticationManager = authenticationManager;
@@ -91,6 +96,15 @@ public class AuthService {
             user.setProperties(properties);
         }
 
+        if (request.posLocationId() != null) {
+            PosLocation posLocation = posLocationRepository.findById(request.posLocationId())
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.NOT_FOUND,
+                            "POS location not found: " + request.posLocationId()
+                    ));
+            user.setPosLocation(posLocation);
+        }
+
         User savedUser = userRepository.save(user);
 
         UserPrincipal userPrincipal = new UserPrincipal(savedUser);
@@ -107,12 +121,17 @@ public class AuthService {
                 ))
                 .collect(Collectors.toSet());
 
+        String posLocationId = user.getPosLocation() != null ? user.getPosLocation().getId().toString() : null;
+        String posLocationName = user.getPosLocation() != null ? user.getPosLocation().getName() : null;
+
         return new AuthResponse(
                 token,
                 user.getUsername(),
                 user.getEmail(),
                 user.getRole(),
-                propertyInfos
+                propertyInfos,
+                posLocationId,
+                posLocationName
         );
     }
 }

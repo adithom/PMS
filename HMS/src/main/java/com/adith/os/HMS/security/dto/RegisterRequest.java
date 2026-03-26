@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
 import java.util.Set;
+import java.util.UUID;
 
 public record RegisterRequest(
         @NotBlank(message = "Username is required")
@@ -19,5 +20,7 @@ public record RegisterRequest(
         @NotNull(message = "Role is required")
         Role role,
 
-        Set<String> propertyIds
+        Set<String> propertyIds,
+
+        UUID posLocationId
 ) {}

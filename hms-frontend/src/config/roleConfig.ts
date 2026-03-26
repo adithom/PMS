@@ -34,22 +34,22 @@ export const routes: RouteConfig[] = [
     allowedRoles: ['ADMIN', 'MANAGER', 'FRONTDESK']
   },
   {
-    path: '/billing',
-    label: 'Billing',
-    component: 'Billing',
-    allowedRoles: ['ADMIN', 'MANAGER', 'FRONTDESK', 'POS']
-  },
-  {
     path: '/pos',
     label: 'POS',
     component: 'PosInterface',
     allowedRoles: ['ADMIN', 'MANAGER', 'POS']
   },
   {
+    path: '/billing',
+    label: 'Billing',
+    component: 'Billing',
+    allowedRoles: ['ADMIN', 'MANAGER', 'FRONTDESK']
+  },
+  {
     path: '/reports',
     label: 'Reports',
     component: 'Reports',
-    allowedRoles: ['ADMIN', 'MANAGER', 'POS']
+    allowedRoles: ['ADMIN', 'MANAGER']
   }
 ];
 

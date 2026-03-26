@@ -29,7 +29,7 @@ export interface FolioDto {
   guestName?: string;
   propertyCode?: string;
   status?: 'OPEN' | 'CLOSED' | 'POSTED';
-  folioType?: 'MASTER' | 'GUEST' | 'GROUP';
+  folioType?: 'MASTER' | 'GUEST' | 'GROUP' | 'WALK_IN';
   subtotal?: number;
   taxAmount?: number;
   discountAmount?: number;

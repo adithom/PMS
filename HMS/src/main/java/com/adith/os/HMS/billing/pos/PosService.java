@@ -1,8 +1,16 @@
 package com.adith.os.HMS.billing.pos;
 
-import com.adith.os.HMS.billing.folio.FolioService;
+import com.adith.os.HMS.billing.folio.*;
 import com.adith.os.HMS.billing.folio.dto.ChargeCreationDto;
+import com.adith.os.HMS.billing.folio.dto.FolioCreationDto;
+import com.adith.os.HMS.billing.folio.dto.FolioDto;
+import com.adith.os.HMS.billing.payment.PaymentMethod;
+import com.adith.os.HMS.billing.payment.PaymentService;
+import com.adith.os.HMS.billing.payment.dto.PaymentCreationDto;
 import com.adith.os.HMS.billing.pos.dto.*;
+import com.adith.os.HMS.guest.Guest;
+import com.adith.os.HMS.guest.GuestRepository;
+import com.adith.os.HMS.property.Property;
 import com.adith.os.HMS.property.PropertyRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.http.HttpStatus;
@@ -24,17 +32,26 @@ public class PosService {
     private final PosOrderRepository posOrderRepository;
     private final PropertyRepository propertyRepository;
     private final FolioService folioService;
+    private final FolioRepository folioRepository;
+    private final GuestRepository guestRepository;
+    private final PaymentService paymentService;
 
     public PosService(PosLocationRepository posLocationRepository,
             PosProductRepository posProductRepository,
             PosOrderRepository posOrderRepository,
             PropertyRepository propertyRepository,
-            FolioService folioService) {
+            FolioService folioService,
+            FolioRepository folioRepository,
+            GuestRepository guestRepository,
+            PaymentService paymentService) {
         this.posLocationRepository = posLocationRepository;
         this.posProductRepository = posProductRepository;
         this.posOrderRepository = posOrderRepository;
         this.propertyRepository = propertyRepository;
         this.folioService = folioService;
+        this.folioRepository = folioRepository;
+        this.guestRepository = guestRepository;
+        this.paymentService = paymentService;
     }
 
     public List<PosLocationDto> getLocations(UUID propertyId) {
@@ -50,7 +67,7 @@ public class PosService {
     }
 
     @Transactional
-    public PosOrderDto createOrder(PosOrderCreationDto dto) {
+    public PosOrderDto createOrder(PosOrderCreationDto dto, String username) {
         PosLocation location = posLocationRepository.findById(dto.posLocationId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Location not found"));
 
@@ -58,8 +75,9 @@ public class PosService {
         order.setPosLocation(location);
         order.setProperty(location.getProperty());
         order.setStatus(PosOrderStatus.OPEN);
-        order.setOrderType("DINE_IN"); // Default, could be passed in DTO
+        order.setOrderType("DINE_IN");
         order.setPaymentStatus("PENDING");
+        order.setCreatedBy(username);
 
         List<PosOrderItem> items = dto.items().stream()
                 .map(itemDto -> {
@@ -72,7 +90,6 @@ public class PosService {
                     item.setQuantity(itemDto.quantity());
                     item.setUnitPrice(product.getPrice());
 
-                    // Use product tax rate, fallback to location default, fallback to 0
                     BigDecimal taxRate = product.getTaxRate() != null ? product.getTaxRate()
                             : (location.getDefaultTaxRate() != null ? location.getDefaultTaxRate() : BigDecimal.ZERO);
                     item.setTaxRate(taxRate);
@@ -98,19 +115,18 @@ public class PosService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order is not open");
         }
 
-        // Derive charge code from location type
-        com.adith.os.HMS.billing.folio.ChargeCode chargeCode = order.getPosLocation().getLocationType() != null
+        ChargeCode chargeCode = order.getPosLocation().getLocationType() != null
                 ? order.getPosLocation().getLocationType().toChargeCode()
-                : com.adith.os.HMS.billing.folio.ChargeCode.MISC;
+                : ChargeCode.MISC;
 
-        // Add charge to folio
+        // Pass totalAmount with zero taxRate — tax is already included in the total
         ChargeCreationDto chargeDto = new ChargeCreationDto(
                 LocalDate.now(),
                 chargeCode,
                 "POS Order: " + order.getOrderNumber(),
-                order.getSubtotal(), // <--- Pass Subtotal instead of TotalAmount
+                order.getTotalAmount(),
                 BigDecimal.ONE,
-                null,
+                BigDecimal.ZERO,
                 BigDecimal.ZERO,
                 "POS_ORDER",
                 order.getId(),
@@ -118,17 +134,70 @@ public class PosService {
                 "SYSTEM");
 
         UUID propertyId = order.getProperty().getId();
-
         folioService.addCharge(propertyId, folioId, chargeDto);
+
+        // Link folio and booking to the order
+        Folio folio = folioRepository.findById(folioId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Folio not found"));
+        order.setFolio(folio);
+        if (folio.getBooking() != null) {
+            order.setBooking(folio.getBooking());
+        }
 
         order.setStatus(PosOrderStatus.CHARGED);
         order.setPaymentStatus("CHARGED_TO_FOLIO");
         order.setCompletedAt(OffsetDateTime.now());
 
-        // We can't easily set the folio entity without fetching it, but the link is in
-        // FolioCharge
-
         return toDto(posOrderRepository.save(order));
+    }
+
+    @Transactional
+    public PosOrderDto settleOrder(UUID orderId, PosSettleDto dto, String username) {
+        PosOrder order = posOrderRepository.findById(orderId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
+
+        if (order.getStatus() != PosOrderStatus.OPEN) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order is not open");
+        }
+
+        UUID folioId;
+        if (dto.walkIn()) {
+            folioId = getOrCreateWalkInFolio(order.getProperty(), order.getPosLocation(), username);
+        } else {
+            if (dto.folioId() == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "folioId is required for hotel guest settlement");
+            }
+            folioId = dto.folioId();
+        }
+
+        // Charge the order to the folio
+        chargeOrderToFolio(orderId, folioId);
+
+        // Record immediate payment
+        PaymentCreationDto paymentDto = new PaymentCreationDto(
+                order.getTotalAmount(),
+                PaymentMethod.valueOf(dto.paymentMethod()),
+                com.adith.os.HMS.billing.folio.ChargeCategory.ANCILLARY,
+                dto.transactionId(),
+                dto.cardLastFour(),
+                null,   // cardType
+                null,   // bankName
+                null,   // accountNumber
+                null,   // referenceNumber
+                dto.upiId(),
+                dto.notes(),
+                username
+        );
+
+        paymentService.recordPayment(order.getProperty().getId(), folioId, paymentDto, username);
+
+        // Re-fetch order (chargeOrderToFolio already updated it)
+        PosOrder updated = posOrderRepository.findById(orderId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
+        updated.setStatus(PosOrderStatus.CLOSED);
+        updated.setPaymentStatus("SETTLED");
+
+        return toDto(posOrderRepository.save(updated));
     }
 
     @Transactional
@@ -147,8 +216,24 @@ public class PosService {
         location.setClosingTime(dto.closingTime());
         location.setActive(true);
 
-        PosLocation savedLocation = posLocationRepository.save(location);
-        return toDto(savedLocation);
+        return toDto(posLocationRepository.save(location));
+    }
+
+    @Transactional
+    public PosLocationDto updateLocation(UUID id, PosLocationUpdateDto dto) {
+        PosLocation location = posLocationRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Location not found"));
+
+        if (dto.name() != null) location.setName(dto.name());
+        if (dto.code() != null) location.setCode(dto.code());
+        if (dto.locationType() != null) location.setLocationType(dto.locationType());
+        if (dto.defaultTaxRate() != null) location.setDefaultTaxRate(dto.defaultTaxRate());
+        if (dto.serviceChargeRate() != null) location.setServiceChargeRate(dto.serviceChargeRate());
+        if (dto.openingTime() != null) location.setOpeningTime(dto.openingTime());
+        if (dto.closingTime() != null) location.setClosingTime(dto.closingTime());
+        if (dto.isActive() != null) location.setActive(dto.isActive());
+
+        return toDto(posLocationRepository.save(location));
     }
 
     @Transactional
@@ -165,7 +250,6 @@ public class PosService {
         product.setPrice(dto.price());
         product.setCost(dto.cost());
 
-        // Use provided tax rate or fallback to location default
         BigDecimal taxRate = dto.taxRate() != null ? dto.taxRate() : location.getDefaultTaxRate();
         product.setTaxRate(taxRate);
 
@@ -173,19 +257,121 @@ public class PosService {
         product.setPreparationTime(dto.preparationTime());
         product.setImageUrl(dto.imageUrl());
 
-        PosProduct savedProduct = posProductRepository.save(product);
-        return toDto(savedProduct);
+        return toDto(posProductRepository.save(product));
     }
 
-    // Helper methods for DTO conversion
+    @Transactional
+    public PosProductDto updateProduct(UUID id, PosProductUpdateDto dto) {
+        PosProduct product = posProductRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found"));
+
+        if (dto.name() != null) product.setName(dto.name());
+        if (dto.description() != null) product.setDescription(dto.description());
+        if (dto.category() != null) product.setCategory(dto.category());
+        if (dto.price() != null) product.setPrice(dto.price());
+        if (dto.cost() != null) product.setCost(dto.cost());
+        if (dto.taxRate() != null) product.setTaxRate(dto.taxRate());
+        if (dto.isAvailable() != null) product.setAvailable(dto.isAvailable());
+        if (dto.preparationTime() != null) product.setPreparationTime(dto.preparationTime());
+        if (dto.imageUrl() != null) product.setImageUrl(dto.imageUrl());
+
+        return toDto(posProductRepository.save(product));
+    }
+
+    @Transactional
+    public void deleteProduct(UUID id) {
+        PosProduct product = posProductRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found"));
+
+        // Soft-delete if referenced by any order; hard-delete otherwise
+        boolean referenced = posOrderRepository.existsOrderItemByProductId(id);
+
+        if (referenced) {
+            product.setAvailable(false);
+            posProductRepository.save(product);
+        } else {
+            posProductRepository.delete(product);
+        }
+    }
+
+    @Transactional
+    public FolioDto postWalkInFolio(UUID locationId) {
+        PosLocation location = posLocationRepository.findById(locationId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Location not found"));
+
+        Folio walkInFolio = location.getCurrentWalkInFolio();
+        if (walkInFolio == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No active walk-in folio for this location");
+        }
+
+        UUID propertyId = location.getProperty().getId();
+        FolioDto result = folioService.closeFolio(propertyId, walkInFolio.getId(), "SYSTEM");
+
+        location.setCurrentWalkInFolio(null);
+        posLocationRepository.save(location);
+
+        return result;
+    }
+
+    // ──────────────── Private helpers ────────────────
+
+    private UUID getOrCreateWalkInFolio(Property property, PosLocation location, String username) {
+        // Return existing open walk-in folio if available
+        Folio existing = location.getCurrentWalkInFolio();
+        if (existing != null && existing.getStatus() == FolioStatus.OPEN) {
+            return existing.getId();
+        }
+
+        // Ensure walk-in guest exists for this property
+        UUID walkInGuestId = property.getWalkInGuestId();
+        if (walkInGuestId == null) {
+            Guest walkInGuest = new Guest();
+            walkInGuest.setFirstName("Walk-In");
+            walkInGuest.setLastName("Guest");
+            walkInGuest.setEmail("walkin@" + property.getCode().toLowerCase());
+            Guest saved = guestRepository.save(walkInGuest);
+            property.setWalkInGuestId(saved.getId());
+            propertyRepository.save(property);
+            walkInGuestId = saved.getId();
+        }
+
+        // Create a new WALK_IN folio
+        FolioCreationDto folioDto = new FolioCreationDto(
+                null,           // no booking
+                walkInGuestId,
+                FolioType.WALK_IN,
+                "Walk-in POS folio — " + location.getName(),
+                username,
+                null            // not routed
+        );
+
+        FolioDto created = folioService.createFolio(property.getId(), folioDto);
+
+        // Link to the location
+        Folio folio = folioRepository.findById(created.id())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Walk-in folio creation failed"));
+        location.setCurrentWalkInFolio(folio);
+        posLocationRepository.save(location);
+
+        return created.id();
+    }
+
+    // ──────────────── DTO Mappers ────────────────
+
     private PosLocationDto toDto(PosLocation entity) {
+        UUID walkInFolioId = entity.getCurrentWalkInFolio() != null ? entity.getCurrentWalkInFolio().getId() : null;
         return new PosLocationDto(
                 entity.getId(),
                 entity.getName(),
                 entity.getCode(),
                 entity.getLocationType(),
                 entity.getProperty().getId(),
-                entity.getDefaultTaxRate());
+                entity.getDefaultTaxRate(),
+                entity.getServiceChargeRate(),
+                entity.getOpeningTime(),
+                entity.getClosingTime(),
+                entity.isActive(),
+                walkInFolioId);
     }
 
     private PosProductDto toDto(PosProduct entity) {
@@ -212,8 +398,7 @@ public class PosService {
                 entity.getStatus(),
                 entity.getTotalAmount(),
                 entity.getFolio() != null ? entity.getFolio().getId() : null,
-                entity.getItems() != null ? entity.getItems().stream().map(this::toDto).collect(Collectors.toList())
-                        : null,
+                entity.getItems() != null ? entity.getItems().stream().map(this::toItemDto).collect(Collectors.toList()) : null,
                 entity.getCreatedAt(),
                 entity.getCompletedAt(),
                 entity.getProperty().getId(),
@@ -233,7 +418,7 @@ public class PosService {
                 entity.getServedBy());
     }
 
-    private PosOrderItemDto toDto(PosOrderItem entity) {
+    private PosOrderItemDto toItemDto(PosOrderItem entity) {
         return new PosOrderItemDto(
                 entity.getId(),
                 entity.getPosProduct().getId(),

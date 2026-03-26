@@ -15,6 +15,8 @@ export interface AuthResponse {
     id: string;
     name: string;
   }>;
+  posLocationId?: string;
+  posLocationName?: string;
 }
 
 export interface UserInfo {
@@ -26,6 +28,8 @@ export interface UserInfo {
     id: string;
     name: string;
   }>;
+  posLocationId?: string;
+  posLocationName?: string;
 }
 
 const authApi = {

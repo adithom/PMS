@@ -31,9 +31,5 @@ public record PosOrderDto(
         String guestName,
         String specialInstructions,
         String createdBy,
-        String servedBy) {
-    public PosOrderDto() {
-        this(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null);
-    }
-}
+        String servedBy
+) {}

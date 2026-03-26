@@ -7,7 +7,9 @@ public record UserInfoDto(
         String username,
         String email,
         String role,
-        List<PropertyInfo> properties
+        List<PropertyInfo> properties,
+        String posLocationId,
+        String posLocationName
 ) {
     public record PropertyInfo(String id, String name) {}
 }
