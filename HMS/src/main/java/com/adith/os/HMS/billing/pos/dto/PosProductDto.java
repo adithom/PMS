@@ -6,13 +6,14 @@ import java.util.UUID;
 public record PosProductDto(
         UUID id,
         String name,
-        String code,
         String description,
         BigDecimal price,
         BigDecimal cost,
-        String category,
+        UUID categoryId,
+        String categoryName,
         UUID posLocationId,
         BigDecimal taxRate,
+        BigDecimal discountRate,
         boolean isAvailable,
         Integer preparationTime,
         String imageUrl) {

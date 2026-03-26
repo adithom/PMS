@@ -4,11 +4,15 @@ import com.adith.os.HMS.billing.folio.dto.FolioDto;
 import com.adith.os.HMS.billing.pos.dto.*;
 import com.adith.os.HMS.security.UserPrincipal;
 import jakarta.validation.Valid;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 
@@ -21,6 +25,8 @@ public class PosController {
     public PosController(PosService posService) {
         this.posService = posService;
     }
+
+    // ──────────────── Locations ────────────────
 
     @GetMapping("/locations")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'POS', 'FRONTDESK')")
@@ -47,6 +53,37 @@ public class PosController {
     public ResponseEntity<FolioDto> postWalkInFolio(@PathVariable UUID id) {
         return ResponseEntity.ok(posService.postWalkInFolio(id));
     }
+
+    // ──────────────── Categories ────────────────
+
+    @GetMapping("/categories")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'POS')")
+    public ResponseEntity<List<PosItemCategoryDto>> getCategories(@RequestParam UUID locationId) {
+        return ResponseEntity.ok(posService.getCategories(locationId));
+    }
+
+    @PostMapping("/categories")
+    @PreAuthorize("hasRole('MANAGER')")
+    public ResponseEntity<PosItemCategoryDto> createCategory(@Valid @RequestBody PosItemCategoryCreationDto dto) {
+        return ResponseEntity.ok(posService.createCategory(dto));
+    }
+
+    @PutMapping("/categories/{id}")
+    @PreAuthorize("hasRole('MANAGER')")
+    public ResponseEntity<PosItemCategoryDto> updateCategory(
+            @PathVariable UUID id,
+            @RequestBody PosItemCategoryUpdateDto dto) {
+        return ResponseEntity.ok(posService.updateCategory(id, dto));
+    }
+
+    @DeleteMapping("/categories/{id}")
+    @PreAuthorize("hasRole('MANAGER')")
+    public ResponseEntity<Void> deleteCategory(@PathVariable UUID id) {
+        posService.deleteCategory(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    // ──────────────── Products ────────────────
 
     @GetMapping("/products")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'POS')")
@@ -75,6 +112,8 @@ public class PosController {
         return ResponseEntity.noContent().build();
     }
 
+    // ──────────────── Orders ────────────────
+
     @PostMapping("/orders")
     @PreAuthorize("hasAnyRole('MANAGER', 'POS')")
     public ResponseEntity<PosOrderDto> createOrder(
@@ -98,5 +137,30 @@ public class PosController {
             @Valid @RequestBody PosSettleDto dto,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(posService.settleOrder(orderId, dto, principal.getUsername()));
+    }
+
+    // ──────────────── Order History (MANAGER only) ────────────────
+
+    @GetMapping("/orders")
+    @PreAuthorize("hasRole('MANAGER')")
+    public ResponseEntity<List<PosOrderDto>> getOrders(
+            @RequestParam UUID locationId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) PosOrderStatus status) {
+        OffsetDateTime fromDt = from.atStartOfDay().atOffset(ZoneOffset.UTC);
+        OffsetDateTime toDt = to.plusDays(1).atStartOfDay().atOffset(ZoneOffset.UTC);
+        return ResponseEntity.ok(posService.getOrders(locationId, fromDt, toDt, status));
+    }
+
+    @GetMapping("/orders/summary")
+    @PreAuthorize("hasRole('MANAGER')")
+    public ResponseEntity<OrderSummaryDto> getOrderSummary(
+            @RequestParam UUID locationId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        OffsetDateTime fromDt = from.atStartOfDay().atOffset(ZoneOffset.UTC);
+        OffsetDateTime toDt = to.plusDays(1).atStartOfDay().atOffset(ZoneOffset.UTC);
+        return ResponseEntity.ok(posService.getOrderSummary(locationId, fromDt, toDt));
     }
 }

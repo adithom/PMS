@@ -7,7 +7,6 @@ import java.time.LocalTime;
 
 public record PosLocationUpdateDto(
         String name,
-        String code,
         PosLocationType locationType,
         BigDecimal defaultTaxRate,
         BigDecimal serviceChargeRate,

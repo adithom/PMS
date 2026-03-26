@@ -10,5 +10,7 @@ import java.util.UUID;
 public interface PosProductRepository extends JpaRepository<PosProduct, UUID> {
     List<PosProduct> findByPosLocationId(UUID posLocationId);
 
-    List<PosProduct> findByCategory(String category);
+    List<PosProduct> findByCategoryId(UUID categoryId);
+
+    boolean existsByCategoryId(UUID categoryId);
 }

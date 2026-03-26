@@ -25,6 +25,7 @@ public record PosOrderDto(
         BigDecimal subtotal,
         BigDecimal taxAmount,
         BigDecimal serviceCharge,
+        BigDecimal discountRate,
         BigDecimal discountAmount,
         String paymentStatus,
         String tableNumber,

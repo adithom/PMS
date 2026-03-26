@@ -11,7 +11,6 @@ import java.util.UUID;
 public record PosLocationCreationDto(
         @NotNull UUID propertyId,
         @NotBlank String name,
-        @NotBlank String code,
         @NotNull PosLocationType locationType,
         @NotNull BigDecimal defaultTaxRate,
         BigDecimal serviceChargeRate,

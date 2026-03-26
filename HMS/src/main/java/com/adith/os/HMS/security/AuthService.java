@@ -7,6 +7,8 @@ import com.adith.os.HMS.property.PropertyRepository;
 import com.adith.os.HMS.security.dto.AuthResponse;
 import com.adith.os.HMS.security.dto.LoginRequest;
 import com.adith.os.HMS.security.dto.RegisterRequest;
+import com.adith.os.HMS.security.dto.UpdateUserRequest;
+import com.adith.os.HMS.security.dto.UserInfoDto;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -16,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -111,6 +114,89 @@ public class AuthService {
         String token = jwtService.generateToken(userPrincipal);
 
         return buildAuthResponse(token, savedUser);
+    }
+
+    public List<UserInfoDto> listUsers() {
+        return userRepository.findAll().stream()
+                .map(this::buildUserInfoDto)
+                .toList();
+    }
+
+    public UserInfoDto updateUser(UUID id, UpdateUserRequest request) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
+        if (user.getRole() == Role.ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Cannot edit admin users");
+        }
+
+        if (request.email() != null && !request.email().isBlank()
+                && !request.email().equals(user.getEmail())
+                && userRepository.existsByEmail(request.email())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already exists");
+        }
+
+        if (request.email() != null && !request.email().isBlank()) {
+            user.setEmail(request.email());
+        } else if (request.email() != null && request.email().isBlank()) {
+            user.setEmail(null);
+        }
+
+        if (request.password() != null && !request.password().isBlank()) {
+            user.setPassword(passwordEncoder.encode(request.password()));
+        }
+
+        user.setRole(request.role());
+
+        Set<Property> properties = new HashSet<>();
+        if (request.propertyIds() != null) {
+            for (String propertyId : request.propertyIds()) {
+                Property property = propertyRepository.findById(UUID.fromString(propertyId))
+                        .orElseThrow(() -> new ResponseStatusException(
+                                HttpStatus.NOT_FOUND, "Property not found: " + propertyId));
+                properties.add(property);
+            }
+        }
+        user.setProperties(properties);
+
+        if (request.posLocationId() != null && !request.posLocationId().isBlank()) {
+            PosLocation posLocation = posLocationRepository.findById(UUID.fromString(request.posLocationId()))
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.NOT_FOUND, "POS location not found"));
+            user.setPosLocation(posLocation);
+        } else {
+            user.setPosLocation(null);
+        }
+
+        User savedUser = userRepository.save(user);
+        return buildUserInfoDto(savedUser);
+    }
+
+    private UserInfoDto buildUserInfoDto(User user) {
+        String posLocationId = user.getPosLocation() != null ? user.getPosLocation().getId().toString() : null;
+        String posLocationName = user.getPosLocation() != null ? user.getPosLocation().getName() : null;
+        return new UserInfoDto(
+                user.getId().toString(),
+                user.getUsername(),
+                user.getEmail(),
+                user.getRole().name(),
+                user.getProperties().stream()
+                        .map(p -> new UserInfoDto.PropertyInfo(p.getId().toString(), p.getName()))
+                        .toList(),
+                posLocationId,
+                posLocationName
+        );
+    }
+
+    public void deleteUser(UUID id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
+        if (user.getRole() == Role.ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Cannot delete admin users");
+        }
+
+        userRepository.delete(user);
     }
 
     private AuthResponse buildAuthResponse(String token, User user) {

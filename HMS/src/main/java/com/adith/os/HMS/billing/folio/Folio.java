@@ -90,10 +90,10 @@ public class Folio {
     private String updatedBy;
 
     @OneToMany(mappedBy = "folio", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<FolioCharge> charges;
+    private List<FolioCharge> charges = new ArrayList<>();
 
     @OneToMany(mappedBy = "folio", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<Payment> payments;
+    private List<Payment> payments = new ArrayList<>();
 
     @OneToMany(mappedBy = "folio")
     private List<Bill> bills = new ArrayList<>();

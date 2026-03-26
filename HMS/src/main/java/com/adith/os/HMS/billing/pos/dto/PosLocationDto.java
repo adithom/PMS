@@ -10,7 +10,6 @@ import java.util.UUID;
 public record PosLocationDto(
         UUID id,
         String name,
-        String code,
         PosLocationType locationType,
         UUID propertyId,
         ChargeCode defaultChargeCode,
@@ -22,10 +21,10 @@ public record PosLocationDto(
         UUID currentWalkInFolioId
 ) {
     // Convenience constructor used by PosService.toDto
-    public PosLocationDto(UUID id, String name, String code, PosLocationType locationType, UUID propertyId,
+    public PosLocationDto(UUID id, String name, PosLocationType locationType, UUID propertyId,
             BigDecimal defaultTaxRate, BigDecimal serviceChargeRate, LocalTime openingTime,
             LocalTime closingTime, boolean isActive, UUID currentWalkInFolioId) {
-        this(id, name, code, locationType, propertyId,
+        this(id, name, locationType, propertyId,
                 locationType != null ? locationType.toChargeCode() : ChargeCode.MISC,
                 defaultTaxRate, serviceChargeRate, openingTime, closingTime, isActive, currentWalkInFolioId);
     }

@@ -60,6 +60,9 @@ public class PosOrder {
     @Column(name = "service_charge", precision = 10, scale = 2, nullable = false)
     private BigDecimal serviceCharge = BigDecimal.ZERO;
 
+    @Column(name = "discount_rate", precision = 5, scale = 2)
+    private BigDecimal discountRate;
+
     @Column(name = "discount_amount", precision = 10, scale = 2, nullable = false)
     private BigDecimal discountAmount = BigDecimal.ZERO;
 
@@ -226,6 +229,14 @@ public class PosOrder {
 
     public void setServiceCharge(BigDecimal serviceCharge) {
         this.serviceCharge = serviceCharge;
+    }
+
+    public BigDecimal getDiscountRate() {
+        return discountRate;
+    }
+
+    public void setDiscountRate(BigDecimal discountRate) {
+        this.discountRate = discountRate;
     }
 
     public BigDecimal getDiscountAmount() {

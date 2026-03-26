@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -30,6 +31,7 @@ public class PosService {
     private final PosLocationRepository posLocationRepository;
     private final PosProductRepository posProductRepository;
     private final PosOrderRepository posOrderRepository;
+    private final PosItemCategoryRepository posItemCategoryRepository;
     private final PropertyRepository propertyRepository;
     private final FolioService folioService;
     private final FolioRepository folioRepository;
@@ -39,6 +41,7 @@ public class PosService {
     public PosService(PosLocationRepository posLocationRepository,
             PosProductRepository posProductRepository,
             PosOrderRepository posOrderRepository,
+            PosItemCategoryRepository posItemCategoryRepository,
             PropertyRepository propertyRepository,
             FolioService folioService,
             FolioRepository folioRepository,
@@ -47,6 +50,7 @@ public class PosService {
         this.posLocationRepository = posLocationRepository;
         this.posProductRepository = posProductRepository;
         this.posOrderRepository = posOrderRepository;
+        this.posItemCategoryRepository = posItemCategoryRepository;
         this.propertyRepository = propertyRepository;
         this.folioService = folioService;
         this.folioRepository = folioRepository;
@@ -54,17 +58,178 @@ public class PosService {
         this.paymentService = paymentService;
     }
 
+    // ──────────────── Location methods ────────────────
+
     public List<PosLocationDto> getLocations(UUID propertyId) {
         return posLocationRepository.findByPropertyId(propertyId).stream()
                 .map(this::toDto)
                 .collect(Collectors.toList());
     }
 
+    @Transactional
+    public PosLocationDto createLocation(PosLocationCreationDto dto) {
+        Property property = propertyRepository.findById(dto.propertyId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Property not found"));
+
+        PosLocation location = new PosLocation();
+        location.setProperty(property);
+        location.setName(dto.name());
+        location.setCode(UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase());
+        location.setLocationType(dto.locationType());
+        location.setDefaultTaxRate(dto.defaultTaxRate());
+        location.setServiceChargeRate(dto.serviceChargeRate() != null ? dto.serviceChargeRate() : BigDecimal.ZERO);
+        location.setOpeningTime(dto.openingTime());
+        location.setClosingTime(dto.closingTime());
+        location.setActive(true);
+
+        return toDto(posLocationRepository.save(location));
+    }
+
+    @Transactional
+    public PosLocationDto updateLocation(UUID id, PosLocationUpdateDto dto) {
+        PosLocation location = posLocationRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Location not found"));
+
+        if (dto.name() != null) location.setName(dto.name());
+        if (dto.locationType() != null) location.setLocationType(dto.locationType());
+        if (dto.defaultTaxRate() != null) location.setDefaultTaxRate(dto.defaultTaxRate());
+        if (dto.serviceChargeRate() != null) location.setServiceChargeRate(dto.serviceChargeRate());
+        if (dto.openingTime() != null) location.setOpeningTime(dto.openingTime());
+        if (dto.closingTime() != null) location.setClosingTime(dto.closingTime());
+        if (dto.isActive() != null) location.setActive(dto.isActive());
+
+        return toDto(posLocationRepository.save(location));
+    }
+
+    // ──────────────── Category methods ��───────────────
+
+    public List<PosItemCategoryDto> getCategories(UUID locationId) {
+        return posItemCategoryRepository.findByPosLocationIdOrderByDisplayOrder(locationId).stream()
+                .map(this::toCategoryDto)
+                .collect(Collectors.toList());
+    }
+
+    public List<PosItemCategoryDto> getActiveCategories(UUID locationId) {
+        return posItemCategoryRepository.findByPosLocationIdAndIsActiveTrueOrderByDisplayOrder(locationId).stream()
+                .map(this::toCategoryDto)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public PosItemCategoryDto createCategory(PosItemCategoryCreationDto dto) {
+        PosLocation location = posLocationRepository.findById(dto.locationId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Location not found"));
+
+        PosItemCategory category = new PosItemCategory();
+        category.setPosLocation(location);
+        category.setName(dto.name());
+        category.setCode(UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase());
+        category.setDisplayOrder(dto.displayOrder() != null ? dto.displayOrder() : 0);
+        category.setActive(true);
+
+        return toCategoryDto(posItemCategoryRepository.save(category));
+    }
+
+    @Transactional
+    public PosItemCategoryDto updateCategory(UUID id, PosItemCategoryUpdateDto dto) {
+        PosItemCategory category = posItemCategoryRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Category not found"));
+
+        if (dto.name() != null) category.setName(dto.name());
+        if (dto.displayOrder() != null) category.setDisplayOrder(dto.displayOrder());
+        if (dto.isActive() != null) category.setActive(dto.isActive());
+
+        return toCategoryDto(posItemCategoryRepository.save(category));
+    }
+
+    @Transactional
+    public void deleteCategory(UUID id) {
+        PosItemCategory category = posItemCategoryRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Category not found"));
+
+        boolean hasProducts = posProductRepository.existsByCategoryId(id);
+        if (hasProducts) {
+            category.setActive(false);
+            posItemCategoryRepository.save(category);
+        } else {
+            posItemCategoryRepository.delete(category);
+        }
+    }
+
+    // ──────────────── Product methods ────────────────
+
     public List<PosProductDto> getProducts(UUID locationId) {
         return posProductRepository.findByPosLocationId(locationId).stream()
                 .map(this::toDto)
                 .collect(Collectors.toList());
     }
+
+    @Transactional
+    public PosProductDto createProduct(PosProductCreationDto dto) {
+        PosLocation location = posLocationRepository.findById(dto.locationId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Location not found"));
+
+        PosItemCategory category = posItemCategoryRepository.findById(dto.categoryId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Category not found"));
+
+        PosProduct product = new PosProduct();
+        product.setPosLocation(location);
+        product.setName(dto.name());
+        product.setCode(UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase());
+        product.setDescription(dto.description());
+        product.setCategory(category);
+        product.setPrice(dto.price());
+        product.setCost(dto.cost());
+        product.setDiscountRate(dto.discountRate());
+
+        BigDecimal taxRate = dto.taxRate() != null ? dto.taxRate() : location.getDefaultTaxRate();
+        product.setTaxRate(taxRate);
+
+        product.setAvailable(dto.isAvailable());
+        product.setPreparationTime(dto.preparationTime());
+        product.setImageUrl(dto.imageUrl());
+
+        return toDto(posProductRepository.save(product));
+    }
+
+    @Transactional
+    public PosProductDto updateProduct(UUID id, PosProductUpdateDto dto) {
+        PosProduct product = posProductRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found"));
+
+        if (dto.name() != null) product.setName(dto.name());
+        if (dto.description() != null) product.setDescription(dto.description());
+        if (dto.categoryId() != null) {
+            PosItemCategory category = posItemCategoryRepository.findById(dto.categoryId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Category not found"));
+            product.setCategory(category);
+        }
+        if (dto.price() != null) product.setPrice(dto.price());
+        if (dto.cost() != null) product.setCost(dto.cost());
+        if (dto.taxRate() != null) product.setTaxRate(dto.taxRate());
+        if (dto.discountRate() != null) product.setDiscountRate(dto.discountRate());
+        if (dto.isAvailable() != null) product.setAvailable(dto.isAvailable());
+        if (dto.preparationTime() != null) product.setPreparationTime(dto.preparationTime());
+        if (dto.imageUrl() != null) product.setImageUrl(dto.imageUrl());
+
+        return toDto(posProductRepository.save(product));
+    }
+
+    @Transactional
+    public void deleteProduct(UUID id) {
+        PosProduct product = posProductRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found"));
+
+        boolean referenced = posOrderRepository.existsOrderItemByProductId(id);
+        if (referenced) {
+            product.setAvailable(false);
+            posProductRepository.save(product);
+        } else {
+            posProductRepository.delete(product);
+        }
+    }
+
+    // ──────────────── Order methods ────────────────
 
     @Transactional
     public PosOrderDto createOrder(PosOrderCreationDto dto, String username) {
@@ -88,7 +253,15 @@ public class PosService {
                     item.setPosProduct(product);
                     item.setItemName(product.getName());
                     item.setQuantity(itemDto.quantity());
-                    item.setUnitPrice(product.getPrice());
+
+                    // Apply per-item discount if set
+                    BigDecimal unitPrice = product.getPrice();
+                    if (product.getDiscountRate() != null && product.getDiscountRate().compareTo(BigDecimal.ZERO) > 0) {
+                        BigDecimal discountMultiplier = BigDecimal.ONE.subtract(
+                                product.getDiscountRate().divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP));
+                        unitPrice = unitPrice.multiply(discountMultiplier).setScale(2, RoundingMode.HALF_UP);
+                    }
+                    item.setUnitPrice(unitPrice);
 
                     BigDecimal taxRate = product.getTaxRate() != null ? product.getTaxRate()
                             : (location.getDefaultTaxRate() != null ? location.getDefaultTaxRate() : BigDecimal.ZERO);
@@ -101,6 +274,16 @@ public class PosService {
 
         order.setItems(items);
         order.calculateTotal();
+
+        // Apply order-level discount if provided
+        if (dto.discountRate() != null && dto.discountRate().compareTo(BigDecimal.ZERO) > 0) {
+            order.setDiscountRate(dto.discountRate());
+            BigDecimal discountAmount = order.getSubtotal()
+                    .multiply(dto.discountRate())
+                    .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+            order.setDiscountAmount(discountAmount);
+            order.calculateTotal();
+        }
 
         PosOrder savedOrder = posOrderRepository.save(order);
         return toDto(savedOrder);
@@ -200,99 +383,27 @@ public class PosService {
         return toDto(posOrderRepository.save(updated));
     }
 
-    @Transactional
-    public PosLocationDto createLocation(PosLocationCreationDto dto) {
-        com.adith.os.HMS.property.Property property = propertyRepository.findById(dto.propertyId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Property not found"));
+    // ──────────────── Order history ────────────────
 
-        PosLocation location = new PosLocation();
-        location.setProperty(property);
-        location.setName(dto.name());
-        location.setCode(dto.code());
-        location.setLocationType(dto.locationType());
-        location.setDefaultTaxRate(dto.defaultTaxRate());
-        location.setServiceChargeRate(dto.serviceChargeRate() != null ? dto.serviceChargeRate() : BigDecimal.ZERO);
-        location.setOpeningTime(dto.openingTime());
-        location.setClosingTime(dto.closingTime());
-        location.setActive(true);
-
-        return toDto(posLocationRepository.save(location));
-    }
-
-    @Transactional
-    public PosLocationDto updateLocation(UUID id, PosLocationUpdateDto dto) {
-        PosLocation location = posLocationRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Location not found"));
-
-        if (dto.name() != null) location.setName(dto.name());
-        if (dto.code() != null) location.setCode(dto.code());
-        if (dto.locationType() != null) location.setLocationType(dto.locationType());
-        if (dto.defaultTaxRate() != null) location.setDefaultTaxRate(dto.defaultTaxRate());
-        if (dto.serviceChargeRate() != null) location.setServiceChargeRate(dto.serviceChargeRate());
-        if (dto.openingTime() != null) location.setOpeningTime(dto.openingTime());
-        if (dto.closingTime() != null) location.setClosingTime(dto.closingTime());
-        if (dto.isActive() != null) location.setActive(dto.isActive());
-
-        return toDto(posLocationRepository.save(location));
-    }
-
-    @Transactional
-    public PosProductDto createProduct(PosProductCreationDto dto) {
-        PosLocation location = posLocationRepository.findById(dto.locationId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Location not found"));
-
-        PosProduct product = new PosProduct();
-        product.setPosLocation(location);
-        product.setName(dto.name());
-        product.setCode(dto.code());
-        product.setDescription(dto.description());
-        product.setCategory(dto.category());
-        product.setPrice(dto.price());
-        product.setCost(dto.cost());
-
-        BigDecimal taxRate = dto.taxRate() != null ? dto.taxRate() : location.getDefaultTaxRate();
-        product.setTaxRate(taxRate);
-
-        product.setAvailable(dto.isAvailable());
-        product.setPreparationTime(dto.preparationTime());
-        product.setImageUrl(dto.imageUrl());
-
-        return toDto(posProductRepository.save(product));
-    }
-
-    @Transactional
-    public PosProductDto updateProduct(UUID id, PosProductUpdateDto dto) {
-        PosProduct product = posProductRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found"));
-
-        if (dto.name() != null) product.setName(dto.name());
-        if (dto.description() != null) product.setDescription(dto.description());
-        if (dto.category() != null) product.setCategory(dto.category());
-        if (dto.price() != null) product.setPrice(dto.price());
-        if (dto.cost() != null) product.setCost(dto.cost());
-        if (dto.taxRate() != null) product.setTaxRate(dto.taxRate());
-        if (dto.isAvailable() != null) product.setAvailable(dto.isAvailable());
-        if (dto.preparationTime() != null) product.setPreparationTime(dto.preparationTime());
-        if (dto.imageUrl() != null) product.setImageUrl(dto.imageUrl());
-
-        return toDto(posProductRepository.save(product));
-    }
-
-    @Transactional
-    public void deleteProduct(UUID id) {
-        PosProduct product = posProductRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found"));
-
-        // Soft-delete if referenced by any order; hard-delete otherwise
-        boolean referenced = posOrderRepository.existsOrderItemByProductId(id);
-
-        if (referenced) {
-            product.setAvailable(false);
-            posProductRepository.save(product);
+    public List<PosOrderDto> getOrders(UUID locationId, OffsetDateTime from, OffsetDateTime to, PosOrderStatus status) {
+        List<PosOrder> orders;
+        if (status != null) {
+            orders = posOrderRepository.findByLocationAndDateRangeAndStatus(locationId, from, to, status);
         } else {
-            posProductRepository.delete(product);
+            orders = posOrderRepository.findByLocationAndDateRange(locationId, from, to);
         }
+        return orders.stream().map(this::toDto).collect(Collectors.toList());
     }
+
+    public OrderSummaryDto getOrderSummary(UUID locationId, OffsetDateTime from, OffsetDateTime to) {
+        Object[] result = posOrderRepository.getOrderSummary(locationId, from, to);
+        long count = ((Number) result[0]).longValue();
+        BigDecimal totalRevenue = (BigDecimal) result[1];
+        BigDecimal avgValue = (BigDecimal) result[2];
+        return new OrderSummaryDto(count, totalRevenue, avgValue);
+    }
+
+    // ──────────────── Walk-in folio ────────────────
 
     @Transactional
     public FolioDto postWalkInFolio(UUID locationId) {
@@ -316,13 +427,11 @@ public class PosService {
     // ──────────────── Private helpers ────────────────
 
     private UUID getOrCreateWalkInFolio(Property property, PosLocation location, String username) {
-        // Return existing open walk-in folio if available
         Folio existing = location.getCurrentWalkInFolio();
         if (existing != null && existing.getStatus() == FolioStatus.OPEN) {
             return existing.getId();
         }
 
-        // Ensure walk-in guest exists for this property
         UUID walkInGuestId = property.getWalkInGuestId();
         if (walkInGuestId == null) {
             Guest walkInGuest = new Guest();
@@ -335,19 +444,17 @@ public class PosService {
             walkInGuestId = saved.getId();
         }
 
-        // Create a new WALK_IN folio
         FolioCreationDto folioDto = new FolioCreationDto(
-                null,           // no booking
+                null,
                 walkInGuestId,
                 FolioType.WALK_IN,
                 "Walk-in POS folio — " + location.getName(),
                 username,
-                null            // not routed
+                null
         );
 
         FolioDto created = folioService.createFolio(property.getId(), folioDto);
 
-        // Link to the location
         Folio folio = folioRepository.findById(created.id())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Walk-in folio creation failed"));
         location.setCurrentWalkInFolio(folio);
@@ -363,7 +470,6 @@ public class PosService {
         return new PosLocationDto(
                 entity.getId(),
                 entity.getName(),
-                entity.getCode(),
                 entity.getLocationType(),
                 entity.getProperty().getId(),
                 entity.getDefaultTaxRate(),
@@ -374,17 +480,29 @@ public class PosService {
                 walkInFolioId);
     }
 
+    private PosItemCategoryDto toCategoryDto(PosItemCategory entity) {
+        return new PosItemCategoryDto(
+                entity.getId(),
+                entity.getPosLocation().getId(),
+                entity.getName(),
+                entity.getDisplayOrder(),
+                entity.isActive());
+    }
+
     private PosProductDto toDto(PosProduct entity) {
+        UUID categoryId = entity.getCategory() != null ? entity.getCategory().getId() : null;
+        String categoryName = entity.getCategory() != null ? entity.getCategory().getName() : null;
         return new PosProductDto(
                 entity.getId(),
                 entity.getName(),
-                entity.getCode(),
                 entity.getDescription(),
                 entity.getPrice(),
                 entity.getCost(),
-                entity.getCategory(),
+                categoryId,
+                categoryName,
                 entity.getPosLocation().getId(),
                 entity.getTaxRate(),
+                entity.getDiscountRate(),
                 entity.isAvailable(),
                 entity.getPreparationTime(),
                 entity.getImageUrl());
@@ -409,6 +527,7 @@ public class PosService {
                 entity.getSubtotal(),
                 entity.getTaxAmount(),
                 entity.getServiceCharge(),
+                entity.getDiscountRate(),
                 entity.getDiscountAmount(),
                 entity.getPaymentStatus(),
                 entity.getTableNumber(),

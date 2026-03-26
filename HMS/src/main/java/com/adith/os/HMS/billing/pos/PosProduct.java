@@ -1,8 +1,8 @@
 package com.adith.os.HMS.billing.pos;
 
 import jakarta.persistence.*;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotBlank;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -27,15 +27,18 @@ public class PosProduct {
     @Column(nullable = false, length = 200)
     private String name;
 
-    @NotBlank
-    @Column(nullable = false, length = 50)
+    @Column(length = 50)
     private String code;
 
     @Column(columnDefinition = "TEXT")
     private String description;
 
-    @Column(length = 100)
-    private String category;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id")
+    private PosItemCategory category;
+
+    @Column(name = "discount_rate", precision = 5, scale = 2)
+    private BigDecimal discountRate;
 
     @NotNull
     @Column(nullable = false, precision = 10, scale = 2)
@@ -121,12 +124,20 @@ public class PosProduct {
         this.description = description;
     }
 
-    public String getCategory() {
+    public PosItemCategory getCategory() {
         return category;
     }
 
-    public void setCategory(String category) {
+    public void setCategory(PosItemCategory category) {
         this.category = category;
+    }
+
+    public BigDecimal getDiscountRate() {
+        return discountRate;
+    }
+
+    public void setDiscountRate(BigDecimal discountRate) {
+        this.discountRate = discountRate;
     }
 
     public BigDecimal getPrice() {

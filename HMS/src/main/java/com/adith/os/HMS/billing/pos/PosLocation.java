@@ -3,8 +3,8 @@ package com.adith.os.HMS.billing.pos;
 import com.adith.os.HMS.billing.folio.Folio;
 import com.adith.os.HMS.property.Property;
 import jakarta.persistence.*;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotBlank;
 
 import java.math.BigDecimal;
 import java.time.LocalTime;
@@ -30,8 +30,7 @@ public class PosLocation {
     @Column(nullable = false, length = 100)
     private String name;
 
-    @NotBlank
-    @Column(nullable = false, length = 20)
+    @Column(length = 20)
     private String code;
 
     @NotNull

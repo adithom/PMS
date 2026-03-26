@@ -9,12 +9,12 @@ import java.util.UUID;
 public record PosProductCreationDto(
         @NotNull UUID locationId,
         @NotBlank String name,
-        @NotBlank String code,
         String description,
-        @NotBlank String category,
+        @NotNull UUID categoryId,
         @NotNull BigDecimal price,
         BigDecimal cost,
         BigDecimal taxRate,
+        BigDecimal discountRate,
         boolean isAvailable,
         Integer preparationTime,
         String imageUrl) {
