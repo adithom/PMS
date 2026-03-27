@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import propertyApi from '../api/propertyApi';
 import roomApi from '../api/roomApi';
-import bookingApi from '../api/bookingApi';
+import availabilityApi from '../api/availabilityApi';
 import type { Property, Room, UnitDto } from '../types';
 
 import BookingForm from "../components/Booking/BookingForm";
@@ -199,35 +199,53 @@ export default function Rooms() {
         }
       }
 
-      // Overlay booking-derived status: OCCUPIED (checked in) or SCHEDULED (arriving today/tomorrow)
+      // Overlay booking-derived status using the occupancy report API
+      // which returns BookedRoomDto with roomId + bookingStatus
       const today = new Date().toISOString().split('T')[0];
-      const dayAfterTomorrow = new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0];
+      const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
 
-      const bookingResults = await Promise.all(
-        nextProperties.map(async (property) => {
-          try {
-            const bookings = await bookingApi.getRange(property.id, today, dayAfterTomorrow);
-            return bookings ?? [];
-          } catch {
-            return [];
-          }
-        }),
-      );
+      const [todayReports, tomorrowReports] = await Promise.all([
+        Promise.all(
+          nextProperties.map(async (property) => {
+            try { return await availabilityApi.getOccupancyReport(property.id, today); }
+            catch { return null; }
+          }),
+        ),
+        Promise.all(
+          nextProperties.map(async (property) => {
+            try { return await availabilityApi.getOccupancyReport(property.id, tomorrow); }
+            catch { return null; }
+          }),
+        ),
+      ]);
 
-      for (const bookings of bookingResults) {
-        for (const booking of bookings) {
-          if (!booking.roomId) continue; // floating/unassigned bookings don't affect a room tile
-          const current = statusData[booking.roomId];
-          // Don't downgrade from INACTIVE or MAINTENANCE
+      // Today: CHECKED_IN → OCCUPIED, CONFIRMED/PENDING → SCHEDULED
+      for (const report of todayReports) {
+        if (!report) continue;
+        for (const booked of report.bookedRoomsList ?? []) {
+          const current = statusData[booked.roomId];
           if (current === 'INACTIVE' || current === 'MAINTENANCE') continue;
 
-          if (booking.status === 'CHECKED_IN') {
-            statusData[booking.roomId] = 'OCCUPIED';
+          if (booked.bookingStatus === 'CHECKED_IN') {
+            statusData[booked.roomId] = 'OCCUPIED';
           } else if (
-            (booking.status === 'CONFIRMED' || booking.status === 'PENDING') &&
+            (booked.bookingStatus === 'CONFIRMED' || booked.bookingStatus === 'PENDING') &&
             current !== 'OCCUPIED'
           ) {
-            statusData[booking.roomId] = 'SCHEDULED';
+            statusData[booked.roomId] = 'SCHEDULED';
+          }
+        }
+      }
+
+      // Tomorrow: only upgrade VACANT → SCHEDULED (never downgrade OCCUPIED)
+      for (const report of tomorrowReports) {
+        if (!report) continue;
+        for (const booked of report.bookedRoomsList ?? []) {
+          const current = statusData[booked.roomId];
+          if (current === 'INACTIVE' || current === 'MAINTENANCE' || current === 'OCCUPIED') continue;
+
+          if (booked.bookingStatus === 'CONFIRMED' || booked.bookingStatus === 'PENDING') {
+            statusData[booked.roomId] = 'SCHEDULED';
           }
         }
       }
