@@ -7,7 +7,7 @@ import availabilityApi from '../../api/availabilityApi';
 import type { Property, Room, UnitDto, Booking } from '../../types';
 
 /* ────────────────────────────────────────────────────────────── */
-/* Types & Tokens                                                 */
+/* Types & Tokens                                               */
 /* ────────────────────────────────────────────────────────────── */
 
 export type GuestSearchResult = {
@@ -45,7 +45,7 @@ const inputCls =
 const labelCls = 'mb-1.5 block text-sm font-medium text-slate-700';
 
 /* ────────────────────────────────────────────────────────────── */
-/* Component                                                      */
+/* Component                                                    */
 /* ────────────────────────────────────────────────────────────── */
 
 export default function BookingForm({
@@ -105,7 +105,7 @@ export default function BookingForm({
   const [availabilityMessage, setAvailabilityMessage] = useState<{ type: 'error' | 'success', text: string } | null>(null);
 
   /* ═══════════════════════════════════════════════════════════ */
-  /* Cascading Data Effects                                      */
+  /* Cascading Data Effects                                    */
   /* ═══════════════════════════════════════════════════════════ */
 
   // 1. Fetch Properties
@@ -249,7 +249,10 @@ export default function BookingForm({
       const idStr = String(created.id ?? created.uuid ?? created.guestId ?? created._id);
       
       setSelectedGuestId(idStr);
-      setGuestResults([{ id: idStr, firstName: newGuestFirstName, lastName: newGuestLastName, email: newGuestEmail, phone: newGuestPhone }]);
+      // Update the visual search input to show the new guest's name
+      setGuestQuery(`${newGuestFirstName} ${newGuestLastName}`);
+      // Clear results so the dropdown doesn't pop open
+      setGuestResults([]); 
       setCreatingGuest(false);
       return idStr;
     } catch (err: any) {
@@ -262,17 +265,21 @@ export default function BookingForm({
     if (e) e.preventDefault();
     setError(null); setLoading(true);
     try {
-      if (creatingGuest && !isEditMode) await createGuestThenSelect();
+      let finalGuestId = selectedGuestId;
+
+      if (creatingGuest && !isEditMode) {
+        finalGuestId = await createGuestThenSelect();
+      }
 
       // Strict Hierarchy Validations
       if (!selectedPropertyId) throw new Error('Property is required.');
       if (!selectedUnitId) throw new Error('Unit is required.');
-      if (!selectedGuestId && !creatingGuest) throw new Error('Please select or create a guest.');
+      if (!finalGuestId) throw new Error('Please select or create a guest.');
       if (!checkIn || !checkOut || new Date(checkOut) <= new Date(checkIn)) throw new Error('Valid dates required.');
 
       const payload: BookingCreationDto = {
         roomId: getRoomId(room) ?? undefined,
-        guestId: selectedGuestId!,
+        guestId: finalGuestId,
         unitId: selectedUnitId, // Now strictly passed
         status: status as any,
         checkIn, checkOut, adults, children, currency, totalPrice, paidAmount, specialRequests,
@@ -375,7 +382,17 @@ export default function BookingForm({
               <label><span className={labelCls}>Doc ID</span><input className={inputCls} value={newGuestDocId} onChange={e => setNewGuestDocId(e.target.value)} /></label>
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setCreatingGuest(false)} className={btnSecondary}>Cancel</button>
+              <button type="button" onClick={() => setCreatingGuest(false)} className={btnSecondary}>
+                Cancel
+              </button>
+              <button 
+                type="button" 
+                onClick={createGuestThenSelect} 
+                disabled={loading || !newGuestFirstName || !newGuestLastName} 
+                className={btnPrimary}
+              >
+                {loading ? 'Saving...' : 'Save Guest'}
+              </button>
             </div>
           </div>
         ) : (
