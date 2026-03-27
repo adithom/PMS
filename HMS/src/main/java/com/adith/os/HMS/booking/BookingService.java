@@ -521,6 +521,7 @@ public class BookingService {
             booking.setPaidAmount(dto.paidAmount()!= null ? dto.paidAmount() : BigDecimal.ZERO);
             booking.setSpecialRequests(dto.specialRequests());
             booking.setTwinBed(dto.isTwinBed());
+            booking.setReferenceNumber(dto.referenceNumber());
 
             // Sync dates before saving
             roomAssignmentService.syncDatesForBookingUpdate(bookingId, dto.checkIn(), dto.checkOut());
@@ -686,6 +687,10 @@ public class BookingService {
 
             if (dto.isTwinBed() != null) {
               booking.setTwinBed(dto.isTwinBed());
+            }
+
+            if (dto.referenceNumber() != null) {
+                booking.setReferenceNumber(dto.referenceNumber());
             }
 
             if (datesChanged) {

@@ -11,6 +11,7 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 public record RoomCreationDto(
+        @NotNull(message = "Unit is required")
         UUID unitId,
         @NotBlank(message = "Room number is required")
         String number,

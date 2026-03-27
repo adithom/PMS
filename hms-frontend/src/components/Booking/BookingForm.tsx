@@ -84,6 +84,7 @@ export default function BookingForm({
   
   // ---> NEW STATE FOR TWIN BED <---
   const [isTwinBed, setIsTwinBed] = useState<boolean>(booking?.isTwinBed ?? false);
+  const [referenceNumber, setReferenceNumber] = useState<string>(booking?.referenceNumber ?? '');
 
   // ── Guest State ──
   const defaultGuestName = initialGuest ? `${initialGuest.firstName} ${initialGuest.lastName}` : '';
@@ -283,7 +284,8 @@ export default function BookingForm({
         unitId: selectedUnitId, // Now strictly passed
         status: status as any,
         checkIn, checkOut, adults, children, currency, totalPrice, paidAmount, specialRequests,
-        isTwinBed // ---> ADDED TO PAYLOAD <---
+        isTwinBed,
+        referenceNumber: referenceNumber || undefined
       };
 
       const result = (isEditMode && booking?.id) 
@@ -475,6 +477,16 @@ export default function BookingForm({
             Twin Bedded Room
           </label>
         </div>
+
+        <label>
+          <span className={labelCls}>Reference Number <span className="font-normal text-slate-400">(Optional)</span></span>
+          <input
+            className={inputCls}
+            placeholder="e.g. BKG-20250301-1234"
+            value={referenceNumber}
+            onChange={e => setReferenceNumber(e.target.value)}
+          />
+        </label>
 
         <label>
           <span className={labelCls}>Notes / Special Requests</span>

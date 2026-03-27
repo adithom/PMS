@@ -110,6 +110,9 @@ public class Booking {
     @Column(name = "is_twin_bed", nullable = false, columnDefinition = "boolean default false")
     private boolean isTwinBed = false;
 
+    @Column(name = "reference_number", length = 100)
+    private String referenceNumber;
+
     @PrePersist
     protected void onCreate() {
         if (createdAt == null) {
@@ -286,6 +289,9 @@ public class Booking {
 
     public boolean isTwinBed() { return isTwinBed; }
     public void setTwinBed(boolean twinBed) { isTwinBed = twinBed; }
+
+    public String getReferenceNumber() { return referenceNumber; }
+    public void setReferenceNumber(String referenceNumber) { this.referenceNumber = referenceNumber; }
 
     // Calculated fields - these compute values dynamically
 

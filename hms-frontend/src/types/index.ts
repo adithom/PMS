@@ -61,6 +61,7 @@ export interface Booking {
   specialRequests?: string;
   createdAt?: string;
   isTwinBed: boolean;
+  referenceNumber?: string;
 }
 
 export type BookingStatus =

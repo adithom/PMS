@@ -44,7 +44,9 @@ public record BookingCreationDto(
         UUID parentBookingId,       // Set when creating a child booking individually
         String groupReference,       // e.g. "WEDDING-SHARMA-2025", purely informational
 
-        Boolean isTwinBed
+        Boolean isTwinBed,
+
+        String referenceNumber       // Optional external booking engine reference
 
 ) {
     public BookingCreationDto {

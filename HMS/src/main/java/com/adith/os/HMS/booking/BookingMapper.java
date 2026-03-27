@@ -25,7 +25,7 @@ public class BookingMapper {
         // REMOVED: Status validation - now handled by compact constructor with default
 
         // Create new booking using constructor
-        return new Booking(
+        Booking booking = new Booking(
                 property,
                 room,
                 guest,
@@ -41,6 +41,8 @@ public class BookingMapper {
                 bookingCreationDto.paidAmount(),  // Already defaults to ZERO in DTO
                 bookingCreationDto.isTwinBed()
         );
+        booking.setReferenceNumber(bookingCreationDto.referenceNumber());
+        return booking;
     }
 
     public BookingDto toDto(Booking booking) {
@@ -71,7 +73,8 @@ public class BookingMapper {
                 booking.getParentBooking() != null ? booking.getParentBooking().getId() : null,
                 booking.isGroupMaster(),
                 booking.getChildBookings() != null ? booking.getChildBookings().size() : 0,
-                booking.isTwinBed()
+                booking.isTwinBed(),
+                booking.getReferenceNumber()
         );
     }
 

@@ -46,16 +46,17 @@ public class RoomService {
                     "Room with number " + roomCreationDto.number() + " already exists in this property");
         }
 
-        // Validate unit if provided
-        Unit unit = null;
-        if (roomCreationDto.unitId() != null) {
-            unit = unitRepository.findById(roomCreationDto.unitId())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Unit not found"));
+        // Unit is required
+        if (roomCreationDto.unitId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unit is required");
+        }
 
-            if (!unit.getProperty().getId().equals(propertyId)) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Unit does not belong to the specified property");
-            }
+        Unit unit = unitRepository.findById(roomCreationDto.unitId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Unit not found"));
+
+        if (!unit.getProperty().getId().equals(propertyId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Unit does not belong to the specified property");
         }
 
         try {

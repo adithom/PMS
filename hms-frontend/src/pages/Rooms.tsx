@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import propertyApi from '../api/propertyApi';
 import roomApi from '../api/roomApi';
-import type { RoomAvailabilityCheckDto } from '../api/roomApi';
+import bookingApi from '../api/bookingApi';
 import type { Property, Room, UnitDto } from '../types';
 
 import BookingForm from "../components/Booking/BookingForm";
@@ -14,7 +14,7 @@ import RoomForm from '../components/RoomEditForm';
 /* Types                                                        */
 /* ────────────────────────────────────────────────────────────── */
 
-type RoomDisplayStatus = 'VACANT' | 'OCCUPIED' | 'MAINTENANCE' | 'INACTIVE';
+type RoomDisplayStatus = 'VACANT' | 'OCCUPIED' | 'SCHEDULED' | 'MAINTENANCE' | 'INACTIVE';
 
 type RoomSelection = {
   room: Room;
@@ -35,7 +35,7 @@ type RoomCountSummary = Record<RoomDisplayStatus, number>;
 /* Constants & Design Tokens                                    */
 /* ────────────────────────────────────────────────────────────── */
 
-const ROOM_STATUSES: RoomDisplayStatus[] = ['VACANT', 'OCCUPIED', 'INACTIVE', 'MAINTENANCE'];
+const ROOM_STATUSES: RoomDisplayStatus[] = ['VACANT', 'OCCUPIED', 'SCHEDULED', 'INACTIVE', 'MAINTENANCE'];
 
 const STATUS_META: Record<
   RoomDisplayStatus,
@@ -75,6 +75,15 @@ const STATUS_META: Record<
     swatch: 'bg-amber-400',
     stat: 'bg-amber-50 border-amber-200',
     dot: 'bg-amber-400',
+  },
+  SCHEDULED: {
+    label: 'Scheduled',
+    description: 'Arriving today/tomorrow',
+    tile: 'border-sky-200 bg-sky-50 hover:border-sky-400 hover:shadow-md',
+    chip: 'bg-sky-100 text-sky-700 border border-sky-200',
+    swatch: 'bg-sky-400',
+    stat: 'bg-sky-50 border-sky-200',
+    dot: 'bg-sky-400',
   },
   MAINTENANCE: {
     label: 'Maintenance',
@@ -126,7 +135,7 @@ function resolveRoomDisplayStatus(
 }
 
 function createEmptySummary(): RoomCountSummary {
-  return { VACANT: 0, OCCUPIED: 0, MAINTENANCE: 0, INACTIVE: 0 };
+  return { VACANT: 0, OCCUPIED: 0, SCHEDULED: 0, MAINTENANCE: 0, INACTIVE: 0 };
 }
 
 function formatCurrency(amount: number): string {
@@ -156,84 +165,73 @@ export default function Rooms() {
     setError(null);
     try {
       const nextProperties = await propertyApi.getAll();
-      const unitResults = await Promise.all(
-        nextProperties.map(async (property) => {
-          try {
-            const units = await propertyApi.getUnits(property.id);
-            return [property.id, units] as const;
-          } catch {
-            return [property.id, []] as const;
-          }
-        }),
-      );
-      const roomResults = await Promise.all(
-        nextProperties.map(async (property) => {
-          const rooms = await roomApi.getByProperty(property.id);
-          return [property.id, rooms ?? []] as const;
-        }),
-      );
-      
+      const [unitResults, roomResults] = await Promise.all([
+        Promise.all(
+          nextProperties.map(async (property) => {
+            try {
+              const units = await propertyApi.getUnits(property.id);
+              return [property.id, units] as const;
+            } catch {
+              return [property.id, []] as const;
+            }
+          }),
+        ),
+        Promise.all(
+          nextProperties.map(async (property) => {
+            const rooms = await roomApi.getByProperty(property.id);
+            return [property.id, rooms ?? []] as const;
+          }),
+        ),
+      ]);
+
       const nextUnitsByProperty = Object.fromEntries(unitResults);
       const nextRoomsByProperty = Object.fromEntries(roomResults);
       const statusData: Record<string, RoomDisplayStatus> = {};
-      
-      const today = new Date().toISOString().split('T')[0];
-      const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
-      
-      const availabilityResults = await Promise.all(
-        nextProperties.map(async (property) => {
-          try {
-            const availability = await roomApi.searchAvailableRooms(property.id, today, tomorrow);
-            return [property.id, availability] as const;
-          } catch {
-            return [property.id, null] as const;
-          }
-        }),
-      );
-      
-      for (const [, availability] of availabilityResults) {
-        if (!availability?.availableRoomsList) continue;
-        for (const room of availability.availableRoomsList) {
-          if (room.roomId) statusData[room.roomId] = 'VACANT';
-        }
-      }
-      
-      await Promise.all(
-        nextProperties.map(async (property) => {
-          const rooms = nextRoomsByProperty[property.id] ?? [];
-          await Promise.all(
-            rooms.map(async (room) => {
-              const roomId = getRoomId(room);
-              if (!roomId || statusData[roomId]) return;
-              if (room.status === 'INACTIVE') { statusData[roomId] = 'INACTIVE'; return; }
-              if (room.status === 'IN_MAINTENANCE' || room.status === 'QUEUED_FOR_MAINTENANCE') {
-                statusData[roomId] = 'MAINTENANCE'; return;
-              }
-              try {
-                const avail: RoomAvailabilityCheckDto = await roomApi.checkRoomAvailability(roomId, today, tomorrow);
-                if (avail.isAvailable) { statusData[roomId] = 'VACANT'; return; }
-                const reason = (avail.reason || '').toUpperCase();
-                if (reason === 'INACTIVE') statusData[roomId] = 'INACTIVE';
-                else if (reason === 'IN_MAINTENANCE' || reason === 'MAINTENANCE') statusData[roomId] = 'MAINTENANCE';
-                else statusData[roomId] = 'OCCUPIED';
-              } catch {
-                statusData[roomId] = getFallbackDisplayStatus(room);
-              }
-            }),
-          );
-        }),
-      );
-      
+
+      // Base status from room hardware state
       for (const property of nextProperties) {
         for (const room of nextRoomsByProperty[property.id] ?? []) {
           const roomId = getRoomId(room);
           if (!roomId) continue;
           if (room.status === 'INACTIVE') statusData[roomId] = 'INACTIVE';
           else if (room.status === 'IN_MAINTENANCE' || room.status === 'QUEUED_FOR_MAINTENANCE') statusData[roomId] = 'MAINTENANCE';
-          else if (!statusData[roomId]) statusData[roomId] = 'VACANT';
+          else statusData[roomId] = 'VACANT';
         }
       }
-      
+
+      // Overlay booking-derived status: OCCUPIED (checked in) or SCHEDULED (arriving today/tomorrow)
+      const today = new Date().toISOString().split('T')[0];
+      const dayAfterTomorrow = new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0];
+
+      const bookingResults = await Promise.all(
+        nextProperties.map(async (property) => {
+          try {
+            const bookings = await bookingApi.getRange(property.id, today, dayAfterTomorrow);
+            return bookings ?? [];
+          } catch {
+            return [];
+          }
+        }),
+      );
+
+      for (const bookings of bookingResults) {
+        for (const booking of bookings) {
+          if (!booking.roomId) continue; // floating/unassigned bookings don't affect a room tile
+          const current = statusData[booking.roomId];
+          // Don't downgrade from INACTIVE or MAINTENANCE
+          if (current === 'INACTIVE' || current === 'MAINTENANCE') continue;
+
+          if (booking.status === 'CHECKED_IN') {
+            statusData[booking.roomId] = 'OCCUPIED';
+          } else if (
+            (booking.status === 'CONFIRMED' || booking.status === 'PENDING') &&
+            current !== 'OCCUPIED'
+          ) {
+            statusData[booking.roomId] = 'SCHEDULED';
+          }
+        }
+      }
+
       setProperties(nextProperties);
       setUnitsByProperty(nextUnitsByProperty);
       setRoomsByProperty(nextRoomsByProperty);
@@ -265,6 +263,7 @@ export default function Rooms() {
     for (const sec of propertySections) {
       s.VACANT += sec.summary.VACANT;
       s.OCCUPIED += sec.summary.OCCUPIED;
+      s.SCHEDULED += sec.summary.SCHEDULED;
       s.MAINTENANCE += sec.summary.MAINTENANCE;
       s.INACTIVE += sec.summary.INACTIVE;
     }
@@ -367,7 +366,7 @@ export default function Rooms() {
         ) : null}
 
         {/* ─── Overview Stats ─── */}
-        <div className="mt-8 grid grid-cols-5 gap-4">
+        <div className="mt-8 grid grid-cols-6 gap-4">
           <div className="flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-white py-5 text-center shadow-sm">
             <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Properties</p>
             <p className="mt-2 text-3xl font-extrabold text-slate-900">{propertySections.length}</p>
@@ -376,7 +375,7 @@ export default function Rooms() {
             <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Rooms</p>
             <p className="mt-2 text-3xl font-extrabold text-slate-900">{totalRooms}</p>
           </div>
-          {(['VACANT', 'OCCUPIED', 'INACTIVE'] as RoomDisplayStatus[]).map((s) => (
+          {(['VACANT', 'OCCUPIED', 'SCHEDULED', 'INACTIVE'] as RoomDisplayStatus[]).map((s) => (
             <div key={s} className={cn('flex flex-col items-center justify-center rounded-xl border py-5 text-center shadow-sm', STATUS_META[s].stat)}>
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{STATUS_META[s].label}</p>
               <p className="mt-2 text-3xl font-extrabold text-slate-900">{overviewSummary[s]}</p>

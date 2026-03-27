@@ -37,7 +37,6 @@ public class DatabaseSeeder {
                 
                 me.setRole(Role.ADMIN); 
                 
-                // CRITICAL: Hash the password before saving
                 me.setPassword(passwordEncoder.encode(myPassword));
 
                 userRepository.save(me);

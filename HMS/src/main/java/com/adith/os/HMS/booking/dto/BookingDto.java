@@ -76,7 +76,9 @@ public record BookingDto(
 
         int childBookingCount, // 0 for regular/child bookings
         
-        Boolean isTwinBed
+        Boolean isTwinBed,
+
+        String referenceNumber
 ) {
     // Compact constructor for validation and defaults
     public BookingDto {

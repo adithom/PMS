@@ -15,7 +15,8 @@ export interface BookingCreationDto {
   totalPrice?: number;
   paidAmount?: number;
   specialRequests?: string;
-  isTwinBed?: boolean;  
+  isTwinBed?: boolean;
+  referenceNumber?: string;
 }
 
 export interface ExtendBookingRequestDto {

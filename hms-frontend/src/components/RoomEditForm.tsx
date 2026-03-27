@@ -44,6 +44,11 @@ export default function RoomForm({ propertyId, initialRoom, units = [], onSucces
     setLoading(true);
 
     try {
+      if (!isEditMode && !formData.unitId) {
+        setError('Unit is required.');
+        return;
+      }
+
       const payload: Partial<Room> & { unitId?: string } = {
         number: formData.number,
         type: formData.type,
@@ -52,7 +57,7 @@ export default function RoomForm({ propertyId, initialRoom, units = [], onSucces
         status: formData.status as RoomStatus,
       };
 
-      if (!isEditMode && formData.unitId) {
+      if (!isEditMode) {
         payload.unitId = formData.unitId;
       }
 
@@ -80,9 +85,9 @@ export default function RoomForm({ propertyId, initialRoom, units = [], onSucces
       {/* Unit Selection (Only shown when creating a new room) */}
       {!isEditMode && (
         <label>
-          <span className={labelCls}>Unit Association</span>
-          <select className={inputCls} value={formData.unitId} onChange={(e) => handleChange('unitId', e.target.value)}>
-            <option value="">No Unit / Direct Room</option>
+          <span className={labelCls}>Unit *</span>
+          <select required className={inputCls} value={formData.unitId} onChange={(e) => handleChange('unitId', e.target.value)}>
+            <option value="">-- Select unit --</option>
             {units.map((unit) => (
               <option key={unit.id} value={unit.id}>{unit.name}</option>
             ))}
