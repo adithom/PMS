@@ -3,7 +3,5 @@ builder = "nixpacks"
 
 [deploy]
 startCommand = "java -jar target/*.jar"
-healthcheckPath = "/api/auth/login"
-healthcheckTimeout = 300
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
