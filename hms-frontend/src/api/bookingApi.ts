@@ -31,6 +31,25 @@ export interface EarlyCheckoutRequestDto {
   customRoomCharge?: number; // Optional penalty/adjusted rate, used if policy is 'CUSTOM'
 }
 
+export interface RoomShiftRequestDto {
+  newRoomId: string;
+  shiftDate: string; // Format: YYYY-MM-DD
+  newRate?: number;
+  notes?: string;
+}
+
+export interface RoomAssignmentDto {
+  id: string;
+  bookingId: string;
+  roomId: string;
+  roomNumber: string;
+  unitName: string;
+  startDate: string;
+  endDate: string;
+  status: 'SCHEDULED' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+  notes?: string;
+}
+
 const bookingApi = {
   // Get all bookings for a property
   getByProperty: (propertyId: string) =>
@@ -129,6 +148,14 @@ const bookingApi = {
   extend: (propertyId: string, bookingId: string, data: ExtendBookingRequestDto) =>
     api.post<Booking>(
       `/properties/${propertyId}/bookings/${bookingId}/extend`,
+      data
+    ),
+
+  // Shift guest to a different room (CHECKED_IN bookings only)
+  // POST /api/properties/{propertyId}/bookings/{bookingId}/shift-room
+  shiftRoom: (propertyId: string, bookingId: string, data: RoomShiftRequestDto) =>
+    api.post<RoomAssignmentDto[]>(
+      `/properties/${propertyId}/bookings/${bookingId}/shift-room`,
       data
     ),
 

@@ -337,12 +337,17 @@ export default function BookingForm({
           <div>
             <label>
               <span className={labelCls}>Room (Optional)</span>
-              <select className={inputCls} value={getRoomId(room) ?? ''} disabled={!selectedUnitId}
+              <select className={inputCls} value={getRoomId(room) ?? ''} disabled={!selectedUnitId || (isEditMode && booking?.status === 'CHECKED_IN')}
                 onChange={e => setRoom(availableRooms.find(r => getRoomId(r) === e.target.value) ?? null)}>
                 <option value="">No room / Floating inventory</option>
                 {availableRooms.map(r => <option key={getRoomId(r)} value={getRoomId(r)!}>{r.number} {r.type ? `- ${r.type}` : ''}</option>)}
               </select>
             </label>
+            {isEditMode && booking?.status === 'CHECKED_IN' && (
+              <p className="mt-2 text-xs font-semibold px-2 py-1 rounded-md inline-block bg-amber-100 text-amber-800">
+                Use "Shift Room" from the chart menu to change rooms for a checked-in guest.
+              </p>
+            )}
             {availabilityMessage && !isEditMode && selectedUnitId && (
               <p className={cn("mt-2 text-xs font-semibold px-2 py-1 rounded-md inline-block", 
                 availabilityMessage.type === 'success' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800')}>
