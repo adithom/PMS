@@ -2,6 +2,16 @@
 import api from './fetchClient';
 import type { Booking, BookingStatus } from '../types';
 
+export interface NewTravelAgentDto {
+  name: string;
+  contactPerson?: string;
+  email?: string;
+  phone?: string;
+  iataCode?: string;
+  commissionRate?: number;
+  address?: string;
+}
+
 export interface BookingCreationDto {
   roomId?: string;
   guestId: string;
@@ -17,6 +27,8 @@ export interface BookingCreationDto {
   specialRequests?: string;
   isTwinBed?: boolean;
   referenceNumber?: string;
+  travelAgentId?: string;
+  newTravelAgent?: NewTravelAgentDto;
 }
 
 export interface ExtendBookingRequestDto {

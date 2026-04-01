@@ -10,6 +10,8 @@ import com.adith.os.HMS.property.PropertyRepository;
 import com.adith.os.HMS.room.Room;
 import com.adith.os.HMS.room.RoomRepository;
 import com.adith.os.HMS.room.RoomStatus;
+import com.adith.os.HMS.travelagent.TravelAgent;
+import com.adith.os.HMS.travelagent.TravelAgentService;
 import com.adith.os.HMS.unit.Unit;
 import com.adith.os.HMS.unit.UnitRepository;
 import jakarta.transaction.Transactional;
@@ -33,6 +35,7 @@ public class GroupBookingService {
     private final BookingRepository bookingRepository;
     private final FolioRepository folioRepository;
     private final FolioService folioService;
+    private final TravelAgentService travelAgentService;
 
     public GroupBookingService(
             PropertyRepository propertyRepository,
@@ -41,7 +44,8 @@ public class GroupBookingService {
             RoomRepository roomRepository,
             BookingRepository bookingRepository,
             FolioRepository folioRepository,
-            FolioService folioService) {
+            FolioService folioService,
+            TravelAgentService travelAgentService) {
         this.propertyRepository = propertyRepository;
         this.guestRepository = guestRepository;
         this.unitRepository = unitRepository;
@@ -49,6 +53,7 @@ public class GroupBookingService {
         this.bookingRepository = bookingRepository;
         this.folioRepository = folioRepository;
         this.folioService = folioService;
+        this.travelAgentService = travelAgentService;
     }
 
     // =========================================================================
@@ -88,6 +93,10 @@ public class GroupBookingService {
         List<ValidatedRoomRequest> validated = validateAndResolveRoomRequests(
                 propertyId, dto, organizer);
 
+        // --- Resolve travel agent once for the whole group ---
+        TravelAgent travelAgent = travelAgentService.resolveOrCreate(
+                dto.travelAgentId(), dto.newTravelAgent());
+
         // ---- 1. Create the parent booking ----
         Booking parent = new Booking();
         parent.setProperty(property);
@@ -106,6 +115,10 @@ public class GroupBookingService {
         parent.setGroupMaster(true);
         if (dto.groupReference() != null) {
             parent.setGroupReference(dto.groupReference());
+        }
+        if (travelAgent != null) {
+            parent.setTravelAgent(travelAgent);
+            parent.setCommissionRate(travelAgent.getCommissionRate());
         }
         Booking savedParent = bookingRepository.save(parent);
 
@@ -143,6 +156,10 @@ public class GroupBookingService {
             child.setGroupMaster(false);
             child.setParentBooking(savedParent);
             child.setTwinBed(vr.request().isTwinBed() != null ? vr.request().isTwinBed() : false);
+            if (travelAgent != null) {
+                child.setTravelAgent(travelAgent);
+                child.setCommissionRate(travelAgent.getCommissionRate());
+            }
 
             Booking savedChild = bookingRepository.save(child);
             savedChildren.add(savedChild);

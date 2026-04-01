@@ -278,4 +278,14 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
             @Param("startDate") java.time.LocalDate startDate,
             @Param("endDate") java.time.LocalDate endDate
     );
+
+    boolean existsByTravelAgentId(UUID travelAgentId);
+
+    @Query("SELECT b FROM Booking b WHERE b.travelAgent.id = :travelAgentId ORDER BY b.checkIn DESC")
+    List<Booking> findByTravelAgentIdOrderByCheckInDesc(@Param("travelAgentId") UUID travelAgentId);
+
+    @Query("SELECT b FROM Booking b WHERE b.property.id = :propertyId AND b.travelAgent.id = :travelAgentId ORDER BY b.checkIn DESC")
+    List<Booking> findByPropertyIdAndTravelAgentIdOrderByCheckInDesc(
+            @Param("propertyId") UUID propertyId,
+            @Param("travelAgentId") UUID travelAgentId);
 }

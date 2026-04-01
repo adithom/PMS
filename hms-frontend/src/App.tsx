@@ -8,7 +8,6 @@ import LoadingSpinner from './components/LoadingSpinner';
 import { getRoutesForRole, getDefaultRouteForRole } from './config/roleConfig';
 
 // Import your page components
-import Properties from './pages/Properties';
 import Rooms from './pages/Rooms';
 import Bookings from './pages/Bookings';
 import Guests from './pages/Guests';
@@ -52,17 +51,7 @@ function AppRoutes() {
       />
 
       {/* Protected routes with role-based access */}
-      <Route
-        path="/properties"
-        element={
-          <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER']}>
-            <>
-              <Navigation allowedRoutes={allowedRoutes} />
-              <Properties />
-            </>
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/properties" element={<Navigate to="/rooms" replace />} />
 
       <Route
         path="/rooms"

@@ -32,6 +32,8 @@ import com.adith.os.HMS.roomassignment.RoomAssignment;
 import com.adith.os.HMS.roomassignment.RoomAssignmentRepository;
 import com.adith.os.HMS.roomassignment.RoomAssignmentService;
 import com.adith.os.HMS.roomassignment.RoomAssignmentStatus;
+import com.adith.os.HMS.travelagent.TravelAgent;
+import com.adith.os.HMS.travelagent.TravelAgentService;
 import com.adith.os.HMS.unit.Unit;
 import com.adith.os.HMS.unit.UnitRepository;
 
@@ -51,6 +53,7 @@ public class BookingService {
     private final FolioService folioService;
     private final RoomAssignmentService roomAssignmentService;
     private final RoomAssignmentRepository roomAssignmentRepository;
+    private final TravelAgentService travelAgentService;
 
     // Active statuses for room assignments
     private static final List<RoomAssignmentStatus> ACTIVE_ASSIGNMENT_STATUSES =
@@ -64,7 +67,8 @@ public class BookingService {
                           GuestRepository guestRepository, UnitRepository unitRepository,
                           BookingRepository bookingRepository, BookingMapper bookingMapper,
                           FolioService folioService, RoomAssignmentService roomAssignmentService,
-                          RoomAssignmentRepository roomAssignmentRepository) {
+                          RoomAssignmentRepository roomAssignmentRepository,
+                          TravelAgentService travelAgentService) {
         this.propertyRepository = propertyRepository;
         this.roomRepository = roomRepository;
         this.guestRepository = guestRepository;
@@ -74,6 +78,7 @@ public class BookingService {
         this.folioService = folioService;
         this.roomAssignmentService = roomAssignmentService;
         this.roomAssignmentRepository = roomAssignmentRepository;
+        this.travelAgentService = travelAgentService;
     }
 
     @Transactional
@@ -181,6 +186,14 @@ public class BookingService {
 
         try {
             Booking booking = bookingMapper.toEntity(bookingCreationDto, property, room, guest, unit);
+
+            TravelAgent travelAgent = travelAgentService.resolveOrCreate(
+                    bookingCreationDto.travelAgentId(), bookingCreationDto.newTravelAgent());
+            if (travelAgent != null) {
+                booking.setTravelAgent(travelAgent);
+                booking.setCommissionRate(travelAgent.getCommissionRate());
+            }
+
             Booking savedBooking = bookingRepository.save(booking);
 
             // NEW: Automatically create a Master Folio for this new booking
@@ -523,6 +536,16 @@ public class BookingService {
             booking.setTwinBed(dto.isTwinBed());
             booking.setReferenceNumber(dto.referenceNumber());
 
+            // Travel agent: null travelAgentId on PUT means remove the association
+            if (dto.travelAgentId() != null) {
+                TravelAgent agent = travelAgentService.resolveOrCreate(dto.travelAgentId(), null);
+                booking.setTravelAgent(agent);
+                booking.setCommissionRate(agent.getCommissionRate());
+            } else {
+                booking.setTravelAgent(null);
+                booking.setCommissionRate(null);
+            }
+
             // Sync dates before saving
             roomAssignmentService.syncDatesForBookingUpdate(bookingId, dto.checkIn(), dto.checkOut());
 
@@ -691,6 +714,16 @@ public class BookingService {
 
             if (dto.referenceNumber() != null) {
                 booking.setReferenceNumber(dto.referenceNumber());
+            }
+
+            // Travel agent partial update
+            if (Boolean.TRUE.equals(dto.clearTravelAgent())) {
+                booking.setTravelAgent(null);
+                booking.setCommissionRate(null);
+            } else if (dto.travelAgentId() != null) {
+                TravelAgent agent = travelAgentService.resolveOrCreate(dto.travelAgentId(), null);
+                booking.setTravelAgent(agent);
+                booking.setCommissionRate(agent.getCommissionRate());
             }
 
             if (datesChanged) {

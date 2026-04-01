@@ -37,6 +37,10 @@ public record BookingUpdateDto(
 
         Boolean isTwinBed,
 
-        String referenceNumber
+        String referenceNumber,
+
+        UUID travelAgentId,         // null = no change (PATCH) or remove agent (PUT)
+
+        Boolean clearTravelAgent    // PATCH only: if true, explicitly removes travel agent
   ) {
 }

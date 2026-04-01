@@ -62,6 +62,23 @@ export interface Booking {
   createdAt?: string;
   isTwinBed: boolean;
   referenceNumber?: string;
+  travelAgentId?: string;
+  travelAgentName?: string;
+  commissionRate?: number;
+}
+
+export interface TravelAgent {
+  id: string;
+  name: string;
+  contactPerson?: string;
+  email?: string;
+  phone?: string;
+  iataCode?: string;
+  commissionRate?: number;
+  active: boolean;
+  address?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export type BookingStatus =

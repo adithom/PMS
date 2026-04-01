@@ -1,14 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import propertyApi from '../api/propertyApi';
 import roomApi from '../api/roomApi';
+import unitApi from '../api/unitApi';
 import availabilityApi from '../api/availabilityApi';
 import type { Property, Room, UnitDto } from '../types';
+import { useAuth } from '../contexts/AuthContext';
 
 import BookingForm from "../components/Booking/BookingForm";
 import LoadingSpinner from '../components/LoadingSpinner';
 import ModalShell from '../components/ModalShell';
+import PropertyForm from '../components/PropertyForm';
 import RoomDetailsView from '../components/RoomDetailView';
 import RoomForm from '../components/RoomEditForm';
+import UnitForm from '../components/UnitForm';
 
 /* ────────────────────────────────────────────────────────────── */
 /* Types                                                        */
@@ -27,6 +31,12 @@ type RoomsDialog =
   | { type: 'delete'; selection: RoomSelection }
   | { type: 'booking'; selection: RoomSelection }
   | { type: 'add'; propertyId: string }
+  | { type: 'view_property'; property: Property }
+  | { type: 'add_property' }
+  | { type: 'edit_property'; property: Property }
+  | { type: 'delete_property'; property: Property }
+  | { type: 'add_unit'; property: Property }
+  | { type: 'edit_unit'; property: Property; unit: UnitDto }
   | null;
 
 type RoomCountSummary = Record<RoomDisplayStatus, number>;
@@ -151,14 +161,21 @@ function formatCurrency(amount: number): string {
 /* ────────────────────────────────────────────────────────────── */
 
 export default function Rooms() {
+  const { user } = useAuth();
+  const isManager = user?.role === 'ADMIN' || user?.role === 'MANAGER';
+
   const [properties, setProperties] = useState<Property[]>([]);
   const [roomsByProperty, setRoomsByProperty] = useState<Record<string, Room[]>>({});
   const [roomDisplayStatus, setRoomDisplayStatus] = useState<Record<string, RoomDisplayStatus>>({});
   const [unitsByProperty, setUnitsByProperty] = useState<Record<string, UnitDto[]>>({});
-  
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<RoomsDialog>(null);
+
+  const [unitsForManage, setUnitsForManage] = useState<UnitDto[]>([]);
+  const [loadingUnitsManage, setLoadingUnitsManage] = useState(false);
+  const [unitsManageError, setUnitsManageError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -300,6 +317,14 @@ export default function Rooms() {
   const selectedRoom = dialog && 'selection' in dialog ? dialog.selection : null;
   const selectedRoomStatus = selectedRoom ? resolveRoomDisplayStatus(selectedRoom.room, roomDisplayStatus) : null;
 
+  const managedProperty =
+    dialog?.type === 'view_property' ? dialog.property :
+    dialog?.type === 'edit_property' ? dialog.property :
+    dialog?.type === 'delete_property' ? dialog.property :
+    dialog?.type === 'add_unit' ? dialog.property :
+    dialog?.type === 'edit_unit' ? dialog.property :
+    null;
+
   // Generate today/tomorrow dynamically for new bookings
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
   const tomorrowStr = useMemo(() => new Date(Date.now() + 86400000).toISOString().split('T')[0], []);
@@ -319,6 +344,66 @@ export default function Rooms() {
       setDialog(null);
       await loadData();
     } catch (err) { setError((err as Error).message); }
+  };
+
+  const loadUnitsForManage = async (propertyId: string) => {
+    setLoadingUnitsManage(true);
+    setUnitsManageError(null);
+    try {
+      const units = await propertyApi.getUnits(propertyId);
+      setUnitsForManage(units || []);
+    } catch {
+      setUnitsForManage([]);
+      setUnitsManageError('Failed to load units');
+    } finally {
+      setLoadingUnitsManage(false);
+    }
+  };
+
+  const handleManageProperty = (property: Property) => {
+    setDialog({ type: 'view_property', property });
+    void loadUnitsForManage(property.id);
+  };
+
+  const handleSaveProperty = async (data: Partial<Property>) => {
+    try {
+      if (dialog?.type === 'edit_property') {
+        await propertyApi.update(dialog.property.id, data);
+      } else {
+        await propertyApi.create(data);
+      }
+      setDialog(null);
+      await loadData();
+    } catch (err: any) {
+      alert(`Failed to save: ${err.message}`);
+    }
+  };
+
+  const handleDeleteProperty = async () => {
+    if (dialog?.type !== 'delete_property') return;
+    try {
+      await propertyApi.delete(dialog.property.id);
+      setDialog(null);
+      await loadData();
+    } catch (err: any) {
+      alert(`Failed to delete: ${err.message}`);
+    }
+  };
+
+  const handleSaveUnit = async (data: { name: string; sortOrder: number }) => {
+    if (dialog?.type !== 'add_unit' && dialog?.type !== 'edit_unit') return;
+    const prop = dialog.property;
+    try {
+      if (dialog.type === 'edit_unit') {
+        await unitApi.partialUpdate(prop.id, dialog.unit.id, data);
+      } else {
+        await unitApi.create(prop.id, data);
+      }
+      setDialog({ type: 'view_property', property: prop });
+      await loadUnitsForManage(prop.id);
+    } catch (err: any) {
+      alert(`Failed to save unit: ${err.message}`);
+    }
   };
 
   if (loading) {
@@ -349,9 +434,9 @@ export default function Rooms() {
         {/* ─── Page Header ─── */}
         <div className="flex flex-col items-center gap-4 text-center">
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-emerald-600">Front Desk</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-emerald-600">Administration</p>
             <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
-              Rooms &amp; Inventory
+              Inventory
             </h1>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-3">
@@ -366,6 +451,11 @@ export default function Rooms() {
               </svg>
               Refresh
             </button>
+            {isManager && (
+              <button type="button" className={btnPrimary} onClick={() => setDialog({ type: 'add_property' })}>
+                + Add Property
+              </button>
+            )}
           </div>
         </div>
 
@@ -432,9 +522,16 @@ export default function Rooms() {
                     </span>
                   </div>
                 </div>
-                <button type="button" className={cn(btnPrimary, 'shrink-0 self-start sm:self-center')} onClick={() => handleAddRoom(property.id)}>
-                  + Add Room
-                </button>
+                <div className="flex shrink-0 items-center gap-2 self-start sm:self-center">
+                  {isManager && (
+                    <button type="button" className={btnSecondary} onClick={() => handleManageProperty(property)}>
+                      Manage
+                    </button>
+                  )}
+                  <button type="button" className={btnPrimary} onClick={() => handleAddRoom(property.id)}>
+                    + Add Room
+                  </button>
+                </div>
               </div>
 
               <div className="px-6 py-6 sm:px-8">
@@ -573,6 +670,133 @@ export default function Rooms() {
           </div>
         </ModalShell>
       ) : null}
+
+      {/* ── Property Management Modals (ADMIN/MANAGER only) ── */}
+
+      {dialog?.type === 'view_property' && managedProperty && (
+        <ModalShell title={managedProperty.name} subtitle={managedProperty.code} onClose={() => setDialog(null)}>
+          <div className="space-y-6">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4 sm:col-span-3">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Address</p>
+                <p className="mt-1 text-sm font-medium text-slate-900">{managedProperty.address || 'Not specified'}</p>
+              </div>
+              <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4 sm:col-span-2">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Country</p>
+                <p className="mt-1 text-sm font-semibold text-slate-900">{managedProperty.country}</p>
+              </div>
+              <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total Rooms</p>
+                <p className="mt-1 text-lg font-bold text-slate-900">{managedProperty.totalRooms}</p>
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <h3 className="text-sm font-bold tracking-tight text-slate-900">
+                  Units ({unitsForManage.length})
+                </h3>
+                <button type="button" onClick={() => setDialog({ type: 'add_unit', property: managedProperty })}
+                  className="text-xs font-bold text-emerald-600 hover:text-emerald-700">
+                  + Add Unit
+                </button>
+              </div>
+              <div className="mt-3 space-y-2">
+                {loadingUnitsManage ? (
+                  <p className="animate-pulse py-4 text-xs text-slate-400">Loading units...</p>
+                ) : unitsManageError ? (
+                  <div className="rounded-lg border border-rose-200 bg-rose-50 py-4 text-center">
+                    <p className="text-xs font-medium text-rose-600">{unitsManageError}</p>
+                  </div>
+                ) : unitsForManage.length === 0 ? (
+                  <div className="rounded-lg border-2 border-dashed border-slate-100 py-6 text-center">
+                    <p className="text-xs font-medium text-slate-400">No units configured yet.</p>
+                  </div>
+                ) : (
+                  unitsForManage.map((unit) => (
+                    <button key={unit.id} type="button"
+                      onClick={() => setDialog({ type: 'edit_unit', property: managedProperty, unit })}
+                      className="group flex w-full items-center justify-between rounded-xl border border-slate-100 bg-white p-3 text-left transition-all hover:border-slate-300 hover:bg-slate-50">
+                      <div>
+                        <p className="text-sm font-bold text-slate-900">{unit.name}</p>
+                        <p className="mt-0.5 text-[11px] font-medium text-slate-400">
+                          Order: {unit.sortOrder} &nbsp;•&nbsp; Rooms: {unit.totalRooms}
+                        </p>
+                      </div>
+                      <div className="text-slate-300 group-hover:text-slate-600">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                        </svg>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap justify-between gap-3 border-t border-slate-100 pt-4">
+              <button type="button" className={btnDanger}
+                onClick={() => setDialog({ type: 'delete_property', property: managedProperty })}>
+                Delete Property
+              </button>
+              <button type="button" className={btnPrimary}
+                onClick={() => setDialog({ type: 'edit_property', property: managedProperty })}>
+                Edit Property Info
+              </button>
+            </div>
+          </div>
+        </ModalShell>
+      )}
+
+      {(dialog?.type === 'add_property' || dialog?.type === 'edit_property') && (
+        <ModalShell
+          title={dialog.type === 'add_property' ? 'Add New Property' : `Edit ${dialog.property.name}`}
+          onClose={() => setDialog(null)}
+        >
+          <PropertyForm
+            property={dialog.type === 'edit_property' ? dialog.property : null}
+            onSave={handleSaveProperty}
+            onCancel={() => setDialog(null)}
+          />
+        </ModalShell>
+      )}
+
+      {(dialog?.type === 'add_unit' || dialog?.type === 'edit_unit') && managedProperty && (
+        <ModalShell
+          title={dialog.type === 'add_unit' ? 'Add New Unit' : `Edit ${dialog.unit.name}`}
+          subtitle={managedProperty.name}
+          onClose={() => setDialog({ type: 'view_property', property: managedProperty })}
+        >
+          <UnitForm
+            propertyId={managedProperty.id}
+            unit={dialog.type === 'edit_unit' ? dialog.unit : null}
+            onSave={handleSaveUnit}
+            onCancel={() => setDialog({ type: 'view_property', property: managedProperty })}
+          />
+        </ModalShell>
+      )}
+
+      {dialog?.type === 'delete_property' && managedProperty && (
+        <ModalShell
+          title={`Delete ${managedProperty.name}?`}
+          onClose={() => setDialog({ type: 'view_property', property: managedProperty })}
+        >
+          <div className="space-y-5">
+            <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm leading-6 text-rose-800">
+              <strong>Warning:</strong> This action cannot be undone. You are permanently removing this property and all its associations.
+            </div>
+            <div className="flex justify-end gap-3">
+              <button type="button" className={btnSecondary}
+                onClick={() => setDialog({ type: 'view_property', property: managedProperty })}>
+                Cancel
+              </button>
+              <button type="button" className={btnDanger} onClick={handleDeleteProperty}>
+                Confirm Deletion
+              </button>
+            </div>
+          </div>
+        </ModalShell>
+      )}
     </div>
   );
 }

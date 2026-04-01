@@ -2,9 +2,10 @@ import React, { useEffect, useState } from 'react';
 import propertyApi from '../../api/propertyApi';
 import guestApi from '../../api/guestApi';
 import bookingApi, { type BookingCreationDto } from '../../api/bookingApi';
+import travelAgentApi from '../../api/travelAgentApi';
 import roomApi from '../../api/roomApi';
 import availabilityApi from '../../api/availabilityApi';
-import type { Property, Room, UnitDto, Booking } from '../../types';
+import type { Property, Room, UnitDto, Booking, TravelAgent } from '../../types';
 
 /* ────────────────────────────────────────────────────────────── */
 /* Types & Tokens                                               */
@@ -98,6 +99,22 @@ export default function BookingForm({
   const [newGuestEmail, setNewGuestEmail] = useState<string>('');
   const [newGuestPhone, setNewGuestPhone] = useState<string>('');
   const [newGuestDocId, setNewGuestDocId] = useState<string>('');
+
+  // ── Travel Agent State ──
+  const [agentSectionOpen, setAgentSectionOpen] = useState<boolean>(
+    !!(booking?.travelAgentId)
+  );
+  const [agentQuery, setAgentQuery] = useState<string>(booking?.travelAgentName ?? '');
+  const [agentResults, setAgentResults] = useState<TravelAgent[]>([]);
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(booking?.travelAgentId ?? null);
+  const [selectedAgentName, setSelectedAgentName] = useState<string>(booking?.travelAgentName ?? '');
+  const [creatingAgent, setCreatingAgent] = useState<boolean>(false);
+  const [newAgentName, setNewAgentName] = useState<string>('');
+  const [newAgentContactPerson, setNewAgentContactPerson] = useState<string>('');
+  const [newAgentEmail, setNewAgentEmail] = useState<string>('');
+  const [newAgentPhone, setNewAgentPhone] = useState<string>('');
+  const [newAgentIataCode, setNewAgentIataCode] = useState<string>('');
+  const [newAgentCommissionRate, setNewAgentCommissionRate] = useState<string>('');
 
   // ── UI State ──
   const [loading, setLoading] = useState<boolean>(false);
@@ -238,6 +255,17 @@ export default function BookingForm({
     return () => { mounted = false; };
   }, [guestQuery, isEditMode]);
 
+  // Travel Agent Search Effect
+  useEffect(() => {
+    if (!agentQuery || agentQuery.length < 2 || selectedAgentId) return;
+    let mounted = true;
+    travelAgentApi.search(agentQuery).then(raw => {
+      if (!mounted) return;
+      setAgentResults(raw || []);
+    }).catch(() => setAgentResults([]));
+    return () => { mounted = false; };
+  }, [agentQuery, selectedAgentId]);
+
   /* ═══════════════════════════════════════════════════════════ */
   /* Submission                                                  */
   /* ═══════════════════════════════════════════════════════════ */
@@ -278,6 +306,25 @@ export default function BookingForm({
       if (!finalGuestId) throw new Error('Please select or create a guest.');
       if (!checkIn || !checkOut || new Date(checkOut) <= new Date(checkIn)) throw new Error('Valid dates required.');
 
+      // Resolve travel agent for payload
+      let travelAgentPayload: Pick<BookingCreationDto, 'travelAgentId' | 'newTravelAgent'> = {};
+      if (agentSectionOpen) {
+        if (selectedAgentId) {
+          travelAgentPayload = { travelAgentId: selectedAgentId };
+        } else if (creatingAgent && newAgentName.trim()) {
+          travelAgentPayload = {
+            newTravelAgent: {
+              name: newAgentName.trim(),
+              contactPerson: newAgentContactPerson.trim() || undefined,
+              email: newAgentEmail.trim() || undefined,
+              phone: newAgentPhone.trim() || undefined,
+              iataCode: newAgentIataCode.trim() || undefined,
+              commissionRate: newAgentCommissionRate ? Number(newAgentCommissionRate) : undefined,
+            }
+          };
+        }
+      }
+
       const payload: BookingCreationDto = {
         roomId: getRoomId(room) ?? undefined,
         guestId: finalGuestId,
@@ -285,7 +332,8 @@ export default function BookingForm({
         status: status as any,
         checkIn, checkOut, adults, children, currency, totalPrice, paidAmount, specialRequests,
         isTwinBed,
-        referenceNumber: referenceNumber || undefined
+        referenceNumber: referenceNumber || undefined,
+        ...travelAgentPayload
       };
 
       const result = (isEditMode && booking?.id) 
@@ -422,6 +470,127 @@ export default function BookingForm({
             )}
             {selectedGuestId && <span className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">✓ Guest Attached</span>}
           </div>
+        )}
+      </div>
+
+      {/* ── Travel Agent ── */}
+      <div className="space-y-4 rounded-xl border border-slate-100 bg-white p-5 shadow-sm">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+          <div>
+            <h4 className="text-sm font-bold tracking-tight text-slate-900">Travel Agent</h4>
+            {!agentSectionOpen && <p className="text-xs text-slate-400 mt-0.5">Optional — leave blank if direct booking</p>}
+          </div>
+          {!agentSectionOpen ? (
+            <button type="button" onClick={() => setAgentSectionOpen(true)}
+              className="text-xs font-bold text-emerald-600 hover:text-emerald-700">
+              + Add Travel Agent
+            </button>
+          ) : (
+            <button type="button" onClick={() => {
+              setAgentSectionOpen(false);
+              setSelectedAgentId(null); setSelectedAgentName(''); setAgentQuery('');
+              setAgentResults([]); setCreatingAgent(false);
+              setNewAgentName(''); setNewAgentContactPerson(''); setNewAgentEmail('');
+              setNewAgentPhone(''); setNewAgentIataCode(''); setNewAgentCommissionRate('');
+            }} className="text-xs font-medium text-slate-400 hover:text-rose-500">
+              Remove
+            </button>
+          )}
+        </div>
+
+        {agentSectionOpen && (
+          <>
+            {creatingAgent ? (
+              <div className="space-y-4 rounded-lg border border-emerald-100 bg-emerald-50/30 p-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label><span className={labelCls}>Agency Name *</span>
+                    <input className={inputCls} value={newAgentName} onChange={e => setNewAgentName(e.target.value)} placeholder="e.g. Cox & Kings" /></label>
+                  <label><span className={labelCls}>Contact Person</span>
+                    <input className={inputCls} value={newAgentContactPerson} onChange={e => setNewAgentContactPerson(e.target.value)} /></label>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label><span className={labelCls}>Email</span>
+                    <input type="email" className={inputCls} value={newAgentEmail} onChange={e => setNewAgentEmail(e.target.value)} /></label>
+                  <label><span className={labelCls}>Phone</span>
+                    <input className={inputCls} value={newAgentPhone} onChange={e => setNewAgentPhone(e.target.value)} /></label>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label><span className={labelCls}>IATA Code</span>
+                    <input className={inputCls} value={newAgentIataCode} onChange={e => setNewAgentIataCode(e.target.value)} placeholder="e.g. 12345678" /></label>
+                  <label><span className={labelCls}>Commission Rate (%)</span>
+                    <input type="number" min={0} max={100} step={0.01} className={inputCls}
+                      value={newAgentCommissionRate} onChange={e => setNewAgentCommissionRate(e.target.value)} placeholder="e.g. 10" /></label>
+                </div>
+                <div className="flex justify-end gap-2 pt-2">
+                  <button type="button" onClick={() => setCreatingAgent(false)} className={btnSecondary}>Cancel</button>
+                  <button type="button" disabled={!newAgentName.trim()}
+                    onClick={async () => {
+                      setLoading(true); setError(null);
+                      try {
+                        const created = await travelAgentApi.create({
+                          name: newAgentName.trim(),
+                          contactPerson: newAgentContactPerson.trim() || undefined,
+                          email: newAgentEmail.trim() || undefined,
+                          phone: newAgentPhone.trim() || undefined,
+                          iataCode: newAgentIataCode.trim() || undefined,
+                          commissionRate: newAgentCommissionRate ? Number(newAgentCommissionRate) : undefined,
+                        });
+                        setSelectedAgentId(created.id);
+                        setSelectedAgentName(created.name);
+                        setAgentQuery(created.name);
+                        setCreatingAgent(false);
+                      } catch (err: any) {
+                        setError(err.message || 'Failed to create travel agent');
+                      } finally { setLoading(false); }
+                    }}
+                    className={btnPrimary}>
+                    {loading ? 'Saving...' : 'Save Agent'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="relative">
+                {!selectedAgentId && (
+                  <div className="flex items-center justify-between mb-2">
+                    <span className={labelCls} style={{ marginBottom: 0 }}>Search Existing Agent</span>
+                    <button type="button" onClick={() => { setCreatingAgent(true); setAgentQuery(''); setAgentResults([]); }}
+                      className="text-xs font-bold text-emerald-600 hover:text-emerald-700">
+                      + New Agent
+                    </button>
+                  </div>
+                )}
+                {selectedAgentId ? (
+                  <div className="flex items-center justify-between rounded-lg border border-emerald-100 bg-emerald-50/50 px-3 py-2">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
+                      ✓ {selectedAgentName}
+                    </span>
+                    <button type="button" onClick={() => {
+                      setSelectedAgentId(null); setSelectedAgentName(''); setAgentQuery(''); setAgentResults([]);
+                    }} className="text-xs text-slate-400 hover:text-rose-500 font-medium">Change</button>
+                  </div>
+                ) : (
+                  <>
+                    <input className={inputCls} placeholder="Type agency name or IATA code..." value={agentQuery}
+                      onChange={e => { setAgentQuery(e.target.value); setSelectedAgentId(null); }} />
+                    {agentResults.length > 0 && (
+                      <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
+                        {agentResults.map(a => (
+                          <button key={a.id} type="button"
+                            onClick={() => { setSelectedAgentId(a.id); setSelectedAgentName(a.name); setAgentQuery(a.name); setAgentResults([]); }}
+                            className="flex w-full flex-col items-start px-4 py-3 text-left hover:bg-slate-50 border-b border-slate-100 last:border-0">
+                            <span className="font-semibold text-slate-900">{a.name}</span>
+                            <span className="text-xs text-slate-500">
+                              {[a.iataCode, a.email, a.phone].filter(Boolean).join(' · ') || 'No contact info'}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
 

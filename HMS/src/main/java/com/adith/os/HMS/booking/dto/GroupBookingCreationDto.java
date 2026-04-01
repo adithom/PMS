@@ -1,6 +1,7 @@
 package com.adith.os.HMS.booking.dto;
 
 import com.adith.os.HMS.booking.BookingStatus;
+import com.adith.os.HMS.travelagent.dto.TravelAgentCreationDto;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -50,11 +51,19 @@ public record GroupBookingCreationDto(
          * SEPARATE  - each room pays its own folio independently (default)
          * CONSOLIDATED - all child folios are routed to the organizer's master folio
          */
-        GroupBillingMode billingMode
+        GroupBillingMode billingMode,
+
+        UUID travelAgentId,          // Optional — reference an existing travel agent
+
+        @Valid
+        TravelAgentCreationDto newTravelAgent  // Optional — create a new travel agent inline
 ) {
     public GroupBookingCreationDto {
         if (currency == null || currency.isBlank()) currency = "INR";
         if (billingMode == null) billingMode = GroupBillingMode.SEPARATE;
+        if (travelAgentId != null && newTravelAgent != null) {
+            throw new IllegalArgumentException("Provide either travelAgentId OR newTravelAgent, not both");
+        }
     }
 
     public enum GroupBillingMode {
