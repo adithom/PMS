@@ -78,7 +78,11 @@ public record BookingDto(
         
         Boolean isTwinBed,
 
-        String referenceNumber
+        String referenceNumber,
+
+        UUID travelAgentId,
+        String travelAgentName,
+        BigDecimal commissionRate
 ) {
     // Compact constructor for validation and defaults
     public BookingDto {

@@ -74,7 +74,10 @@ public class BookingMapper {
                 booking.isGroupMaster(),
                 booking.getChildBookings() != null ? booking.getChildBookings().size() : 0,
                 booking.isTwinBed(),
-                booking.getReferenceNumber()
+                booking.getReferenceNumber(),
+                booking.getTravelAgent() != null ? booking.getTravelAgent().getId() : null,
+                booking.getTravelAgent() != null ? booking.getTravelAgent().getName() : null,
+                booking.getCommissionRate()
         );
     }
 

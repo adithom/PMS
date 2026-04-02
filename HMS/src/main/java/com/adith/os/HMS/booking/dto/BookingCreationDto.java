@@ -1,6 +1,8 @@
 package com.adith.os.HMS.booking.dto;
 
 import com.adith.os.HMS.booking.BookingStatus;
+import com.adith.os.HMS.travelagent.dto.TravelAgentCreationDto;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 
 import java.math.BigDecimal;
@@ -46,7 +48,12 @@ public record BookingCreationDto(
 
         Boolean isTwinBed,
 
-        String referenceNumber       // Optional external booking engine reference
+        String referenceNumber,      // Optional external booking engine reference
+
+        UUID travelAgentId,          // Optional — reference an existing travel agent
+
+        @Valid
+        TravelAgentCreationDto newTravelAgent  // Optional — create a new travel agent inline
 
 ) {
     public BookingCreationDto {
@@ -67,6 +74,9 @@ public record BookingCreationDto(
         }
         if (paidAmount == null) {
             paidAmount = BigDecimal.ZERO;
+        }
+        if (travelAgentId != null && newTravelAgent != null) {
+            throw new IllegalArgumentException("Provide either travelAgentId OR newTravelAgent, not both");
         }
     }
 }

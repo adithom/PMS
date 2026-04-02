@@ -6,6 +6,7 @@ import com.adith.os.HMS.guest.Guest;
 import com.adith.os.HMS.property.Property;
 import com.adith.os.HMS.room.Room;
 import com.adith.os.HMS.roomassignment.RoomAssignment;
+import com.adith.os.HMS.travelagent.TravelAgent;
 import com.adith.os.HMS.unit.Unit;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
@@ -112,6 +113,13 @@ public class Booking {
 
     @Column(name = "reference_number", length = 100)
     private String referenceNumber;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "travel_agent_id")
+    private TravelAgent travelAgent;
+
+    @Column(name = "commission_rate", precision = 5, scale = 2)
+    private BigDecimal commissionRate;
 
     @PrePersist
     protected void onCreate() {
@@ -292,6 +300,12 @@ public class Booking {
 
     public String getReferenceNumber() { return referenceNumber; }
     public void setReferenceNumber(String referenceNumber) { this.referenceNumber = referenceNumber; }
+
+    public TravelAgent getTravelAgent() { return travelAgent; }
+    public void setTravelAgent(TravelAgent travelAgent) { this.travelAgent = travelAgent; }
+
+    public BigDecimal getCommissionRate() { return commissionRate; }
+    public void setCommissionRate(BigDecimal commissionRate) { this.commissionRate = commissionRate; }
 
     // Calculated fields - these compute values dynamically
 
