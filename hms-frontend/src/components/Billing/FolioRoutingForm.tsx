@@ -217,7 +217,7 @@ export default function FolioRoutingForm({ propertyId, folioId, charges, currenc
                       />
                     </td>
                     <td className="p-3 text-slate-600">
-                      {new Date(charge.chargeDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      {new Date(charge.chargeDate + 'T00:00:00').toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' }).replace(/\//g, '-')}
                     </td>
                     <td className="p-3">
                       <span className="block font-medium text-slate-900">{charge.description || charge.chargeCode}</span>

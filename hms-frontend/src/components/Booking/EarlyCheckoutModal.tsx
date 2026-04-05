@@ -20,7 +20,7 @@ export default function EarlyCheckoutModal({ propertyId, bookingId, onClose, onS
 
   // Form State
   const [newCheckOutDate, setNewCheckOutDate] = useState<string>(
-    new Date().toISOString().split('T')[0] // Default to today
+    new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) // Default to today in IST
   );
   const [policy, setPolicy] = useState<PolicyType>('REFUND_UNUSED_NIGHTS');
   const [customRoomCharge, setCustomRoomCharge] = useState<number | ''>('');
@@ -32,7 +32,7 @@ export default function EarlyCheckoutModal({ propertyId, bookingId, onClose, onS
         setBooking(data);
         // If today is somehow after the original checkout, cap it.
         const originalOut = data.checkOut.split('T')[0];
-        const today = new Date().toISOString().split('T')[0];
+        const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
         setNewCheckOutDate(today < originalOut ? today : originalOut);
       })
       .catch(() => setError('Failed to load booking details.'))
@@ -101,7 +101,7 @@ export default function EarlyCheckoutModal({ propertyId, bookingId, onClose, onS
           <div className="flex items-center justify-between mb-4">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Original Checkout</p>
-              <p className="font-semibold text-slate-700">{new Date(originalCheckOut).toLocaleDateString()}</p>
+              <p className="font-semibold text-slate-700">{new Date(originalCheckOut + 'T00:00:00').toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' }).replace(/\//g, '-')}</p>
             </div>
             <div className="text-slate-300">→</div>
             <div className="text-right">

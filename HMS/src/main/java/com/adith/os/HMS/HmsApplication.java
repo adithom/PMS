@@ -6,6 +6,8 @@ import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfi
 import org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
+import java.util.TimeZone;
+
 @SpringBootApplication(exclude = {
         SecurityAutoConfiguration.class,
         UserDetailsServiceAutoConfiguration.class
@@ -14,6 +16,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 public class HmsApplication {
 
 	public static void main(String[] args) {
+		TimeZone.setDefault(TimeZone.getTimeZone("Asia/Kolkata"));
 		SpringApplication.run(HmsApplication.class, args);
 	}
 

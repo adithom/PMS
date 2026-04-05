@@ -20,7 +20,7 @@ interface ChargeFormProps {
 export default function ChargeForm({ propertyId, folioId, onSuccess, onCancel }: ChargeFormProps) {
   const [formData, setFormData] = useState<Partial<ChargeCreationDto>>({
     chargeCode: 'MISC',
-    chargeDate: new Date().toISOString().split('T')[0], // YYYY-MM-DD
+    chargeDate: new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }), // YYYY-MM-DD (IST)
     description: '',
     unitPrice: 0,
     quantity: 1,

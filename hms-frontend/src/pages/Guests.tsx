@@ -51,7 +51,8 @@ const getStatusColor = (status: string) => {
 };
 
 const formatDate = (dateStr: string) => {
-  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return new Date(dateStr.includes('T') ? dateStr : dateStr + 'T00:00:00')
+    .toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' }).replace(/\//g, '-');
 };
 
 /* ────────────────────────────────────────────────────────────── */

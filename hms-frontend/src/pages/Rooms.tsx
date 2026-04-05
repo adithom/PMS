@@ -218,8 +218,8 @@ export default function Rooms() {
 
       // Overlay booking-derived status using the occupancy report API
       // which returns BookedRoomDto with roomId + bookingStatus
-      const today = new Date().toISOString().split('T')[0];
-      const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+      const tomorrow = new Date(Date.now() + 86400000).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 
       const [todayReports, tomorrowReports] = await Promise.all([
         Promise.all(
@@ -326,8 +326,8 @@ export default function Rooms() {
     null;
 
   // Generate today/tomorrow dynamically for new bookings
-  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
-  const tomorrowStr = useMemo(() => new Date(Date.now() + 86400000).toISOString().split('T')[0], []);
+  const todayStr = useMemo(() => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }), []);
+  const tomorrowStr = useMemo(() => new Date(Date.now() + 86400000).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }), []);
 
   const handleRefresh = () => void loadData();
   const handleRoomClick = (room: Room, propertyId: string) => setDialog({ type: 'actions', selection: { room, propertyId } });
