@@ -57,7 +57,7 @@ export default function FrontDeskBillingManager({ propertyId }: FrontDeskBilling
       const mappedFolios: FrontDeskFolio[] = (response || []).map((f, i) => ({
         ...f,
         roomNumber: f.folioType === 'MASTER' ? 'GROUP' : `${101 + i}`, // Dummy room number
-        checkoutDate: new Date().toISOString() // Dummy checkout date (Today)
+        checkoutDate: new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) // Dummy checkout date (Today in IST)
       }));
 
       setFolios(mappedFolios);
@@ -80,7 +80,7 @@ export default function FrontDeskBillingManager({ propertyId }: FrontDeskBilling
   /* ═══════════════════════════════════════════════════════════ */
 
   const HIGH_BALANCE_THRESHOLD = 50000;
-  const todayDateString = new Date().toISOString().split('T')[0];
+  const todayDateString = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 
   const metrics = useMemo(() => {
     let departingWithBalance = 0;

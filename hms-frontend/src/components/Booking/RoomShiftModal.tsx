@@ -30,10 +30,7 @@ export default function RoomShiftModal({ propertyId, booking, onClose, onSuccess
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  const today = (() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  })();
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   const checkOutStr = booking.checkOut.split('T')[0];
   // day before checkout — computed with local date parts to avoid UTC offset issues
   const maxShiftDate = (() => {

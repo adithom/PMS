@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Service
 public class NightAuditService {
@@ -33,13 +34,16 @@ public class NightAuditService {
     private final RoomAssignmentRepository roomAssignmentRepository;
     private final FolioService folioService;
     private final BookingRepository bookingRepository;
+    private final NightAuditLogRepository nightAuditLogRepository;
 
     public NightAuditService(RoomAssignmentRepository roomAssignmentRepository,
                              FolioService folioService,
-                             BookingRepository bookingRepository) {
+                             BookingRepository bookingRepository,
+                             NightAuditLogRepository nightAuditLogRepository) {
         this.roomAssignmentRepository = roomAssignmentRepository;
         this.folioService = folioService;
         this.bookingRepository = bookingRepository;
+        this.nightAuditLogRepository = nightAuditLogRepository;
     }
 
     /**
@@ -61,9 +65,11 @@ public class NightAuditService {
     @Transactional
     public NightAuditResultDto runNightAuditForDate(LocalDate chargeDate) {
         log.info("Night Audit (Manual): Running for date {}", chargeDate);
-        NightAuditResultDto result = runNightAuditInternal(chargeDate, true);
+        AtomicReference<String> firstError = new AtomicReference<>();
+        NightAuditResultDto result = runNightAuditInternal(chargeDate, true, firstError);
         log.info("Night Audit (Manual): Completed for {}. Posted: {}, Skipped: {}, Errors: {}",
                 chargeDate, result.chargesPosted(), result.chargesSkipped(), result.errors());
+        saveLog(chargeDate, "MANUAL", result, firstError.get());
         return result;
     }
 
@@ -73,16 +79,32 @@ public class NightAuditService {
 
         log.info("--- STARTING FULL NIGHT AUDIT FOR {} ---", auditDate);
 
-        NightAuditResultDto result = runNightAuditInternal(auditDate, false);
+        AtomicReference<String> firstError = new AtomicReference<>();
+        NightAuditResultDto result = runNightAuditInternal(auditDate, false, firstError);
         performInventoryRollover(businessDate);
 
         log.info("--- COMPLETED FULL NIGHT AUDIT FOR {}. Posted: {}, Skipped: {}, Errors: {} ---",
                 auditDate, result.chargesPosted(), result.chargesSkipped(), result.errors());
 
+        saveLog(auditDate, "AUTO", result, firstError.get());
         return result;
     }
 
-    private NightAuditResultDto runNightAuditInternal(LocalDate chargeDate, boolean manualRun) {
+    private void saveLog(LocalDate auditDate, String runType, NightAuditResultDto result, String errorSummary) {
+        try {
+            nightAuditLogRepository.save(new NightAuditLog(
+                    auditDate, runType,
+                    result.totalAssignments(), result.chargesPosted(),
+                    result.chargesSkipped(), result.errors(),
+                    errorSummary
+            ));
+        } catch (Exception e) {
+            log.error("Night Audit: Failed to persist audit log for {}: {}", auditDate, e.getMessage());
+        }
+    }
+
+    private NightAuditResultDto runNightAuditInternal(LocalDate chargeDate, boolean manualRun,
+                                                      AtomicReference<String> firstError) {
         List<RoomAssignment> assignments = roomAssignmentRepository.findAssignmentsForDate(
                 chargeDate, CHARGEABLE_ASSIGNMENT_STATUSES);
 
@@ -155,13 +177,12 @@ public class NightAuditService {
                 );
 
                 chargesPosted++;
-                if (!manualRun) {
-                    log.debug("Night Audit: Posted room rent charge for booking {} room {} on {}",
-                            booking.getId(), room.getNumber(), chargeDate);
-                }
+                log.info("Night Audit{}: Posted room rent charge for booking {} room {} on {}",
+                        manualRun ? " (Manual)" : "", booking.getId(), room.getNumber(), chargeDate);
 
             } catch (Exception e) {
                 errors++;
+                firstError.compareAndSet(null, e.getMessage());
                 log.error("Night Audit{}: Error posting charge for assignment {}: {}",
                         manualRun ? " (Manual)" : "",
                         assignment.getId(), e.getMessage(), e);

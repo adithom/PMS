@@ -13,7 +13,7 @@ import TaskListModal from '../components/Booking/TaskListModal';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ModalShell from '../components/ModalShell';
 import type { Property, Room, Booking } from '../types';
-import { toDS, addDays, diffDays, shortDate, dayLabel, dateStr } from '../utils/dateHelpers';
+import { toDS, addDays, diffDays, shortDate, dayLabel, dateStr, fmtDate } from '../utils/dateHelpers';
 import { getRoomId } from '../utils/roomHelpers';
 import {
   CELL_W, CELL_H, LABEL_W, MIN_CHART_ROWS,
@@ -100,7 +100,7 @@ function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout, onEdit
           <span className="text-[11px] text-slate-400">Room {booking.roomNumber || '—'}</span>
         </div>
         <p className="mt-1.5 text-[11px] text-slate-500">
-          {dateStr(booking.checkIn)} → {dateStr(booking.checkOut)}
+          {fmtDate(booking.checkIn)} → {fmtDate(booking.checkOut)}
         </p>
       </div>
       <div className="py-1">
@@ -460,7 +460,7 @@ export default function Bookings() {
                         onClick={() => setSelectedDate(d)}>
                         <span className={cn('text-[10px] font-semibold', isT ? 'text-blue-600' : 'text-slate-400')}>{dayLabel(d)}</span>
                         <span className={cn('text-sm font-bold', isT ? 'text-blue-700' : 'text-slate-700')}>{d.getDate()}</span>
-                        <span className="text-[9px] text-slate-400">{d.toLocaleDateString('en-US', { month: 'short' })}</span>
+                        <span className="text-[9px] text-slate-400">{d.toLocaleDateString('en-US', { timeZone: 'Asia/Kolkata', month: 'short' })}</span>
                         {occ !== undefined && (
                           <div className="mt-1 h-1 w-full rounded-full bg-slate-200 overflow-hidden">
                             <div className={cn('h-full rounded-full transition-all',
@@ -665,7 +665,7 @@ export default function Bookings() {
                 {toDS(selectedDate) === todayStr ? 'Today' : 'Selected Date'}
               </p>
               <p className="mt-1 text-lg font-bold text-slate-900">
-                {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                {selectedDate.toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata', weekday: 'long', day: 'numeric', month: 'long' })}
               </p>
             </div>
             <button type="button" className="w-full rounded-xl border border-amber-200 bg-amber-50 p-4 text-left transition-all hover:shadow-md hover:border-amber-300"

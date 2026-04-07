@@ -488,7 +488,7 @@ function WalkInFoliosTab({ locations, onRefresh }: { locations: PosLocation[]; o
 
 function OrderHistoryTab({ locations }: { locations: PosLocation[] }) {
   const [selectedLocationId, setSelectedLocationId] = useState<string>(locations[0]?.id ?? '');
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   const [fromDate, setFromDate] = useState(today);
   const [toDate, setToDate] = useState(today);
   const [statusFilter, setStatusFilter] = useState<string>('');
@@ -578,7 +578,7 @@ function OrderHistoryTab({ locations }: { locations: PosLocation[] }) {
                 <>
                   <tr key={order.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => setExpandedId(expandedId === order.id ? null : order.id)}>
                     <td className="px-4 py-2 font-medium text-gray-800">{order.orderNumber}</td>
-                    <td className="px-4 py-2 text-gray-500">{new Date(order.orderDate).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}</td>
+                    <td className="px-4 py-2 text-gray-500">{new Date(order.orderDate).toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' }).replace(/\//g, '-') + ' ' + new Date(order.orderDate).toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' })}</td>
                     <td className="px-4 py-2 text-right text-gray-500">{order.items?.length ?? 0}</td>
                     <td className="px-4 py-2 text-right text-gray-500">{fmt(order.subtotal)}</td>
                     <td className="px-4 py-2 text-right text-gray-500">

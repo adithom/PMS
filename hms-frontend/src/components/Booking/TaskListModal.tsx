@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import ModalShell from '../ModalShell';
 import taskApi from '../../api/taskApi';
 import type { Room, Guest, Booking } from '../../types';
-import { format } from 'date-fns';
+import { fmtDate } from '../../utils/dateHelpers';
 import AssignRoomModal from './AssignRoomModal';
 
 interface TaskListModalProps {
@@ -118,7 +118,7 @@ export default function TaskListModal({ propertyId, onClose, onBookingUpdated }:
                     <div>
                       <div className="font-medium text-blue-900">{booking.guestName}</div>
                       <div className="text-xs text-blue-700">
-                        {format(new Date(booking.checkIn), 'MMM d')} - {format(new Date(booking.checkOut), 'MMM d')} ({booking.unitName})
+                        {fmtDate(booking.checkIn)} - {fmtDate(booking.checkOut)} ({booking.unitName})
                       </div>
                     </div>
                     <button 

@@ -187,7 +187,7 @@ export default function FolioDetailModal({ propertyId, folioId, onClose }: Folio
                       return (
                         <tr key={idx} className={`transition-colors hover:bg-slate-50 ${item.isVoided ? 'opacity-50 line-through' : ''}`}>
                           <td className="p-4 text-slate-600">
-                            {item.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            {item.date.toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' }).replace(/\//g, '-') + ' ' + item.date.toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' })}
                           </td>
                           <td className="p-4">
                             <p className="font-semibold text-slate-900">{item.description}</p>

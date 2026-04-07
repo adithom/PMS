@@ -10,7 +10,7 @@
 - [x] room shifting
 - [x] property - gst number
 - [x] global tax rate lookup
-- [ ] pos everything
+- [x] pos everything
 
 #### some tests
 - [ ] room shifting bill generation
@@ -19,12 +19,12 @@
 - [ ] group bookings charge routing
 
 ### next
-- [ ] host backend on railway
+- [x] host backend on vps
 - [ ] reports
 > financial (incoming revenue - cash, cc, upi account transfer, endpoint: transferred to folio) daily sales report, mtd report, country, domestic states, meal plan, months, ytd, mtd (compare to last year)
-- [ ] birthday in calender
+- [x] birthday in calender
 - [ ] meal plan and automated price estimate
-- [ ] travel agent optional, reservation no. in order
+- [x] travel agent optional, reservation no. in order
 - [ ] discounts - rate and number
 
 ### long term
