@@ -12,6 +12,7 @@ interface FolioDetailModalProps {
   propertyId: string;
   folioId: string;
   onClose: () => void;
+  readOnly?: boolean;
 }
 
 // Unified ledger item for the timeline
@@ -19,7 +20,7 @@ type LedgerItem =
   | { type: 'CHARGE'; date: Date; amount: number; description: string; code: string; isVoided: boolean; raw: ChargeDto }
   | { type: 'PAYMENT'; date: Date; amount: number; description: string; code: string; isVoided: boolean; raw: PaymentDto };
 
-export default function FolioDetailModal({ propertyId, folioId, onClose }: FolioDetailModalProps) {
+export default function FolioDetailModal({ propertyId, folioId, onClose, readOnly = false }: FolioDetailModalProps) {
   const [folio, setFolio] = useState<FolioDetailDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -141,6 +142,11 @@ export default function FolioDetailModal({ propertyId, folioId, onClose }: Folio
               <span className="rounded-md bg-slate-100 px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-600">
                 {folio.folioType}
               </span>
+              {readOnly && (
+                <span className="rounded-md bg-amber-100 px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-amber-700">
+                  View Only
+                </span>
+              )}
             </div>
             <p className="mt-1 text-sm font-medium text-slate-500">
               Guest: <span className="text-slate-900">{folio.guestName || 'Unknown'}</span>
@@ -169,7 +175,7 @@ export default function FolioDetailModal({ propertyId, folioId, onClose }: Folio
                     <th className="p-4 text-right">Charge</th>
                     <th className="p-4 text-right">Credit</th>
                     <th className="p-4 text-right">Balance</th>
-                    <th className="p-4 text-center">Action</th>
+                    {!readOnly && <th className="p-4 text-center">Action</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -202,17 +208,19 @@ export default function FolioDetailModal({ propertyId, folioId, onClose }: Folio
                           <td className="p-4 text-right font-bold text-slate-900">
                             {item.isVoided ? '—' : `${folio.currency} ${runningBalance.toFixed(2)}`}
                           </td>
-                          <td className="p-4 text-center">
-                            {!item.isVoided && folio.status === 'OPEN' && (
-                              <button 
-                                onClick={() => handleVoidOrRefund(item)}
-                                disabled={isProcessingId === item.raw.id}
-                                className="text-[10px] font-bold uppercase tracking-wider text-rose-500 hover:text-rose-700 disabled:opacity-50"
-                              >
-                                {isProcessingId === item.raw.id ? 'Processing...' : (item.type === 'CHARGE' ? 'Void' : 'Refund')}
-                              </button>
-                            )}
-                          </td>
+                          {!readOnly && (
+                            <td className="p-4 text-center">
+                              {!item.isVoided && folio.status === 'OPEN' && (
+                                <button
+                                  onClick={() => handleVoidOrRefund(item)}
+                                  disabled={isProcessingId === item.raw.id}
+                                  className="text-[10px] font-bold uppercase tracking-wider text-rose-500 hover:text-rose-700 disabled:opacity-50"
+                                >
+                                  {isProcessingId === item.raw.id ? 'Processing...' : (item.type === 'CHARGE' ? 'Void' : 'Refund')}
+                                </button>
+                              )}
+                            </td>
+                          )}
                         </tr>
                       );
                     })
@@ -262,7 +270,7 @@ export default function FolioDetailModal({ propertyId, folioId, onClose }: Folio
             </div>
 
             {/* Quick Actions */}
-            {folio.status === 'OPEN' && (
+            {!readOnly && folio.status === 'OPEN' && (
               <div className="mt-8 space-y-3">
                 <button 
                   onClick={() => setShowAddCharge(true)}

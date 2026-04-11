@@ -101,6 +101,11 @@ export default function GroupBookingModal({ propertyId, onClose, onSuccess }: Gr
         setError('Please select an Organizer and specify Check-In and Check-Out dates.');
         return;
       }
+      const today = new Date().toISOString().split('T')[0];
+      if (new Date(formData.checkIn) < new Date(today)) {
+        setError('Check-in date cannot be in the past.');
+        return;
+      }
       if (new Date(formData.checkIn) >= new Date(formData.checkOut)) {
         setError('Check-Out date must be after Check-In date.');
         return;
@@ -231,19 +236,21 @@ export default function GroupBookingModal({ propertyId, onClose, onSuccess }: Gr
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-bold uppercase tracking-widest text-slate-500">Check-In Date *</label>
-                      <input 
-                        type="date" 
-                        className={inputCls} 
+                      <input
+                        type="date"
+                        className={inputCls}
                         value={formData.checkIn}
+                        min={new Date().toISOString().split('T')[0]}
                         onChange={e => updateField('checkIn', e.target.value)}
                       />
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-bold uppercase tracking-widest text-slate-500">Check-Out Date *</label>
-                      <input 
-                        type="date" 
-                        className={inputCls} 
+                      <input
+                        type="date"
+                        className={inputCls}
                         value={formData.checkOut}
+                        min={new Date().toISOString().split('T')[0]}
                         onChange={e => updateField('checkOut', e.target.value)}
                       />
                     </div>

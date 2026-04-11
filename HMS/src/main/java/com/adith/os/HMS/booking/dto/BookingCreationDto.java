@@ -22,6 +22,7 @@ public record BookingCreationDto(
         BookingStatus status,
 
         @NotNull(message = "Check-in date is required")
+        @FutureOrPresent(message = "Check-in date cannot be in the past")
         LocalDate checkIn,
 
         @NotNull(message = "Check-out date is required")

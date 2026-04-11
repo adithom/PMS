@@ -34,7 +34,7 @@ public class NightAuditController {
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<NightAuditService.NightAuditResultDto> runNightAudit(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        NightAuditService.NightAuditResultDto result = nightAuditService.runFullNightAuditForDate(date);
+        NightAuditService.NightAuditResultDto result = nightAuditService.runFullNightAuditForDate(date, "MANUAL");
         return ResponseEntity.ok(result);
     }
 
