@@ -54,6 +54,7 @@ public class NightAuditService {
      * Runs at the configured cron schedule (default: 2:00 AM daily).
      */
     @Scheduled(cron = "${hms.night-audit.cron:0 0 2 * * *}")
+    @Transactional
     public void runFullNightAudit() {
         runFullNightAuditForDate(LocalDate.now().minusDays(1), "AUTO");
     }
