@@ -3,6 +3,7 @@ package com.adith.os.HMS.booking.dto;
 import com.adith.os.HMS.booking.BookingStatus;
 import com.adith.os.HMS.travelagent.dto.TravelAgentCreationDto;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.FutureOrPresent;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
@@ -29,6 +30,7 @@ public record GroupBookingCreationDto(
         UUID organizerGuestId,
 
         @NotNull(message = "Check-in date is required")
+        @FutureOrPresent(message = "Check-in date cannot be in the past")
         LocalDate checkIn,
 
         @NotNull(message = "Check-out date is required")

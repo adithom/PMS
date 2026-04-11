@@ -10,6 +10,7 @@ import GroupBookingModal from '../components/Booking/GroupBookingModal';
 import EarlyCheckoutModal from '../components/Booking/EarlyCheckoutModal';
 import RoomShiftModal from '../components/Booking/RoomShiftModal';
 import TaskListModal from '../components/Booking/TaskListModal';
+import BookingFoliosModal from '../components/Booking/BookingFoliosModal';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ModalShell from '../components/ModalShell';
 import type { Property, Room, Booking } from '../types';
@@ -30,7 +31,7 @@ type StatType = 'incoming' | 'inhouse' | 'checkouts' | 'all';
 /* Context Menu                                                  */
 /* ────────────────────────────────────────────────────────────── */
 
-function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout, onEditBooking, onShiftRoom }: {
+function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout, onEditBooking, onShiftRoom, onShowFolio }: {
   state: { x: number; y: number; booking: Booking } | null;
   propertyId: string;
   onClose: () => void;
@@ -38,6 +39,7 @@ function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout, onEdit
   onEarlyCheckout: (bookingId: string) => void;
   onEditBooking: (booking: Booking) => void;
   onShiftRoom: (booking: Booking) => void;
+  onShowFolio: (bookingId: string, guestName: string) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -58,6 +60,8 @@ function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout, onEdit
     if (editableStatuses.includes(booking.status)) {
       acts.push({ label: '✎ Edit Booking', doFn: async () => { onEditBooking(booking); onClose(); } });
     }
+
+    acts.push({ label: '⊞ Show Folio', doFn: async () => { onShowFolio(booking.id!, guestName); onClose(); } });
 
     switch (booking.status) {
       case 'PENDING':
@@ -185,6 +189,7 @@ export default function Bookings() {
   const [showForm, setShowForm] = useState(false);
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [earlyCheckoutBookingId, setEarlyCheckoutBookingId] = useState<string | null>(null);
+  const [viewFolioBooking, setViewFolioBooking] = useState<{ id: string; guestName: string } | null>(null);
   const [showList, setShowList] = useState(false);
   const [showTasksModal, setShowTasksModal] = useState(false);
   
@@ -745,6 +750,14 @@ export default function Bookings() {
         <EarlyCheckoutModal propertyId={selectedPropId} bookingId={earlyCheckoutBookingId}
           onClose={() => setEarlyCheckoutBookingId(null)} onSuccess={async () => { setEarlyCheckoutBookingId(null); await refresh(); }} />
       )}
+      {viewFolioBooking && selectedPropId && (
+        <BookingFoliosModal
+          propertyId={selectedPropId}
+          bookingId={viewFolioBooking.id}
+          guestName={viewFolioBooking.guestName}
+          onClose={() => setViewFolioBooking(null)}
+        />
+      )}
       {showList && selectedPropId && (
         <BookingsList bookings={getFiltered()} propertyId={selectedPropId} listType={listType}
           onClose={() => setShowList(false)} onUpdate={refresh} />
@@ -752,7 +765,8 @@ export default function Bookings() {
       {selectedPropId && (
         <CtxMenu state={ctx} propertyId={selectedPropId} onClose={() => setCtx(null)}
           onAction={refresh} onEarlyCheckout={setEarlyCheckoutBookingId}
-          onEditBooking={setEditBooking} onShiftRoom={setShiftRoomBooking} />
+          onEditBooking={setEditBooking} onShiftRoom={setShiftRoomBooking}
+          onShowFolio={(id, name) => setViewFolioBooking({ id, guestName: name })} />
       )}
     </div>
   );

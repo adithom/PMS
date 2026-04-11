@@ -97,6 +97,9 @@ public class BookingService {
         if (bookingCreationDto.checkOut() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Check-out date is required");
         }
+        if (bookingCreationDto.checkIn().isBefore(LocalDate.now())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Check-in date cannot be in the past");
+        }
         if (!bookingCreationDto.checkOut().isAfter(bookingCreationDto.checkIn())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Check-out date must be after check-in date");

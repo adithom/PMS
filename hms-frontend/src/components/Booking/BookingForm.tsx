@@ -304,7 +304,9 @@ export default function BookingForm({
       if (!selectedPropertyId) throw new Error('Property is required.');
       if (!selectedUnitId) throw new Error('Unit is required.');
       if (!finalGuestId) throw new Error('Please select or create a guest.');
-      if (!checkIn || !checkOut || new Date(checkOut) <= new Date(checkIn)) throw new Error('Valid dates required.');
+      const today = new Date().toISOString().split('T')[0];
+      if (!checkIn || !checkOut || new Date(checkIn) < new Date(today)) throw new Error('Check-in date cannot be in the past.');
+      if (new Date(checkOut) <= new Date(checkIn)) throw new Error('Valid dates required.');
 
       // Resolve travel agent for payload
       let travelAgentPayload: Pick<BookingCreationDto, 'travelAgentId' | 'newTravelAgent'> = {};
@@ -599,8 +601,8 @@ export default function BookingForm({
         <h4 className="text-sm font-bold tracking-tight text-slate-900 border-b border-slate-100 pb-2">Stay Parameters</h4>
         
         <div className="grid gap-4 sm:grid-cols-2">
-          <label><span className={labelCls}>Check-in *</span><input type="date" className={inputCls} value={checkIn} onChange={e => setCheckIn(e.target.value)} /></label>
-          <label><span className={labelCls}>Check-out *</span><input type="date" className={inputCls} value={checkOut} onChange={e => setCheckOut(e.target.value)} /></label>
+          <label><span className={labelCls}>Check-in *</span><input type="date" className={inputCls} value={checkIn} min={new Date().toISOString().split('T')[0]} onChange={e => setCheckIn(e.target.value)} /></label>
+          <label><span className={labelCls}>Check-out *</span><input type="date" className={inputCls} value={checkOut} min={new Date().toISOString().split('T')[0]} onChange={e => setCheckOut(e.target.value)} /></label>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-4">

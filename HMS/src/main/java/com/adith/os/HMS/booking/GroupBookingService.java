@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -79,6 +80,9 @@ public class GroupBookingService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Property not found"));
 
         // --- Validate dates ---
+        if (dto.checkIn().isBefore(LocalDate.now())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Check-in date cannot be in the past");
+        }
         if (dto.checkOut() == null || !dto.checkOut().isAfter(dto.checkIn())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Check-out date must be after check-in date");
