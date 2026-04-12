@@ -1049,8 +1049,8 @@ public class BookingService {
 
         Booking savedBooking = bookingRepository.save(booking);
 
-        // Activate room assignments
-        roomAssignmentService.activateAssignments(savedBooking.getId());
+        // Force-activate all SCHEDULED assignments — staff is physically checking in the guest
+        roomAssignmentService.forceActivateAssignments(savedBooking.getId());
 
         return bookingMapper.toDto(savedBooking);
     }

@@ -331,6 +331,23 @@ public class RoomAssignmentService {
     }
 
     /**
+     * Force-activate all SCHEDULED assignments for a booking regardless of start date.
+     * Used during manual check-in where the staff is physically checking in the guest.
+     */
+    @Transactional
+    public void forceActivateAssignments(UUID bookingId) {
+        List<RoomAssignment> scheduledAssignments = roomAssignmentRepository.findActiveAssignmentsByBookingId(
+                bookingId,
+                List.of(RoomAssignmentStatus.SCHEDULED)
+        );
+
+        for (RoomAssignment assignment : scheduledAssignments) {
+            assignment.setStatus(RoomAssignmentStatus.ACTIVE);
+            roomAssignmentRepository.save(assignment);
+        }
+    }
+
+    /**
      * Complete all active assignments when a guest checks out.
      */
     @Transactional
