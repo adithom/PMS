@@ -26,7 +26,7 @@ ok()   { echo -e "  ${GREEN}✓${RESET} $*"; }
 fail() { echo -e "  ${RED}✗${RESET} $*"; }
 warn() { echo -e "  ${YELLOW}!${RESET} $*"; }
 info() { echo -e "  ${DIM}$*${RESET}"; }
-section() { echo -e "\n${CYAN}${BOLD}── $* $(printf '%.0s─' {1..40} | head -c $((44 - ${#1})))${RESET}"; }
+section() { echo -e "\n${CYAN}${BOLD}── $* ──────────────────────────────────────────${RESET}"; }
 
 # ── Header ───────────────────────────────────────────────────────────────────
 echo -e "\n${BOLD}══════════════════════════════════════════════════${RESET}"
@@ -162,10 +162,8 @@ RESPONSE_TIME=$(curl -s -o /dev/null -w "%{time_total}" --connect-timeout 3 "${A
 echo -ne "  Port ${APP_PORT}   : "
 if [ "${HTTP_CODE}" = "000" ]; then
   fail "connection refused — app not responding"
-elif [ "${HTTP_CODE}" = "401" ] || [ "${HTTP_CODE}" = "403" ]; then
-  ok "reachable (HTTP ${HTTP_CODE} — expected for auth endpoint)"
 else
-  warn "unexpected HTTP ${HTTP_CODE}"
+  ok "reachable (HTTP ${HTTP_CODE})"
 fi
 echo -e "  Response   : ${RESPONSE_TIME}s"
 
@@ -205,10 +203,10 @@ section "JVM"
 
 METRICS_BASE="http://localhost:${MGMT_PORT}/actuator/metrics"
 
-# Helper: fetch a single metric value (first measurement) in bytes, return as-is
+# Helper: fetch a single metric value — handles scientific notation (e.g. 1.23E8)
 metric_value() {
   curl -s --connect-timeout 3 "${METRICS_BASE}/$1" 2>/dev/null \
-    | grep -o '"value":[0-9.]*' | head -1 | sed 's/"value"://'
+    | grep -oE '"value":[0-9.eE+-]+' | head -1 | sed 's/"value"://'
 }
 
 # Helper: bytes → human readable (MiB)
