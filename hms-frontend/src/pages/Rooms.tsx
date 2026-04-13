@@ -305,7 +305,7 @@ export default function Rooms() {
     return s;
   }, [propertySections]);
 
-  const totalRooms = overviewSummary.VACANT + overviewSummary.OCCUPIED + overviewSummary.MAINTENANCE + overviewSummary.INACTIVE;
+  const totalRooms = propertySections.reduce((sum, sec) => sum + (sec.property.totalRooms ?? 0), 0);
   const activeInventory = Math.max(totalRooms - overviewSummary.INACTIVE, 0);
   const occupiedPct = activeInventory > 0 ? Math.round((overviewSummary.OCCUPIED / activeInventory) * 100) : 0;
 
@@ -509,7 +509,7 @@ export default function Rooms() {
                   </p>
                   <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 text-xs font-semibold text-slate-500">
                     <span className="flex items-center gap-1.5">
-                      <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />{rooms.length} Rooms
+                      <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />{property.totalRooms ?? rooms.length} Rooms
                     </span>
                     <span className="flex items-center gap-1.5">
                       <span className={cn('h-1.5 w-1.5 rounded-full', STATUS_META.VACANT.dot)} />{summary.VACANT} Vacant

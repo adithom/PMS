@@ -29,12 +29,8 @@ public class BookingController {
     public ResponseEntity<BookingDto> createBooking(
             @PathVariable UUID propertyId,
             @Valid @RequestBody BookingCreationDto bookingCreationDto) {
-        try {
-            BookingDto createdBooking = bookingService.createBooking(bookingCreationDto, propertyId);
-            return new ResponseEntity<>(createdBooking, HttpStatus.CREATED);
-        } catch (Exception e) {
-            throw new RuntimeException(e.getMessage());
-        }
+        BookingDto createdBooking = bookingService.createBooking(bookingCreationDto, propertyId);
+        return new ResponseEntity<>(createdBooking, HttpStatus.CREATED);
     }
 
     // READ

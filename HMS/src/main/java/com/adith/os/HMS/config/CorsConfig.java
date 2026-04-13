@@ -1,4 +1,4 @@
-package com.adith.os.HMS;
+package com.adith.os.HMS.config;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;

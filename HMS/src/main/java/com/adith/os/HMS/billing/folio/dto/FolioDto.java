@@ -4,6 +4,7 @@ import com.adith.os.HMS.billing.folio.FolioStatus;
 import com.adith.os.HMS.billing.folio.FolioType;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
@@ -25,5 +26,8 @@ public record FolioDto(
         String notes,
         OffsetDateTime createdAt,
         OffsetDateTime closedAt,
-        UUID routedToFolioId        // null if not routed
+        UUID routedToFolioId,
+        LocalDate checkInDate,
+        LocalDate checkOutDate,
+        String roomNumber
 ) {}

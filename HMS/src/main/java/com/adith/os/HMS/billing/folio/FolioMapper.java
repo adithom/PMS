@@ -10,9 +10,11 @@ import com.adith.os.HMS.billing.payment.dto.PaymentDto;
 import com.adith.os.HMS.booking.Booking;
 import com.adith.os.HMS.guest.Guest;
 import com.adith.os.HMS.property.Property;
+import com.adith.os.HMS.roomassignment.RoomAssignment;
 import jakarta.validation.Valid;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -44,10 +46,15 @@ public class FolioMapper {
     public FolioDto toDto(Folio folio) {
         if (folio == null) return null;
 
+        Booking booking = folio.getBooking();
+        LocalDate checkInDate = booking != null ? booking.getCheckIn() : null;
+        LocalDate checkOutDate = booking != null ? booking.getCheckOut() : null;
+        String roomNumber = extractRoomNumber(booking);
+
         return new FolioDto(
                 folio.getId(),
                 folio.getFolioNumber(),
-                folio.getBooking() != null ? folio.getBooking().getId() : null,
+                booking != null ? booking.getId() : null,
                 folio.getGuest().getFullName(),
                 folio.getProperty().getCode(),
                 folio.getStatus(),
@@ -62,8 +69,19 @@ public class FolioMapper {
                 folio.getNotes(),
                 folio.getCreatedAt(),
                 folio.getClosedAt(),
-                folio.getRoutedToFolio() != null ? folio.getRoutedToFolio().getId() : null
+                folio.getRoutedToFolio() != null ? folio.getRoutedToFolio().getId() : null,
+                checkInDate,
+                checkOutDate,
+                roomNumber
         );
+    }
+
+    private String extractRoomNumber(Booking booking) {
+        if (booking == null) return null;
+        List<RoomAssignment> assignments = booking.getRoomAssignments();
+        if (assignments == null || assignments.isEmpty()) return null;
+        var room = assignments.get(0).getRoom();
+        return room != null ? room.getNumber() : null;
     }
 
     public List<FolioDto> toDtoList(List<Folio> folios) {
@@ -82,10 +100,15 @@ public class FolioMapper {
                 ? folio.getPayments().stream().map(this::toPaymentDto).toList()
                 : List.of();
 
+        Booking booking = folio.getBooking();
+        LocalDate checkInDate = booking != null ? booking.getCheckIn() : null;
+        LocalDate checkOutDate = booking != null ? booking.getCheckOut() : null;
+        String roomNumber = extractRoomNumber(booking);
+
         return new FolioDetailDto(
                 folio.getId(),
                 folio.getFolioNumber(),
-                folio.getBooking() != null ? folio.getBooking().getId() : null,
+                booking != null ? booking.getId() : null,
                 folio.getGuest().getFullName(),
                 folio.getProperty().getCode(),
                 folio.getStatus(),
@@ -100,6 +123,9 @@ public class FolioMapper {
                 folio.getCurrency(),
                 folio.getCreatedAt(),
                 folio.getClosedAt(),
+                checkInDate,
+                checkOutDate,
+                roomNumber,
                 chargeDtos,
                 paymentDtos
         );

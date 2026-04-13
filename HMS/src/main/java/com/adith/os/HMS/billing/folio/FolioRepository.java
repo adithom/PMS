@@ -21,7 +21,13 @@ public interface FolioRepository extends JpaRepository<Folio, UUID> {
     @Query("SELECT f FROM Folio f WHERE f.booking.id = :bookingId")
     List<Folio> findAllByBookingId(@Param("bookingId") UUID bookingId);
 
-    @Query("SELECT f FROM Folio f WHERE f.property.id = :propertyId AND f.status = :status")
+    @Query("""
+            SELECT DISTINCT f FROM Folio f
+            LEFT JOIN FETCH f.booking b
+            LEFT JOIN FETCH b.roomAssignments ra
+            LEFT JOIN FETCH ra.room
+            WHERE f.property.id = :propertyId AND f.status = :status
+            """)
     List<Folio> findByPropertyAndStatus(
             @Param("propertyId") UUID propertyId,
             @Param("status") FolioStatus status

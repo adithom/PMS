@@ -41,6 +41,9 @@ export interface FolioDto {
   createdAt?: string;
   closedAt?: string;
   routedToFolioId?: string;
+  checkInDate?: string;
+  checkOutDate?: string;
+  roomNumber?: string;
 }
 
 export interface FolioDetailDto extends FolioDto {
