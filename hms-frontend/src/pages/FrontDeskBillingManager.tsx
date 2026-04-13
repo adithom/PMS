@@ -5,19 +5,11 @@ import type { FolioDto } from '../api/folioApi';
 import LoadingSpinner from '../components/LoadingSpinner';
 import FolioDetailModal from '../components/Billing/FolioDetailModal';
 
-// todo: Wire up real room numbers and checkout dates from backend once FolioDto is updated
 // todo: make the generate bill actually work
 
 /* ────────────────────────────────────────────────────────────── */
 /* Types & Tokens                                               */
 /* ────────────────────────────────────────────────────────────── */
-
-// Extending FolioDto for the Front Desk view to include booking details 
-// Note: You should add roomNumber and checkoutDate to your FolioDto.java!
-interface FrontDeskFolio extends FolioDto {
-  roomNumber?: string;
-  checkoutDate?: string;
-}
 
 interface FrontDeskBillingManagerProps {
   propertyId: string; // The specific property the agent is logged into
@@ -30,7 +22,7 @@ function cn(...classes: Array<string | false | null | undefined>) {
 }
 
 export default function FrontDeskBillingManager({ propertyId }: FrontDeskBillingManagerProps) {
-  const [folios, setFolios] = useState<FrontDeskFolio[]>([]);
+  const [folios, setFolios] = useState<FolioDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,15 +44,7 @@ export default function FrontDeskBillingManager({ propertyId }: FrontDeskBilling
       // Fetch open folios for this specific property
       const response = await folioApi.getOpenFolios(propertyId);
       
-      // Simulate mapping Room Numbers and Checkout Dates for the UI 
-      // (Remove this mapping once backend FolioDto includes these fields)
-      const mappedFolios: FrontDeskFolio[] = (response || []).map((f, i) => ({
-        ...f,
-        roomNumber: f.folioType === 'MASTER' ? 'GROUP' : `${101 + i}`, // Dummy room number
-        checkoutDate: new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) // Dummy checkout date (Today in IST)
-      }));
-
-      setFolios(mappedFolios);
+      setFolios(response || []);
     } catch (err: any) {
       console.error('[Front Desk Billing] Failed to load folios:', err);
       setError(err.message || 'Failed to load front desk billing data');
@@ -88,7 +72,7 @@ export default function FrontDeskBillingManager({ propertyId }: FrontDeskBilling
     let closedCount = 0;
 
     folios.forEach(f => {
-      const isDepartingToday = f.checkoutDate?.startsWith(todayDateString);
+      const isDepartingToday = f.checkOutDate?.startsWith(todayDateString);
       const balance = f.balanceDue || 0;
 
       if (isDepartingToday && balance > 0 && f.status === 'OPEN') {
@@ -120,7 +104,7 @@ export default function FrontDeskBillingManager({ propertyId }: FrontDeskBilling
       // 2. Preset Filter
       const balance = f.balanceDue || 0;
       if (filterPreset === 'DEPARTING_TODAY') {
-        const isDepartingToday = f.checkoutDate?.startsWith(todayDateString);
+        const isDepartingToday = f.checkOutDate?.startsWith(todayDateString);
         if (!isDepartingToday || balance <= 0 || f.status !== 'OPEN') return false;
       }
       if (filterPreset === 'HIGH_BALANCE') {
@@ -134,7 +118,7 @@ export default function FrontDeskBillingManager({ propertyId }: FrontDeskBilling
     }).sort((a, b) => (b.balanceDue || 0) - (a.balanceDue || 0)); // Highest balance first
   }, [folios, filterPreset, searchQuery, todayDateString]);
 
-  const handleGenerateBill = (folio: FrontDeskFolio) => {
+  const handleGenerateBill = (folio: FolioDto) => {
     const balance = folio.balanceDue || 0;
     
     if (balance <= 0) {

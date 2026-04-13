@@ -114,9 +114,10 @@ export default function AdminBillingDashboard() {
       // 2. Search Filter
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
-        const match = 
-          (f.folioNumber || '').toLowerCase().includes(q) || 
-          (f.guestName || '').toLowerCase().includes(q);
+        const match =
+          (f.roomNumber || '').toLowerCase().includes(q) ||
+          (f.guestName || '').toLowerCase().includes(q) ||
+          (f.folioNumber || '').toLowerCase().includes(q);
         if (!match) return false;
       }
 
@@ -395,9 +396,12 @@ export default function AdminBillingDashboard() {
                       <tr key={f.id} className="transition-colors hover:bg-slate-50">
                         <td className="p-4 font-bold text-slate-900">{f.propertyName}</td>
                         <td className="p-4">
-                          <span className="block font-bold text-indigo-600">#{f.folioNumber}</span>
+                          <span className="block font-bold text-slate-900">{f.roomNumber ? `Room ${f.roomNumber}` : '—'}</span>
+                          <span className="block text-xs text-slate-500">
+                            {f.checkInDate && f.checkOutDate ? `${f.checkInDate.split('-').reverse().join('-')} → ${f.checkOutDate.split('-').reverse().join('-')}` : f.folioNumber ? `#${f.folioNumber}` : '—'}
+                          </span>
                           <div className="mt-1 flex items-center gap-2">
-                            <span className={cn('rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider', 
+                            <span className={cn('rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider',
                               f.folioType === 'MASTER' || f.folioType === 'GROUP' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600'
                             )}>
                               {f.folioType}
