@@ -3,9 +3,11 @@ import authApi, { type UserInfo, type UpdateUserRequest, type CreateUserRequest 
 import propertyApi from '../api/propertyApi';
 import posApi from '../api/posApi';
 import travelAgentApi from '../api/travelAgentApi';
+import adminApi from '../api/adminApi';
 import type { Property, TravelAgent } from '../types';
 import type { PosLocation } from '../types/pos';
 import ModalShell from '../components/ModalShell';
+import ConfirmModal from '../components/ConfirmModal';
 
 /* ────────────────────────────────────────────────────────────── */
 /* Tokens                                                        */
@@ -65,6 +67,9 @@ export default function AdminConsole() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<DialogState>(null);
+  const [restarting, setRestarting] = useState(false);
+  const [restartStatus, setRestartStatus] = useState<string | null>(null);
+  const [showRestartConfirm, setShowRestartConfirm] = useState(false);
 
   /* ═══════════════════════════════════════════════════════════ */
   /* Data Loading                                                */
@@ -121,6 +126,31 @@ export default function AdminConsole() {
   /* Travel Agent Actions                                       */
   /* ═══════════════════════════════════════════════════════════ */
 
+  const handleRestart = async () => {
+    setRestarting(true);
+    setRestartStatus('Restarting server...');
+    try {
+      await adminApi.restartServer();
+    } catch {
+      // expected — server drops the connection as it shuts down
+    }
+    // poll until the server responds again (up to 60s)
+    const deadline = Date.now() + 60_000;
+    while (Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, 2000));
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api'}/auth/me`);
+        if (res.status > 0) break;
+      } catch {
+        // still down, keep polling
+      }
+    }
+    const timedOut = Date.now() >= deadline;
+    setRestarting(false);
+    setRestartStatus(timedOut ? 'Restart timed out' : 'Server back online');
+    setTimeout(() => setRestartStatus(null), 4000);
+  };
+
   const handleCreateAgent = async (data: Parameters<typeof travelAgentApi.create>[0]) => {
     await travelAgentApi.create(data);
     setDialog(null); await loadData();
@@ -159,12 +189,28 @@ export default function AdminConsole() {
             <p className="text-[10px] font-semibold text-emerald-600 tracking-wide">System</p>
             <h1 className="text-lg font-extrabold tracking-tight text-slate-900 leading-tight">Admin Console</h1>
           </div>
-          <button type="button" onClick={() => alert('Server restart is not yet implemented.')} className={btnSecondary}>
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            Restart Server
-          </button>
+          <div className="flex items-center gap-2">
+            {restartStatus && (
+              <span className="text-xs text-slate-500">{restartStatus}</span>
+            )}
+            <button
+              type="button"
+              onClick={() => setShowRestartConfirm(true)}
+              disabled={restarting}
+              className={btnSecondary}
+            >
+              {restarting ? (
+                <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              ) : (
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              )}
+              {restarting ? 'Restarting...' : 'Restart Server'}
+            </button>
+          </div>
         </div>
 
         {error && (
@@ -430,6 +476,18 @@ export default function AdminConsole() {
             </div>
           </div>
         </ModalShell>
+      )}
+
+      {showRestartConfirm && (
+        <ConfirmModal
+          title="Restart Server"
+          message="The server will shutdown and come back online shortly. It will be inaccessible for upto 5 minutes. Are you sure you want to restart?"
+          confirmLabel="Restart"
+          variant="danger"
+          loading={restarting}
+          onConfirm={() => { setShowRestartConfirm(false); void handleRestart(); }}
+          onCancel={() => setShowRestartConfirm(false)}
+        />
       )}
     </div>
   );

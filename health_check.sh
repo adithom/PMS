@@ -130,6 +130,15 @@ else
     echo -ne "  Status     : ${BOLD}${CONTAINER_STATUS}${RESET}  "
     if [ "${CONTAINER_STATUS}" = "running" ]; then ok ""; else fail "not running"; fi
 
+    HEALTH_STATUS=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}no healthcheck{{end}}' "${CONTAINER_NAME}")
+    echo -ne "  Health     : ${HEALTH_STATUS}  "
+    case "${HEALTH_STATUS}" in
+      healthy)   ok "" ;;
+      unhealthy) fail "container is unhealthy" ;;
+      starting)  warn "still starting up" ;;
+      *)         info "" ;;
+    esac
+
     echo -e "  Image      : ${IMAGE}"
     echo -e "  Started    : ${STARTED_AT}"
 
