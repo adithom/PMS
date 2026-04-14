@@ -14,7 +14,7 @@ import BookingFoliosModal from '../components/Booking/BookingFoliosModal';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ModalShell from '../components/ModalShell';
 import ConfirmModal from '../components/ConfirmModal';
-import type { Property, Room, Booking } from '../types';
+import type { Property, Room, Booking, RoomAssignmentDto } from '../types';
 import { toDS, addDays, diffDays, shortDate, dayLabel, dateStr, fmtDate } from '../utils/dateHelpers';
 import { getRoomId } from '../utils/roomHelpers';
 import {
@@ -27,6 +27,7 @@ import {
 //todo: fix occupancy rate status bars
 
 type StatType = 'incoming' | 'inhouse' | 'checkouts' | 'all';
+type AssignmentSlot = { booking: Booking; assignment: RoomAssignmentDto };
 
 type PendingAction = {
   title: string;
@@ -274,6 +275,8 @@ export default function Bookings() {
   const prefillCheckOut = useRef('');
   const fetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fetchIdRef = useRef(0);
+  const assignmentCacheRef = useRef<Map<string, RoomAssignmentDto[]>>(new Map());
+  const [assignmentMap, setAssignmentMap] = useState<Map<string, RoomAssignmentDto[]>>(new Map());
 
   useEffect(() => {
     (async () => {
@@ -315,6 +318,27 @@ export default function Bookings() {
         if (id !== fetchIdRef.current) return;
         setBookingBuffer(bks);
         setBufferRange({ from: bufFrom, to: bufTo });
+
+        // ── Room assignment fetch ──────────────────────────────────────
+        const cache = assignmentCacheRef.current;
+        const newIds = (bks || []).map(b => b.id!).filter(Boolean);
+        // Evict cache entries for bookings no longer in the buffer
+        for (const k of cache.keys()) { if (!newIds.includes(k)) cache.delete(k); }
+        // Only fetch uncached IDs
+        const uncached = newIds.filter(bid => !cache.has(bid));
+        if (uncached.length > 0) {
+          const results = await Promise.allSettled(
+            uncached.map(bid =>
+              bookingApi.getRoomAssignments(propId, bid).then(a => ({ bid, assignments: a || [] }))
+            )
+          );
+          if (id !== fetchIdRef.current) return;
+          for (const r of results) {
+            if (r.status === 'fulfilled') cache.set(r.value.bid, r.value.assignments);
+          }
+        }
+        setAssignmentMap(new Map(cache));
+
         const m: Record<string, number> = {};
         daily.forEach(d => { m[d.date] = d.occupancyRate; });
         setOccMap(m);
@@ -345,6 +369,7 @@ export default function Bookings() {
   }, [selectedPropId, winStartStr, winEndStr, bufferRange, fetchBuffer]);
 
   useEffect(() => { setBufferRange(null); }, [selectedPropId]);
+  useEffect(() => { assignmentCacheRef.current.clear(); setAssignmentMap(new Map()); }, [selectedPropId]);
 
   useEffect(() => {
     if (!selectedPropId) return;
@@ -367,13 +392,36 @@ export default function Bookings() {
   }, [rooms]);
 
   const byRoomNumber = useMemo(() => {
-    const m: Record<string, Booking[]> = {};
-    for (const b of rangeBookings) {
-      const rn = b.roomNumber || '';
-      if (rn) { (m[rn] ??= []).push(b); }
+    const m: Record<string, AssignmentSlot[]> = {};
+    for (const bk of rangeBookings) {
+      const assignments = assignmentMap.get(bk.id!);
+      if (assignments && assignments.length > 0) {
+        for (const assignment of assignments) {
+          if (assignment.status === 'CANCELLED') continue;
+          const rn = assignment.roomNumber;
+          if (rn) (m[rn] ??= []).push({ booking: bk, assignment });
+        }
+      } else {
+        // Fallback: no assignments fetched — synthesise from booking fields
+        const rn = bk.roomNumber || '';
+        if (!rn) continue;
+        (m[rn] ??= []).push({
+          booking: bk,
+          assignment: {
+            id: `fallback-${bk.id}`,
+            bookingId: bk.id!,
+            roomId: bk.roomId || '',
+            roomNumber: rn,
+            unitName: bk.unitName,
+            startDate: bk.checkIn,
+            endDate: bk.checkOut,
+            status: 'ACTIVE',
+          },
+        });
+      }
     }
     return m;
-  }, [rangeBookings]);
+  }, [rangeBookings, assignmentMap]);
 
   const toggle = useCallback((t: string) => setCollapsed(p => { const n = new Set(p); n.has(t) ? n.delete(t) : n.add(t); return n; }), []);
   const openForm = useCallback((room: Room | null, ci: string, co: string) => {
@@ -383,6 +431,7 @@ export default function Bookings() {
   const goToday = useCallback(() => { const d = new Date(); d.setHours(0, 0, 0, 0); setWinStart(d); setSelectedDate(new Date()); }, []);
   const refresh = useCallback(async () => {
     if (!selectedPropId) return;
+    assignmentCacheRef.current.clear();
     await fetchBuffer(selectedPropId, winStartStr, winEndStr, true);
   }, [selectedPropId, winStartStr, winEndStr, fetchBuffer]);
   const statClick = useCallback((t: StatType) => { setListType(t); setShowList(true); }, []);
@@ -563,7 +612,7 @@ export default function Bookings() {
 
                       {!isC && g.rooms.map(room => {
                         const rid = getRoomId(room);
-                        const rBks = byRoomNumber[room.number] || [];
+                        const rSlots = byRoomNumber[room.number] || [];
 
                         return (
                           <div key={rid || room.number} className="relative flex" style={{ height: CELL_H, minWidth: gridW }}>
@@ -597,12 +646,17 @@ export default function Bookings() {
                               );
                             })}
 
-                            {rBks.map(bk => {
-                              const ci = dateStr(bk.checkIn);
-                              const co = dateStr(bk.checkOut);
+                            {rSlots.map(slot => {
+                              const { booking: bk, assignment } = slot;
+                              const ci = dateStr(assignment.startDate);
+                              const co = dateStr(assignment.endDate);
                               const isNoShow = bk.status === 'NO_SHOW';
                               const isCancelled = bk.status === 'CANCELLED';
                               const hasMaintenance = !isNoShow && !isCancelled;
+                              const allAssignments = assignmentMap.get(bk.id!) || [];
+                              const isShifted = allAssignments.filter(a => a.status !== 'CANCELLED').length > 1;
+                              const isCompleted = assignment.status === 'COMPLETED';
+                              const isShiftedIn = isShifted && !isCompleted;
 
                               const unClampedStartOff = diffDays(winStartStr, ci);
                               const unClampedEndOff = diffDays(winStartStr, co);
@@ -636,7 +690,7 @@ export default function Bookings() {
                               const guestName = bk.guestName || 'Guest';
 
                               return (
-                                <div key={bk.id}
+                                <div key={assignment.id}
                                   className={cn(
                                     'absolute flex overflow-hidden shadow-sm cursor-pointer transition-all hover:shadow-md hover:brightness-95 border',
                                     isNoShow ? 'bg-rose-100 border-rose-300' : 'bg-white',
@@ -648,19 +702,32 @@ export default function Bookings() {
                                     bleedsLeft && bleedsRight ? 'rounded-none' :
                                     bleedsLeft ? 'rounded-r-md rounded-l-none' :
                                     bleedsRight ? 'rounded-l-md rounded-r-none' :
-                                    'rounded-md'
+                                    'rounded-md',
+                                    isShifted && isCompleted && 'opacity-75',
                                   )}
-                                  style={{ 
-                                    left: leftPx, 
-                                    width: widthPx, 
-                                    height: isNoShow ? CELL_H - 16 : CELL_H - 8, 
+                                  style={{
+                                    left: leftPx,
+                                    width: widthPx,
+                                    height: isNoShow ? CELL_H - 16 : CELL_H - 8,
                                     top: isNoShow ? 8 : 4,
                                     zIndex: isNoShow ? 4 : 5
                                   }}
-                                  title={`${guestName} • ${bk.status.replace('_', ' ')} • ${ci} → ${co}`}
+                                  title={(() => {
+                                    const base = `${guestName} • ${bk.status.replace('_', ' ')} • ${ci} → ${co}`;
+                                    const allA = assignmentMap.get(bk.id!) || [];
+                                    if (isCompleted) {
+                                      const next = allA.find(a => a.status !== 'COMPLETED' && a.status !== 'CANCELLED');
+                                      return next ? `${base} (Continued in Room ${next.roomNumber})` : base;
+                                    }
+                                    if (isShiftedIn) {
+                                      const prev = allA.find(a => a.status === 'COMPLETED');
+                                      return prev ? `${base} (Moved from Room ${prev.roomNumber})` : base;
+                                    }
+                                    return base;
+                                  })()}
                                   onClick={e => { e.stopPropagation(); setCtx({ x: e.clientX, y: e.clientY, booking: bk }); }}
                                   onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtx({ x: e.clientX, y: e.clientY, booking: bk }); }}>
-                                  
+
                                   {/* NO SHOW View */}
                                   {isNoShow && (
                                     <div className={cn('flex w-full items-center justify-center h-full', sc.text, sc.bar)}>
@@ -670,12 +737,18 @@ export default function Bookings() {
 
                                   {/* Standard Guest Stay Part */}
                                   {!isNoShow && boundaryPx > 0 && (
-                                    <div style={{ width: Math.min(boundaryPx, widthPx) }} 
-                                         className={cn("h-full flex items-center px-2 relative shrink-0", 
+                                    <div style={{ width: Math.min(boundaryPx, widthPx) }}
+                                         className={cn("h-full flex items-center px-2 relative shrink-0",
                                           hasMaintenance && boundaryPx < widthPx ? 'border-r border-white/20' : '', sc.bar, sc.text)}>
                                       {bleedsLeft && <span className="mr-1 text-[10px] opacity-70">◂</span>}
+                                      {isShiftedIn && !bleedsLeft && (
+                                        <span className="mr-1 text-[10px] opacity-75" title="Moved from another room">↩</span>
+                                      )}
                                       <span className="text-[11px] font-bold truncate">{guestName}</span>
                                       {bookingBleedsRight && <span className="ml-auto pl-1 text-[10px] opacity-70">▸</span>}
+                                      {isShifted && isCompleted && !bookingBleedsRight && (
+                                        <span className="ml-auto pl-1 text-[10px] opacity-75" title="Continued in another room">▶</span>
+                                      )}
                                     </div>
                                   )}
 
