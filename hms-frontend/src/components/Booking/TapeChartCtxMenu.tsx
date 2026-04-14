@@ -4,6 +4,15 @@ import bookingApi from '../../api/bookingApi';
 import type { Booking } from '../../types';
 import { STATUS_COLORS, cn } from './TapeChartConstants';
 import { toDS, dateStr } from '../../utils/dateHelpers';
+import ConfirmModal from '../ConfirmModal';
+
+type PendingAction = {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  variant: 'danger' | 'primary';
+  doFn: () => Promise<void>;
+};
 
 type TapeChartCtxMenuProps = {
   state: { x: number; y: number; booking: Booking } | null;
@@ -22,6 +31,8 @@ export default function TapeChartCtxMenu({
 }: TapeChartCtxMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
 
   useEffect(() => {
     const h = (e: MouseEvent) => {
@@ -36,7 +47,12 @@ export default function TapeChartCtxMenu({
   const sc = STATUS_COLORS[booking.status] ?? STATUS_COLORS.PENDING;
   const guestName = booking.guestName || 'Guest';
 
-  type Act = { label: string; doFn: () => Promise<void>; danger?: boolean };
+  type Act = {
+    label: string;
+    doFn: () => Promise<void>;
+    danger?: boolean;
+    confirm?: { title: string; message: string; confirmLabel: string };
+  };
   const acts: Act[] = [];
 
   if (booking.id) {
@@ -48,6 +64,11 @@ export default function TapeChartCtxMenu({
             await bookingApi.updateStatus(propertyId, booking.id!, 'CONFIRMED');
             onAction();
           },
+          confirm: {
+            title: 'Confirm Booking',
+            message: `Are you sure you want to confirm the booking for ${guestName}?`,
+            confirmLabel: 'Confirm Booking',
+          },
         });
         acts.push({
           label: '✕ Cancel Booking',
@@ -56,6 +77,11 @@ export default function TapeChartCtxMenu({
             onAction();
           },
           danger: true,
+          confirm: {
+            title: 'Cancel Booking',
+            message: `Are you sure you want to cancel the booking for ${guestName}? This action cannot be undone.`,
+            confirmLabel: 'Cancel Booking',
+          },
         });
         break;
       case 'CONFIRMED':
@@ -65,6 +91,11 @@ export default function TapeChartCtxMenu({
             await bookingApi.checkIn(propertyId, booking.id!);
             onAction();
           },
+          confirm: {
+            title: 'Confirm Check-in',
+            message: `Are you sure you want to check in ${guestName}?`,
+            confirmLabel: 'Check In',
+          },
         });
         acts.push({
           label: '⊘ Mark No Show',
@@ -73,6 +104,11 @@ export default function TapeChartCtxMenu({
             onAction();
           },
           danger: true,
+          confirm: {
+            title: 'Mark as No Show',
+            message: `Are you sure you want to mark ${guestName} as a no-show?`,
+            confirmLabel: 'Mark No Show',
+          },
         });
         break;
       case 'CHECKED_IN': {
@@ -94,6 +130,11 @@ export default function TapeChartCtxMenu({
               await bookingApi.checkOut(propertyId, booking.id!);
               onAction();
             },
+            confirm: {
+              title: 'Confirm Check-out',
+              message: `Are you sure you want to check out ${guestName}?`,
+              confirmLabel: 'Check Out',
+            },
           });
         }
         break;
@@ -102,7 +143,8 @@ export default function TapeChartCtxMenu({
   }
 
   return (
-    <div
+    <>
+    {!pendingAction && <div
       ref={ref}
       className="fixed z-[60] w-64 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl"
       style={{
@@ -141,13 +183,21 @@ export default function TapeChartCtxMenu({
               'w-full px-4 py-2 text-left text-sm transition-colors hover:bg-slate-50',
               a.danger ? 'text-rose-600 hover:bg-rose-50' : 'text-slate-700',
             )}
-            onClick={async () => {
-              try {
+            onClick={() => {
+              if (a.confirm) {
+                setPendingAction({
+                  title: a.confirm.title,
+                  message: a.confirm.message,
+                  confirmLabel: a.confirm.confirmLabel,
+                  variant: a.danger ? 'danger' : 'primary',
+                  doFn: a.doFn,
+                });
+              } else {
                 setError(null);
-                await a.doFn();
+                a.doFn().catch(err => {
+                  setError(err instanceof Error ? err.message : 'Action failed');
+                });
                 onClose();
-              } catch (err) {
-                setError(err instanceof Error ? err.message : 'Action failed');
               }
             }}
           >
@@ -155,6 +205,31 @@ export default function TapeChartCtxMenu({
           </button>
         ))}
       </div>
-    </div>
+    </div>}
+
+    {pendingAction && (
+      <ConfirmModal
+        title={pendingAction.title}
+        message={pendingAction.message}
+        confirmLabel={pendingAction.confirmLabel}
+        variant={pendingAction.variant}
+        loading={confirmLoading}
+        onConfirm={async () => {
+          setConfirmLoading(true);
+          try {
+            await pendingAction.doFn();
+            setPendingAction(null);
+            onClose();
+          } catch (err) {
+            setError(err instanceof Error ? err.message : 'Action failed');
+            setPendingAction(null);
+          } finally {
+            setConfirmLoading(false);
+          }
+        }}
+        onCancel={() => setPendingAction(null)}
+      />
+    )}
+    </>
   );
 }

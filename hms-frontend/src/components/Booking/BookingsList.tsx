@@ -3,6 +3,7 @@ import bookingApi from '../../api/bookingApi';
 import BookingForm from './BookingForm';
 import EarlyCheckoutModal from './EarlyCheckoutModal';
 import ModalShell from '../ModalShell';
+import ConfirmModal from '../ConfirmModal';
 import type { Booking, BookingStatus } from '../../types';
 
 /* ────────────────────────────────────────────────────────────── */
@@ -27,8 +28,6 @@ const btnSecondary = 'inline-flex w-full sm:w-auto items-center justify-center g
 const btnDanger = 'inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-lg bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 shadow-sm transition-all hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 disabled:cursor-not-allowed disabled:opacity-50';
 const btnSuccess = 'inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 disabled:cursor-not-allowed disabled:opacity-50';
 const btnAction = 'inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:cursor-not-allowed disabled:opacity-50';
-const btnConfirmDanger = 'inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 disabled:cursor-not-allowed disabled:opacity-50';
-const btnConfirmPrimary = 'inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-not-allowed disabled:opacity-50';
 
 const getStatusColor = (status: BookingStatus) => {
   switch (status) {
@@ -225,28 +224,19 @@ export default function BookingsList({ bookings, propertyId, listType, onClose, 
 
       {/* 3. Confirm Dialog Modal */}
       {showConfirmDialog && selectedBooking && (
-        <ModalShell 
-          title={confirmAction === 'checkin' ? 'Confirm Check-in' : confirmAction === 'checkout' ? 'Confirm Check-out' : 'Cancel Booking'} 
-          onClose={() => { setShowConfirmDialog(false); setSelectedBooking(null); setConfirmAction(null); setError(null); }}
-        >
-          <div className="space-y-5">
-            <p className="text-sm text-slate-600 leading-relaxed">
-              {confirmAction === 'checkin' && `Are you sure you want to check in ${(selectedBooking as any).guestName || 'this guest'}?`}
-              {confirmAction === 'checkout' && `Are you sure you want to check out ${(selectedBooking as any).guestName || 'this guest'}?`}
-              {confirmAction === 'cancel' && `Are you sure you want to cancel the booking for ${(selectedBooking as any).guestName || 'this guest'}? This action cannot be undone.`}
-            </p>
-            
-            <div className="flex justify-end gap-3 pt-2">
-              <button type="button" className={btnSecondary} disabled={loading}
-                onClick={() => { setShowConfirmDialog(false); setSelectedBooking(null); setConfirmAction(null); setError(null); }}>
-                Back
-              </button>
-              <button type="button" className={confirmAction === 'cancel' ? btnConfirmDanger : btnConfirmPrimary} onClick={confirmActionHandler} disabled={loading}>
-                {loading ? 'Processing...' : 'Confirm Action'}
-              </button>
-            </div>
-          </div>
-        </ModalShell>
+        <ConfirmModal
+          title={confirmAction === 'checkin' ? 'Confirm Check-in' : confirmAction === 'checkout' ? 'Confirm Check-out' : 'Cancel Booking'}
+          message={
+            confirmAction === 'checkin' ? `Are you sure you want to check in ${(selectedBooking as any).guestName || 'this guest'}?`
+            : confirmAction === 'checkout' ? `Are you sure you want to check out ${(selectedBooking as any).guestName || 'this guest'}?`
+            : `Are you sure you want to cancel the booking for ${(selectedBooking as any).guestName || 'this guest'}? This action cannot be undone.`
+          }
+          confirmLabel={confirmAction === 'checkin' ? 'Check In' : confirmAction === 'checkout' ? 'Check Out' : 'Cancel Booking'}
+          variant={confirmAction === 'cancel' ? 'danger' : 'primary'}
+          loading={loading}
+          onConfirm={confirmActionHandler}
+          onCancel={() => { setShowConfirmDialog(false); setSelectedBooking(null); setConfirmAction(null); setError(null); }}
+        />
       )}
 
       {/* 4. Early Checkout Modal */}

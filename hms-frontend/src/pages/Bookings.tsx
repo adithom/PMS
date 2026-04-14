@@ -13,6 +13,7 @@ import TaskListModal from '../components/Booking/TaskListModal';
 import BookingFoliosModal from '../components/Booking/BookingFoliosModal';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ModalShell from '../components/ModalShell';
+import ConfirmModal from '../components/ConfirmModal';
 import type { Property, Room, Booking } from '../types';
 import { toDS, addDays, diffDays, shortDate, dayLabel, dateStr, fmtDate } from '../utils/dateHelpers';
 import { getRoomId } from '../utils/roomHelpers';
@@ -26,6 +27,14 @@ import {
 //todo: fix occupancy rate status bars
 
 type StatType = 'incoming' | 'inhouse' | 'checkouts' | 'all';
+
+type PendingAction = {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  variant: 'danger' | 'primary';
+  doFn: () => Promise<void>;
+};
 
 /* ────────────────────────────────────────────────────────────── */
 /* Context Menu                                                  */
@@ -42,17 +51,24 @@ function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout, onEdit
   onShowFolio: (bookingId: string, guestName: string) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
   useEffect(() => {
     const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) onClose(); };
     document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h);
   }, [onClose]);
-  
+
   if (!state) return null;
   const { x, y, booking } = state;
   const sc = STATUS_COLORS[booking.status] ?? STATUS_COLORS.PENDING;
   const guestName = booking.guestName || 'Guest';
 
-  type Act = { label: string; doFn: () => Promise<void>; danger?: boolean };
+  type Act = {
+    label: string;
+    doFn: () => Promise<void>;
+    danger?: boolean;
+    confirm?: { title: string; message: string; confirmLabel: string };
+  };
   const acts: Act[] = [];
   
   if (booking.id) {
@@ -65,12 +81,30 @@ function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout, onEdit
 
     switch (booking.status) {
       case 'PENDING':
-        acts.push({ label: '✓ Confirm Booking', doFn: async () => { await bookingApi.updateStatus(propertyId, booking.id!, 'CONFIRMED'); onAction(); } });
-        acts.push({ label: '✕ Cancel Booking', doFn: async () => { await bookingApi.updateStatus(propertyId, booking.id!, 'CANCELLED'); onAction(); }, danger: true });
+        acts.push({
+          label: '✓ Confirm Booking',
+          doFn: async () => { await bookingApi.updateStatus(propertyId, booking.id!, 'CONFIRMED'); onAction(); },
+          confirm: { title: 'Confirm Booking', message: `Are you sure you want to confirm the booking for ${guestName}?`, confirmLabel: 'Confirm Booking' },
+        });
+        acts.push({
+          label: '✕ Cancel Booking',
+          doFn: async () => { await bookingApi.updateStatus(propertyId, booking.id!, 'CANCELLED'); onAction(); },
+          danger: true,
+          confirm: { title: 'Cancel Booking', message: `Are you sure you want to cancel the booking for ${guestName}? This action cannot be undone.`, confirmLabel: 'Cancel Booking' },
+        });
         break;
       case 'CONFIRMED':
-        acts.push({ label: '✓ Check-in Guest', doFn: async () => { await bookingApi.checkIn(propertyId, booking.id!); onAction(); } });
-        acts.push({ label: '⊘ Mark No Show', doFn: async () => { await bookingApi.updateStatus(propertyId, booking.id!, 'NO_SHOW'); onAction(); }, danger: true });
+        acts.push({
+          label: '✓ Check-in Guest',
+          doFn: async () => { await bookingApi.checkIn(propertyId, booking.id!); onAction(); },
+          confirm: { title: 'Confirm Check-in', message: `Are you sure you want to check in ${guestName}?`, confirmLabel: 'Check In' },
+        });
+        acts.push({
+          label: '⊘ Mark No Show',
+          doFn: async () => { await bookingApi.updateStatus(propertyId, booking.id!, 'NO_SHOW'); onAction(); },
+          danger: true,
+          confirm: { title: 'Mark as No Show', message: `Are you sure you want to mark ${guestName} as a no-show?`, confirmLabel: 'Mark No Show' },
+        });
         break;
       case 'CHECKED_IN': {
         const outDate = dateStr(booking.checkOut);
@@ -86,7 +120,8 @@ function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout, onEdit
         } else {
           acts.push({
             label: '⏎ Check-out Guest',
-            doFn: async () => { await bookingApi.checkOut(propertyId, booking.id!); onAction(); }
+            doFn: async () => { await bookingApi.checkOut(propertyId, booking.id!); onAction(); },
+            confirm: { title: 'Confirm Check-out', message: `Are you sure you want to check out ${guestName}?`, confirmLabel: 'Check Out' },
           });
         }
         break;
@@ -95,7 +130,8 @@ function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout, onEdit
   }
 
   return (
-    <div ref={ref} className="fixed z-[60] w-64 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl"
+    <>
+    {!pendingAction && <div ref={ref} className="fixed z-[60] w-64 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl"
       style={{ left: Math.min(x, window.innerWidth - 280), top: Math.min(y, window.innerHeight - 300) }}>
       <div className="border-b border-slate-100 bg-slate-50/80 px-4 py-3">
         <p className="text-sm font-bold text-slate-900 truncate">{guestName}</p>
@@ -112,23 +148,56 @@ function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout, onEdit
         {acts.map(a => (
           <button key={a.label} type="button"
             className={cn('w-full px-4 py-2 text-left text-sm transition-colors hover:bg-slate-50', a.danger ? 'text-rose-600 hover:bg-rose-50' : 'text-slate-700')}
-            onClick={async (e) => { 
+            onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              try {
-                await a.doFn(); 
-              } catch (err) {
-                console.error(`Action "${a.label}" failed:`, err);
-                alert(`Failed to perform action. Check your developer console for details.`);
-              } finally {
-                onClose(); 
+              if (a.confirm) {
+                setPendingAction({
+                  title: a.confirm.title,
+                  message: a.confirm.message,
+                  confirmLabel: a.confirm.confirmLabel,
+                  variant: a.danger ? 'danger' : 'primary',
+                  doFn: a.doFn,
+                });
+              } else {
+                a.doFn().catch(err => {
+                  console.error(`Action "${a.label}" failed:`, err);
+                  alert(`Failed to perform action. Check your developer console for details.`);
+                });
+                onClose();
               }
             }}>
             {a.label}
           </button>
         ))}
       </div>
-    </div>
+    </div>}
+
+    {pendingAction && (
+      <ConfirmModal
+        title={pendingAction.title}
+        message={pendingAction.message}
+        confirmLabel={pendingAction.confirmLabel}
+        variant={pendingAction.variant}
+        loading={confirmLoading}
+        onConfirm={async () => {
+          setConfirmLoading(true);
+          try {
+            await pendingAction.doFn();
+            setPendingAction(null);
+            onClose();
+          } catch (err) {
+            console.error('Confirm action failed:', err);
+            alert('Failed to perform action. Check your developer console for details.');
+            setPendingAction(null);
+          } finally {
+            setConfirmLoading(false);
+          }
+        }}
+        onCancel={() => setPendingAction(null)}
+      />
+    )}
+    </>
   );
 }
 

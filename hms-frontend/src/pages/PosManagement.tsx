@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import posApi from '../api/posApi';
+import ConfirmModal from '../components/ConfirmModal';
 import type {
   PosLocation, PosItemCategory, PosProduct, PosOrder, OrderSummary,
   PosLocationCreationDto, PosItemCategoryCreationDto, PosProductCreationDto,
@@ -173,6 +174,14 @@ function CategoriesItemsTab({ locations }: { locations: PosLocation[] }) {
   // Inline editing
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
 
+  // Delete confirmation
+  const [pendingDelete, setPendingDelete] = useState<{
+    title: string;
+    message: string;
+    onConfirm: () => Promise<void>;
+  } | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
   const loadData = useCallback(async () => {
     if (!selectedLocationId) return;
     setLoading(true); setError(null);
@@ -213,10 +222,16 @@ function CategoriesItemsTab({ locations }: { locations: PosLocation[] }) {
     catch { setError('Failed to reorder'); }
   };
 
-  const handleDeleteCategory = async (cat: PosItemCategory) => {
-    if (!confirm(`Delete category "${cat.name}"?`)) return;
-    try { await posApi.deleteCategory(cat.id); loadData(); setSelectedCategoryId(null); }
-    catch { setError('Failed to delete category'); }
+  const handleDeleteCategory = (cat: PosItemCategory) => {
+    setPendingDelete({
+      title: 'Delete Category',
+      message: `Delete category "${cat.name}"? This cannot be undone.`,
+      onConfirm: async () => {
+        await posApi.deleteCategory(cat.id);
+        loadData();
+        setSelectedCategoryId(null);
+      },
+    });
   };
 
   const handleAddProduct = async () => {
@@ -247,13 +262,33 @@ function CategoriesItemsTab({ locations }: { locations: PosLocation[] }) {
     catch { setError('Failed to update product'); }
   };
 
-  const handleDeleteProduct = async (product: PosProduct) => {
-    if (!confirm(`Delete "${product.name}"?`)) return;
-    try { await posApi.deleteProduct(product.id); loadData(); }
-    catch { setError('Failed to delete product'); }
+  const handleDeleteProduct = (product: PosProduct) => {
+    setPendingDelete({
+      title: 'Delete Item',
+      message: `Delete "${product.name}"? This cannot be undone.`,
+      onConfirm: async () => {
+        await posApi.deleteProduct(product.id);
+        loadData();
+      },
+    });
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!pendingDelete) return;
+    setDeleteLoading(true);
+    try {
+      await pendingDelete.onConfirm();
+      setPendingDelete(null);
+    } catch {
+      setError('Failed to delete item');
+      setPendingDelete(null);
+    } finally {
+      setDeleteLoading(false);
+    }
   };
 
   return (
+    <>
     <div className="space-y-4">
       {error && <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm">{error}</div>}
 
@@ -389,6 +424,19 @@ function CategoriesItemsTab({ locations }: { locations: PosLocation[] }) {
         </div>
       )}
     </div>
+
+    {pendingDelete && (
+      <ConfirmModal
+        title={pendingDelete.title}
+        message={pendingDelete.message}
+        confirmLabel="Delete"
+        variant="danger"
+        loading={deleteLoading}
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setPendingDelete(null)}
+      />
+    )}
+    </>
   );
 }
 
