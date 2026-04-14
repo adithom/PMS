@@ -58,10 +58,13 @@ public class PdfGenerationService {
             PDPageContentStream contentStream = new PDPageContentStream(document, page);
 
             // --- 1. LOGO ---
-            File logoFile = new File(logoPath);
-            if (logoFile.exists()) {
-                PDImageXObject pdImage = PDImageXObject.createFromFile(logoFile.getAbsolutePath(), document);
-                contentStream.drawImage(pdImage, 50, 750, 80, 50);
+            try (var logoStream = getClass().getClassLoader().getResourceAsStream("logo.png")) {
+                if (logoStream != null) {
+                    PDImageXObject pdImage = PDImageXObject.createFromByteArray(document, logoStream.readAllBytes(), "logo");
+                    contentStream.drawImage(pdImage, 50, 750, 80, 50);
+                }
+            } catch (Exception ignored) {
+                // Logo missing — continue without it
             }
 
             // --- 2. HEADER INFO ---

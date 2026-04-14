@@ -10,6 +10,7 @@ import ModalShell from '../ModalShell';
 import ChargeForm from './ChargeForm';
 import PaymentForm from './PaymentForm';
 import FolioRoutingForm from './FolioRoutingForm';
+import BillViewModal from './BillViewModal';
 
 interface FolioDetailModalProps {
   propertyId: string;
@@ -40,6 +41,7 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
   const [showAddCharge, setShowAddCharge] = useState(false);
   const [showAddPayment, setShowAddPayment] = useState(false);
   const [showRouting, setShowRouting] = useState(false);
+  const [showBillView, setShowBillView] = useState(false);
 
   useEffect(() => {
     loadFolio();
@@ -79,11 +81,11 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
         setTimeout(() => triggerPresignedDownload(result.ancillaryBill!.pdfDownloadUrl!), 300);
       }
       if (!result.roomRentBill?.pdfDownloadUrl && !result.ancillaryBill?.pdfDownloadUrl) {
-        alert('Invoice generated but PDF upload unavailable. Contact admin.');
+        alert('Bill generated but PDF upload unavailable. Contact admin.');
       }
       await loadBills();
     } catch (err: any) {
-      alert(err.message || 'Failed to generate invoice.');
+      alert(err.message || 'Failed to generate bill.');
     } finally {
       setIsGeneratingBill(false);
     }
@@ -349,23 +351,35 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
                 
                 <div className="my-4 border-t border-slate-100"></div>
 
-                <button
-                  onClick={handleGenerateInvoice}
-                  disabled={isGeneratingBill}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-all hover:bg-slate-50 disabled:opacity-50"
-                >
-                  <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                  </svg>
-                  {isGeneratingBill ? 'Generating...' : 'Generate Invoice'}
-                </button>
+                {bills.filter(b => !b.isVoided).length > 0 ? (
+                  <button
+                    onClick={() => setShowBillView(true)}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700 transition-all hover:bg-emerald-100"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    View Bill
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleGenerateInvoice}
+                    disabled={isGeneratingBill}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-all hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                    </svg>
+                    {isGeneratingBill ? 'Generating...' : 'Generate Bill'}
+                  </button>
+                )}
               </div>
             )}
 
-            {/* Generated Invoices */}
+            {/* Generated Bills */}
             {bills.length > 0 && (
               <div className="mt-8">
-                <h3 className="mb-3 text-sm font-bold uppercase tracking-widest text-slate-400">Generated Invoices</h3>
+                <h3 className="mb-3 text-sm font-bold uppercase tracking-widest text-slate-400">Generated Bills</h3>
                 <div className="space-y-2">
                   {bills.map(bill => (
                     <div key={bill.id} className={`flex items-center justify-between rounded-lg border px-3 py-2.5 ${bill.isVoided ? 'border-slate-100 bg-slate-50 opacity-60' : 'border-slate-200 bg-white'}`}>
@@ -375,7 +389,7 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
                           {bill.isVoided && <span className="ml-2 text-[10px] font-bold uppercase text-rose-500">Voided</span>}
                         </p>
                         <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
-                          {bill.category ?? (bill.charges?.[0] ? 'Invoice' : 'Invoice')}
+                          {bill.charges?.[0]?.chargeCode === 'ROOM_RENT' ? 'Room Rent' : 'Ancillary'}
                         </p>
                       </div>
                       {!bill.isVoided && (
@@ -420,15 +434,23 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
       )}
       {showRouting && (
         <ModalShell title="Route Charges" onClose={() => setShowRouting(false)}>
-           <FolioRoutingForm 
-             propertyId={propertyId} 
+           <FolioRoutingForm
+             propertyId={propertyId}
              folioId={folioId}
              charges={folio.charges || []}
              currency={folio.currency || 'INR'}
-             onSuccess={() => { setShowRouting(false); loadFolio(); }} 
-             onCancel={() => setShowRouting(false)} 
+             onSuccess={() => { setShowRouting(false); loadFolio(); }}
+             onCancel={() => setShowRouting(false)}
            />
         </ModalShell>
+      )}
+      {showBillView && (
+        <BillViewModal
+          folio={folio}
+          bills={bills.filter(b => !b.isVoided)}
+          onClose={() => setShowBillView(false)}
+          onBillsChanged={loadBills}
+        />
       )}
     </div>
   );

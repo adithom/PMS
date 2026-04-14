@@ -92,10 +92,13 @@ public class GroupPdfGenerationService {
             state.newPage();
 
             // Logo
-            File logoFile = new File(logoPath);
-            if (logoFile.exists()) {
-                PDImageXObject logo = PDImageXObject.createFromFile(logoFile.getAbsolutePath(), document);
-                state.cs.drawImage(logo, 50, 750, 80, 50);
+            try (var logoStream = getClass().getClassLoader().getResourceAsStream("logo.png")) {
+                if (logoStream != null) {
+                    PDImageXObject logo = PDImageXObject.createFromByteArray(document, logoStream.readAllBytes(), "logo");
+                    state.cs.drawImage(logo, 50, 750, 80, 50);
+                }
+            } catch (Exception ignored) {
+                // Logo missing — continue without it
             }
 
             // Hotel header
