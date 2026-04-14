@@ -3,7 +3,7 @@ import type { BookingStatus } from '../../types';
 
 export const CELL_W = 110;
 export const CELL_H = 40;
-export const LABEL_W = 160;
+export const LABEL_W = 112;
 export const MIN_CHART_ROWS = 18;
 
 export const BUFFER_BEFORE = 15;

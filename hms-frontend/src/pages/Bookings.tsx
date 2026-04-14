@@ -387,8 +387,8 @@ export default function Bookings() {
 
   const groups = useMemo(() => {
     const m = new Map<string, Room[]>();
-    for (const r of rooms) { const t = r.type || 'Standard'; if (!m.has(t)) m.set(t, []); m.get(t)!.push(r); }
-    return Array.from(m.entries()).map(([type, rms]) => ({ type, rooms: rms }));
+    for (const r of rooms) { const u = r.unitName || 'Unassigned'; if (!m.has(u)) m.set(u, []); m.get(u)!.push(r); }
+    return Array.from(m.entries()).map(([unit, rms]) => ({ type: unit, rooms: rms }));
   }, [rooms]);
 
   const byRoomNumber = useMemo(() => {
