@@ -2,10 +2,12 @@ import { useState, useEffect, useMemo } from 'react';
 import folioApi from '../api/folioApi';
 import type { FolioDto } from '../api/folioApi';
 import billingApi from '../api/billingApi';
+import type { BillDto } from '../api/billingApi';
 import { triggerPresignedDownload } from '../utils/downloadUtils';
 
 import LoadingSpinner from '../components/LoadingSpinner';
 import FolioDetailModal from '../components/Billing/FolioDetailModal';
+import BillViewModal from '../components/Billing/BillViewModal';
 
 /* ────────────────────────────────────────────────────────────── */
 /* Types & Tokens                                               */
@@ -30,8 +32,12 @@ export default function FrontDeskBillingManager({ propertyId }: FrontDeskBilling
   const [filterPreset, setFilterPreset] = useState<FilterPreset>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Bills map: folioId → bills array (drives Generate/View button state)
+  const [folioBillsMap, setFolioBillsMap] = useState<Record<string, BillDto[]>>({});
+
   // Modal State
   const [activeFolioId, setActiveFolioId] = useState<string | null>(null);
+  const [viewBillFolio, setViewBillFolio] = useState<FolioDto | null>(null);
   const [generatingFolioId, setGeneratingFolioId] = useState<string | null>(null);
 
   /* ═══════════════════════════════════════════════════════════ */
@@ -42,10 +48,20 @@ export default function FrontDeskBillingManager({ propertyId }: FrontDeskBilling
     setLoading(true);
     setError(null);
     try {
-      // Fetch open folios for this specific property
       const response = await folioApi.getOpenFolios(propertyId);
-      
-      setFolios(response || []);
+      const fetchedFolios = response || [];
+      setFolios(fetchedFolios);
+
+      // Fetch bills for all folios in parallel to drive button state
+      const results = await Promise.allSettled(
+        fetchedFolios.map(f => billingApi.getBillsForFolio(f.id))
+      );
+      const map: Record<string, BillDto[]> = {};
+      fetchedFolios.forEach((f, i) => {
+        const r = results[i];
+        map[f.id] = r.status === 'fulfilled' ? r.value : [];
+      });
+      setFolioBillsMap(map);
     } catch (err: any) {
       console.error('[Front Desk Billing] Failed to load folios:', err);
       setError(err.message || 'Failed to load front desk billing data');
@@ -53,6 +69,18 @@ export default function FrontDeskBillingManager({ propertyId }: FrontDeskBilling
       setLoading(false);
     }
   };
+
+  const refreshBillsForFolio = async (folioId: string) => {
+    try {
+      const bills = await billingApi.getBillsForFolio(folioId);
+      setFolioBillsMap(prev => ({ ...prev, [folioId]: bills }));
+    } catch {
+      // non-critical
+    }
+  };
+
+  const activeBillsForFolio = (folioId: string) =>
+    (folioBillsMap[folioId] ?? []).filter(b => !b.isVoided);
 
   useEffect(() => {
     if (propertyId) {
@@ -133,6 +161,7 @@ export default function FrontDeskBillingManager({ propertyId }: FrontDeskBilling
       if (!result.roomRentBill?.pdfDownloadUrl && !result.ancillaryBill?.pdfDownloadUrl) {
         alert('Invoice generated. PDF upload unavailable — contact admin.');
       }
+      await refreshBillsForFolio(folio.id);
     } catch (err: any) {
       alert(err.message || 'Failed to generate invoice.');
     } finally {
@@ -342,13 +371,22 @@ export default function FrontDeskBillingManager({ propertyId }: FrontDeskBilling
                         >
                           Open Ledger
                         </button>
-                        <button
-                          onClick={() => handleGenerateBill(f)}
-                          disabled={generatingFolioId === f.id}
-                          className="rounded-lg bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-700 transition-colors hover:bg-indigo-100 disabled:opacity-50"
-                        >
-                          {generatingFolioId === f.id ? 'Generating...' : 'Generate Bill'}
-                        </button>
+                        {activeBillsForFolio(f.id).length > 0 ? (
+                          <button
+                            onClick={() => setViewBillFolio(f)}
+                            className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 transition-colors hover:bg-emerald-100"
+                          >
+                            View Bill
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleGenerateBill(f)}
+                            disabled={generatingFolioId === f.id}
+                            className="rounded-lg bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-700 transition-colors hover:bg-indigo-100 disabled:opacity-50"
+                          >
+                            {generatingFolioId === f.id ? 'Generating...' : 'Generate Bill'}
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );
@@ -359,12 +397,20 @@ export default function FrontDeskBillingManager({ propertyId }: FrontDeskBilling
         </div>
       </div>
 
-      {/* ─── Modal Wrapper ─── */}
+      {/* ─── Modal Wrappers ─── */}
       {activeFolioId && (
         <FolioDetailModal
           propertyId={propertyId}
           folioId={activeFolioId}
-          onClose={() => { setActiveFolioId(null); loadData(); }} // Refresh grid on close
+          onClose={() => { setActiveFolioId(null); loadData(); }}
+        />
+      )}
+      {viewBillFolio && (
+        <BillViewModal
+          folio={viewBillFolio}
+          bills={activeBillsForFolio(viewBillFolio.id)}
+          onClose={() => setViewBillFolio(null)}
+          onBillsChanged={() => refreshBillsForFolio(viewBillFolio.id)}
         />
       )}
     </div>
