@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import posApi from '../api/posApi';
 import ConfirmModal from '../components/ConfirmModal';
@@ -10,6 +10,54 @@ import type {
 const fmt = (n: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(n);
 const tabs = ['Outlets', 'Categories & Items', 'Walk-in Folios', 'Order History'] as const;
 type Tab = typeof tabs[number];
+
+const inputCls = 'border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow w-full';
+const selectCls = 'border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow';
+
+// ─── DateInput — dd/mm/yyyy display, native calendar picker ──────────────────
+
+function DateInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const ref = useRef<HTMLInputElement>(null);
+  const display = value ? value.split('-').reverse().join('/') : '';
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => ref.current?.showPicker()}
+        className={`${selectCls} flex items-center gap-2`}
+      >
+        <span className="tabular-nums">{display}</span>
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      </button>
+      <input
+        ref={ref}
+        type="date"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        className="absolute inset-0 opacity-0 pointer-events-none"
+      />
+    </div>
+  );
+}
+
+// ─── Toggle switch ────────────────────────────────────────────────────────────
+
+function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void }) {
+  return (
+    <button
+      onClick={onChange}
+      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
+        checked ? 'bg-emerald-500' : 'bg-gray-200'
+      }`}
+    >
+      <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform ${
+        checked ? 'translate-x-5' : 'translate-x-0.5'
+      }`} />
+    </button>
+  );
+}
 
 // ─── OutletsTab ──────────────────────────────────────────────────────────────
 
@@ -38,77 +86,81 @@ function OutletsTab({ propertyId, locations, onRefresh }: { propertyId: string; 
   };
 
   return (
-    <div className="space-y-4">
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm">{error}</div>}
+    <div className="space-y-5">
+      {error && <div className="bg-red-50 border border-red-100 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>}
 
       <div className="flex justify-between items-center">
-        <h3 className="text-sm font-medium text-gray-700">Outlets ({locations.length})</h3>
-        <button onClick={() => setCreating(true)} className="text-sm bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700">+ New Outlet</button>
+        <h3 className="text-sm font-semibold text-gray-700">Outlets <span className="text-gray-400 font-normal">({locations.length})</span></h3>
+        <button onClick={() => setCreating(true)} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm">
+          + New Outlet
+        </button>
       </div>
 
       {creating && (
-        <div className="border border-blue-200 bg-blue-50 rounded-lg p-4 space-y-3">
+        <div className="bg-white border border-gray-200 shadow-sm rounded-xl p-5 space-y-4">
+          <h4 className="text-sm font-semibold text-gray-800">New Outlet</h4>
           <div className="grid grid-cols-2 gap-3">
-            <input placeholder="Name *" className="border border-gray-300 rounded px-3 py-2 text-sm" value={form.name || ''}
+            <input placeholder="Name *" className={inputCls} value={form.name || ''}
               onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
-            <select className="border border-gray-300 rounded px-3 py-2 text-sm" value={form.locationType || ''}
+            <select className={inputCls} value={form.locationType || ''}
               onChange={e => setForm(f => ({ ...f, locationType: e.target.value }))}>
               <option value="">Type *</option>
               {LOCATION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
-            <input placeholder="Tax Rate %" type="number" className="border border-gray-300 rounded px-3 py-2 text-sm" value={form.defaultTaxRate ?? ''}
+            <input placeholder="Tax Rate %" type="number" className={inputCls} value={form.defaultTaxRate ?? ''}
               onChange={e => setForm(f => ({ ...f, defaultTaxRate: parseFloat(e.target.value) || 0 }))} />
-            <input placeholder="Service Charge %" type="number" className="border border-gray-300 rounded px-3 py-2 text-sm" value={form.serviceChargeRate ?? ''}
+            <input placeholder="Service Charge %" type="number" className={inputCls} value={form.serviceChargeRate ?? ''}
               onChange={e => setForm(f => ({ ...f, serviceChargeRate: parseFloat(e.target.value) || 0 }))} />
-            <input placeholder="Opening Time (HH:mm)" className="border border-gray-300 rounded px-3 py-2 text-sm" value={form.openingTime || ''}
+            <input placeholder="Opening Time (HH:mm)" className={inputCls} value={form.openingTime || ''}
               onChange={e => setForm(f => ({ ...f, openingTime: e.target.value }))} />
-            <input placeholder="Closing Time (HH:mm)" className="border border-gray-300 rounded px-3 py-2 text-sm" value={form.closingTime || ''}
+            <input placeholder="Closing Time (HH:mm)" className={inputCls} value={form.closingTime || ''}
               onChange={e => setForm(f => ({ ...f, closingTime: e.target.value }))} />
           </div>
-          <div className="flex gap-2 justify-end">
-            <button onClick={() => { setCreating(false); setError(null); }} className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50">Cancel</button>
-            <button onClick={handleCreate} disabled={submitting} className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50">
+          <div className="flex gap-2 justify-end pt-1">
+            <button onClick={() => { setCreating(false); setError(null); }} className="px-4 py-2 text-sm font-medium border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
+            <button onClick={handleCreate} disabled={submitting} className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-sm">
               {submitting ? 'Creating...' : 'Create Outlet'}
             </button>
           </div>
         </div>
       )}
 
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-gray-600">
+          <thead className="bg-gray-50 border-b border-gray-100">
             <tr>
-              <th className="text-left px-4 py-2 font-medium">Name</th>
-              <th className="text-left px-4 py-2 font-medium">Type</th>
-              <th className="text-left px-4 py-2 font-medium">Tax %</th>
-              <th className="text-left px-4 py-2 font-medium">Service %</th>
-              <th className="text-left px-4 py-2 font-medium">Hours</th>
-              <th className="text-center px-4 py-2 font-medium">Active</th>
-              <th className="text-right px-4 py-2 font-medium">Actions</th>
+              <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Name</th>
+              <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Type</th>
+              <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Tax %</th>
+              <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Service %</th>
+              <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Hours</th>
+              <th className="text-center px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Active</th>
+              <th className="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-gray-50">
             {locations.map(loc => (
-              <tr key={loc.id} className="hover:bg-gray-50">
-                <td className="px-4 py-2 font-medium text-gray-800">{loc.name}</td>
-                <td className="px-4 py-2 text-gray-500">{loc.locationType}</td>
-                <td className="px-4 py-2 text-gray-500">{loc.defaultTaxRate}%</td>
-                <td className="px-4 py-2 text-gray-500">{loc.serviceChargeRate ?? 0}%</td>
-                <td className="px-4 py-2 text-gray-500 text-xs">
-                  {loc.openingTime && loc.closingTime ? `${loc.openingTime} - ${loc.closingTime}` : '—'}
+              <tr key={loc.id} className="hover:bg-gray-50/50 transition-colors">
+                <td className="px-5 py-3.5 font-medium text-gray-900">{loc.name}</td>
+                <td className="px-5 py-3.5">
+                  <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{loc.locationType}</span>
                 </td>
-                <td className="px-4 py-2 text-center">
-                  <button onClick={() => handleUpdate(loc.id, { isActive: !loc.isActive })}
-                    className={`w-4 h-4 rounded border cursor-pointer ${loc.isActive ? 'bg-green-500 border-green-600' : 'bg-gray-200 border-gray-300'}`} />
+                <td className="px-5 py-3.5 text-gray-600">{loc.defaultTaxRate}%</td>
+                <td className="px-5 py-3.5 text-gray-600">{loc.serviceChargeRate ?? 0}%</td>
+                <td className="px-5 py-3.5 text-gray-500 text-xs">
+                  {loc.openingTime && loc.closingTime ? `${loc.openingTime} – ${loc.closingTime}` : '—'}
                 </td>
-                <td className="px-4 py-2 text-right">
+                <td className="px-5 py-3.5 text-center">
+                  <Toggle checked={loc.isActive} onChange={() => handleUpdate(loc.id, { isActive: !loc.isActive })} />
+                </td>
+                <td className="px-5 py-3.5 text-right">
                   <button onClick={() => setEditId(editId === loc.id ? null : loc.id)}
-                    className="text-blue-600 hover:text-blue-800 text-xs">Edit</button>
+                    className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors">Edit</button>
                 </td>
               </tr>
             ))}
             {locations.length === 0 && (
-              <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">No outlets yet. Create your first one.</td></tr>
+              <tr><td colSpan={7} className="px-5 py-10 text-center text-gray-400 text-sm">No outlets yet. Create your first one.</td></tr>
             )}
           </tbody>
         </table>
@@ -135,19 +187,19 @@ function EditOutletInline({ location, onSave, onCancel }: { location: PosLocatio
   const [closing, setClosing] = useState(location.closingTime || '');
 
   return (
-    <div className="border border-blue-200 bg-blue-50 rounded-lg p-4 space-y-3">
-      <h4 className="text-sm font-medium text-blue-800">Editing: {location.name}</h4>
+    <div className="bg-white border border-gray-200 shadow-sm rounded-xl p-5 space-y-4">
+      <h4 className="text-sm font-semibold text-gray-800">Editing: <span className="text-blue-600">{location.name}</span></h4>
       <div className="grid grid-cols-2 gap-3">
-        <input placeholder="Name" className="border border-gray-300 rounded px-3 py-2 text-sm" value={name} onChange={e => setName(e.target.value)} />
-        <input placeholder="Tax Rate %" type="number" className="border border-gray-300 rounded px-3 py-2 text-sm" value={taxRate} onChange={e => setTaxRate(parseFloat(e.target.value) || 0)} />
-        <input placeholder="Service Charge %" type="number" className="border border-gray-300 rounded px-3 py-2 text-sm" value={serviceCharge} onChange={e => setServiceCharge(parseFloat(e.target.value) || 0)} />
-        <input placeholder="Opening Time" className="border border-gray-300 rounded px-3 py-2 text-sm" value={opening} onChange={e => setOpening(e.target.value)} />
-        <input placeholder="Closing Time" className="border border-gray-300 rounded px-3 py-2 text-sm" value={closing} onChange={e => setClosing(e.target.value)} />
+        <input placeholder="Name" className={inputCls} value={name} onChange={e => setName(e.target.value)} />
+        <input placeholder="Tax Rate %" type="number" className={inputCls} value={taxRate} onChange={e => setTaxRate(parseFloat(e.target.value) || 0)} />
+        <input placeholder="Service Charge %" type="number" className={inputCls} value={serviceCharge} onChange={e => setServiceCharge(parseFloat(e.target.value) || 0)} />
+        <input placeholder="Opening Time" className={inputCls} value={opening} onChange={e => setOpening(e.target.value)} />
+        <input placeholder="Closing Time" className={inputCls} value={closing} onChange={e => setClosing(e.target.value)} />
       </div>
-      <div className="flex gap-2 justify-end">
-        <button onClick={onCancel} className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50">Cancel</button>
+      <div className="flex gap-2 justify-end pt-1">
+        <button onClick={onCancel} className="px-4 py-2 text-sm font-medium border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
         <button onClick={() => onSave({ name, defaultTaxRate: taxRate, serviceChargeRate: serviceCharge, openingTime: opening || null, closingTime: closing || null })}
-          className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">Save</button>
+          className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm">Save Changes</button>
       </div>
     </div>
   );
@@ -163,18 +215,14 @@ function CategoriesItemsTab({ locations }: { locations: PosLocation[] }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Category form
   const [addingCategory, setAddingCategory] = useState(false);
   const [catForm, setCatForm] = useState<Partial<PosItemCategoryCreationDto>>({});
 
-  // Product form
   const [addingProduct, setAddingProduct] = useState(false);
   const [prodForm, setProdForm] = useState<Partial<PosProductCreationDto>>({ isAvailable: true });
 
-  // Inline editing
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
 
-  // Delete confirmation
   const [pendingDelete, setPendingDelete] = useState<{
     title: string;
     message: string;
@@ -289,131 +337,132 @@ function CategoriesItemsTab({ locations }: { locations: PosLocation[] }) {
 
   return (
     <>
-    <div className="space-y-4">
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm">{error}</div>}
+    <div className="space-y-5">
+      {error && <div className="bg-red-50 border border-red-100 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>}
 
-      {/* Location selector */}
       <div className="flex items-center gap-3">
-        <label className="text-sm text-gray-600">Outlet:</label>
-        <select value={selectedLocationId} onChange={e => setSelectedLocationId(e.target.value)}
-          className="border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <label className="text-sm font-medium text-gray-700">Outlet</label>
+        <select value={selectedLocationId} onChange={e => setSelectedLocationId(e.target.value)} className={selectCls}>
           {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
         </select>
       </div>
 
-      {loading ? <div className="text-center py-8 text-gray-500">Loading...</div> : (
-        <div className="flex gap-4">
+      {loading ? <div className="text-center py-12 text-gray-400 text-sm">Loading...</div> : (
+        <div className="flex gap-5">
           {/* Left: Categories sidebar */}
-          <div className="w-64 flex-shrink-0 space-y-2">
+          <div className="w-64 flex-shrink-0 space-y-3">
             <div className="flex justify-between items-center">
-              <span className="text-sm font-medium text-gray-700">Categories</span>
-              <button onClick={() => setAddingCategory(true)} className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700">+ Add</button>
+              <span className="text-sm font-semibold text-gray-700">Categories</span>
+              <button onClick={() => setAddingCategory(true)} className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm">+ Add</button>
             </div>
 
             {addingCategory && (
-              <div className="border border-blue-200 bg-blue-50 rounded p-2 space-y-2">
-                <input placeholder="Name *" className="w-full border border-gray-300 rounded px-2 py-1 text-sm" value={catForm.name || ''}
+              <div className="bg-white border border-gray-200 shadow-sm rounded-xl p-3 space-y-2.5">
+                <input placeholder="Category name *" className={inputCls} value={catForm.name || ''}
                   onChange={e => setCatForm(f => ({ ...f, name: e.target.value }))} />
-                <div className="flex gap-1 justify-end">
-                  <button onClick={() => { setAddingCategory(false); setError(null); }} className="text-xs px-2 py-1 border border-gray-300 rounded">Cancel</button>
-                  <button onClick={handleAddCategory} className="text-xs px-2 py-1 bg-blue-600 text-white rounded">Add</button>
+                <div className="flex gap-1.5 justify-end">
+                  <button onClick={() => { setAddingCategory(false); setError(null); }} className="text-xs px-3 py-1.5 border border-gray-200 rounded-lg font-medium hover:bg-gray-50 transition-colors">Cancel</button>
+                  <button onClick={handleAddCategory} className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">Add</button>
                 </div>
               </div>
             )}
 
             <div className="space-y-1">
               {categories.map(cat => (
-                <div key={cat.id}
-                  className={`flex items-center justify-between px-3 py-2 rounded cursor-pointer text-sm transition-colors ${
-                    selectedCategoryId === cat.id ? 'bg-blue-100 text-blue-800 font-medium' : 'bg-white text-gray-700 hover:bg-gray-50'
-                  } ${!cat.isActive ? 'opacity-50' : ''}`}
+                <div
+                  key={cat.id}
+                  className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer text-sm transition-all ${
+                    selectedCategoryId === cat.id
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'text-gray-700 hover:bg-gray-100'
+                  } ${!cat.isActive ? 'opacity-40' : ''}`}
                   onClick={() => setSelectedCategoryId(cat.id)}>
-                  <span className="truncate flex-1">{cat.name}</span>
+                  <span className="truncate flex-1 font-medium">{cat.name}</span>
                   <div className="flex items-center gap-0.5 ml-2">
                     <button onClick={e => { e.stopPropagation(); handleReorderCategory(cat, 'up'); }}
-                      className="text-gray-400 hover:text-gray-600 text-xs px-0.5" title="Move up">&#9650;</button>
+                      className={`text-xs px-0.5 transition-colors ${selectedCategoryId === cat.id ? 'text-blue-200 hover:text-white' : 'text-gray-400 hover:text-gray-600'}`} title="Move up">▲</button>
                     <button onClick={e => { e.stopPropagation(); handleReorderCategory(cat, 'down'); }}
-                      className="text-gray-400 hover:text-gray-600 text-xs px-0.5" title="Move down">&#9660;</button>
+                      className={`text-xs px-0.5 transition-colors ${selectedCategoryId === cat.id ? 'text-blue-200 hover:text-white' : 'text-gray-400 hover:text-gray-600'}`} title="Move down">▼</button>
                     <button onClick={e => { e.stopPropagation(); handleToggleCategoryActive(cat); }}
-                      className={`text-xs px-1 ${cat.isActive ? 'text-green-600' : 'text-gray-400'}`} title="Toggle active">
+                      className={`text-xs px-1 font-medium transition-colors ${selectedCategoryId === cat.id ? 'text-blue-200 hover:text-white' : cat.isActive ? 'text-emerald-600' : 'text-gray-400'}`}>
                       {cat.isActive ? 'on' : 'off'}
                     </button>
                     <button onClick={e => { e.stopPropagation(); handleDeleteCategory(cat); }}
-                      className="text-red-400 hover:text-red-600 text-xs px-0.5" title="Delete">&times;</button>
+                      className={`text-xs px-0.5 transition-colors ${selectedCategoryId === cat.id ? 'text-blue-200 hover:text-white' : 'text-red-400 hover:text-red-600'}`}>&times;</button>
                   </div>
                 </div>
               ))}
-              {categories.length === 0 && <div className="text-xs text-gray-400 text-center py-4">No categories yet</div>}
+              {categories.length === 0 && <div className="text-xs text-gray-400 text-center py-6">No categories yet</div>}
             </div>
           </div>
 
           {/* Right: Products in selected category */}
-          <div className="flex-1 space-y-3">
+          <div className="flex-1 space-y-4">
             <div className="flex justify-between items-center">
-              <span className="text-sm font-medium text-gray-700">
-                Items {selectedCategoryId ? `in "${categories.find(c => c.id === selectedCategoryId)?.name || ''}"` : '(all)'}
+              <span className="text-sm font-semibold text-gray-700">
+                Items {selectedCategoryId ? <span className="text-gray-500 font-normal">in "{categories.find(c => c.id === selectedCategoryId)?.name || ''}"</span> : <span className="text-gray-500 font-normal">(all)</span>}
               </span>
               {selectedCategoryId && (
-                <button onClick={() => setAddingProduct(true)} className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700">+ Add Item</button>
+                <button onClick={() => setAddingProduct(true)} className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm">+ Add Item</button>
               )}
             </div>
 
             {addingProduct && selectedCategoryId && (
-              <div className="border border-blue-200 bg-blue-50 rounded-lg p-3 space-y-2">
-                <div className="grid grid-cols-3 gap-2">
-                  <input placeholder="Name *" className="border border-gray-300 rounded px-2 py-1.5 text-sm" value={prodForm.name || ''}
+              <div className="bg-white border border-gray-200 shadow-sm rounded-xl p-4 space-y-3">
+                <h4 className="text-sm font-semibold text-gray-800">New Item</h4>
+                <div className="grid grid-cols-3 gap-3">
+                  <input placeholder="Name *" className={inputCls} value={prodForm.name || ''}
                     onChange={e => setProdForm(f => ({ ...f, name: e.target.value }))} />
-                  <input placeholder="Price *" type="number" className="border border-gray-300 rounded px-2 py-1.5 text-sm" value={prodForm.price ?? ''}
+                  <input placeholder="Price *" type="number" className={inputCls} value={prodForm.price ?? ''}
                     onChange={e => setProdForm(f => ({ ...f, price: parseFloat(e.target.value) || 0 }))} />
-                  <input placeholder="Tax %" type="number" className="border border-gray-300 rounded px-2 py-1.5 text-sm" value={prodForm.taxRate ?? ''}
+                  <input placeholder="Tax %" type="number" className={inputCls} value={prodForm.taxRate ?? ''}
                     onChange={e => setProdForm(f => ({ ...f, taxRate: parseFloat(e.target.value) || 0 }))} />
-                  <input placeholder="Discount %" type="number" className="border border-gray-300 rounded px-2 py-1.5 text-sm" value={prodForm.discountRate ?? ''}
+                  <input placeholder="Discount %" type="number" className={inputCls} value={prodForm.discountRate ?? ''}
                     onChange={e => setProdForm(f => ({ ...f, discountRate: parseFloat(e.target.value) || 0 }))} />
-                  <input placeholder="Description" className="border border-gray-300 rounded px-2 py-1.5 text-sm" value={prodForm.description || ''}
+                  <input placeholder="Description" className={inputCls} value={prodForm.description || ''}
                     onChange={e => setProdForm(f => ({ ...f, description: e.target.value }))} />
                 </div>
-                <div className="flex gap-2 justify-end">
-                  <button onClick={() => { setAddingProduct(false); setError(null); }} className="px-2 py-1 text-xs border border-gray-300 rounded">Cancel</button>
-                  <button onClick={handleAddProduct} className="px-2 py-1 text-xs bg-blue-600 text-white rounded">Add Item</button>
+                <div className="flex gap-2 justify-end pt-1">
+                  <button onClick={() => { setAddingProduct(false); setError(null); }} className="px-3 py-1.5 text-sm font-medium border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
+                  <button onClick={handleAddProduct} className="px-3 py-1.5 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm">Add Item</button>
                 </div>
               </div>
             )}
 
-            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-gray-600">
+                <thead className="bg-gray-50 border-b border-gray-100">
                   <tr>
-                    <th className="text-left px-3 py-2 font-medium">Name</th>
-                    <th className="text-right px-3 py-2 font-medium">Price</th>
-                    <th className="text-right px-3 py-2 font-medium">Disc %</th>
-                    <th className="text-right px-3 py-2 font-medium">Tax %</th>
-                    <th className="text-center px-3 py-2 font-medium">Avail</th>
-                    <th className="text-right px-3 py-2 font-medium">Actions</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Name</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Price</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Disc %</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Tax %</th>
+                    <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Avail</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-50">
                   {filteredProducts.map(prod => (
                     editingProductId === prod.id ? (
                       <EditProductRow key={prod.id} product={prod} onSave={u => handleUpdateProduct(prod.id, u)} onCancel={() => setEditingProductId(null)} />
                     ) : (
-                      <tr key={prod.id} className="hover:bg-gray-50">
-                        <td className="px-3 py-2 font-medium text-gray-800">{prod.name}</td>
-                        <td className="px-3 py-2 text-right text-gray-800">{fmt(prod.price)}</td>
-                        <td className="px-3 py-2 text-right text-gray-500">{prod.discountRate ?? 0}%</td>
-                        <td className="px-3 py-2 text-right text-gray-500">{prod.taxRate}%</td>
-                        <td className="px-3 py-2 text-center">
-                          <button onClick={() => handleUpdateProduct(prod.id, { isAvailable: !prod.isAvailable })}
-                            className={`w-4 h-4 rounded border cursor-pointer ${prod.isAvailable ? 'bg-green-500 border-green-600' : 'bg-gray-200 border-gray-300'}`} />
+                      <tr key={prod.id} className="hover:bg-gray-50/50 transition-colors">
+                        <td className="px-4 py-3.5 font-medium text-gray-900">{prod.name}</td>
+                        <td className="px-4 py-3.5 text-right font-medium text-gray-800">{fmt(prod.price)}</td>
+                        <td className="px-4 py-3.5 text-right text-gray-500">{prod.discountRate ?? 0}%</td>
+                        <td className="px-4 py-3.5 text-right text-gray-500">{prod.taxRate}%</td>
+                        <td className="px-4 py-3.5 text-center">
+                          <Toggle checked={prod.isAvailable} onChange={() => handleUpdateProduct(prod.id, { isAvailable: !prod.isAvailable })} />
                         </td>
-                        <td className="px-3 py-2 text-right space-x-2">
-                          <button onClick={() => setEditingProductId(prod.id)} className="text-blue-600 hover:text-blue-800 text-xs">Edit</button>
-                          <button onClick={() => handleDeleteProduct(prod)} className="text-red-500 hover:text-red-700 text-xs">Del</button>
+                        <td className="px-4 py-3.5 text-right space-x-3">
+                          <button onClick={() => setEditingProductId(prod.id)} className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors">Edit</button>
+                          <button onClick={() => handleDeleteProduct(prod)} className="text-red-400 hover:text-red-600 text-sm font-medium transition-colors">Del</button>
                         </td>
                       </tr>
                     )
                   ))}
                   {filteredProducts.length === 0 && (
-                    <tr><td colSpan={6} className="px-3 py-8 text-center text-gray-400">
+                    <tr><td colSpan={6} className="px-4 py-10 text-center text-gray-400 text-sm">
                       {selectedCategoryId ? 'No items in this category yet.' : 'Select a category to view items.'}
                     </td></tr>
                   )}
@@ -445,17 +494,18 @@ function EditProductRow({ product, onSave, onCancel }: { product: PosProduct; on
   const [discount, setDiscount] = useState(product.discountRate ?? 0);
   const [tax, setTax] = useState(product.taxRate);
   const [name, setName] = useState(product.name);
+  const rowInput = 'border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full';
 
   return (
-    <tr className="bg-blue-50">
-      <td className="px-3 py-2"><input className="border border-gray-300 rounded px-2 py-1 text-sm w-full" value={name} onChange={e => setName(e.target.value)} /></td>
-      <td className="px-3 py-2"><input type="number" className="border border-gray-300 rounded px-2 py-1 text-sm w-20 text-right" value={price} onChange={e => setPrice(parseFloat(e.target.value) || 0)} /></td>
-      <td className="px-3 py-2"><input type="number" className="border border-gray-300 rounded px-2 py-1 text-sm w-16 text-right" value={discount} onChange={e => setDiscount(parseFloat(e.target.value) || 0)} /></td>
-      <td className="px-3 py-2"><input type="number" className="border border-gray-300 rounded px-2 py-1 text-sm w-16 text-right" value={tax} onChange={e => setTax(parseFloat(e.target.value) || 0)} /></td>
-      <td className="px-3 py-2 text-center">—</td>
-      <td className="px-3 py-2 text-right space-x-1">
-        <button onClick={() => onSave({ name, price, discountRate: discount, taxRate: tax })} className="text-green-600 hover:text-green-800 text-xs">Save</button>
-        <button onClick={onCancel} className="text-gray-500 hover:text-gray-700 text-xs">Cancel</button>
+    <tr className="bg-blue-50/50">
+      <td className="px-4 py-2.5"><input className={rowInput} value={name} onChange={e => setName(e.target.value)} /></td>
+      <td className="px-4 py-2.5"><input type="number" className={`${rowInput} w-24 text-right`} value={price} onChange={e => setPrice(parseFloat(e.target.value) || 0)} /></td>
+      <td className="px-4 py-2.5"><input type="number" className={`${rowInput} w-20 text-right`} value={discount} onChange={e => setDiscount(parseFloat(e.target.value) || 0)} /></td>
+      <td className="px-4 py-2.5"><input type="number" className={`${rowInput} w-20 text-right`} value={tax} onChange={e => setTax(parseFloat(e.target.value) || 0)} /></td>
+      <td className="px-4 py-2.5 text-center text-gray-400">—</td>
+      <td className="px-4 py-2.5 text-right space-x-2">
+        <button onClick={() => onSave({ name, price, discountRate: discount, taxRate: tax })} className="text-emerald-600 hover:text-emerald-800 text-sm font-medium transition-colors">Save</button>
+        <button onClick={onCancel} className="text-gray-500 hover:text-gray-700 text-sm font-medium transition-colors">Cancel</button>
       </td>
     </tr>
   );
@@ -477,48 +527,50 @@ function WalkInFoliosTab({ locations, onRefresh }: { locations: PosLocation[]; o
   };
 
   return (
-    <div className="space-y-4">
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm">{error}</div>}
+    <div className="space-y-5">
+      {error && <div className="bg-red-50 border border-red-100 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>}
 
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-gray-600">
+          <thead className="bg-gray-50 border-b border-gray-100">
             <tr>
-              <th className="text-left px-4 py-2 font-medium">Outlet</th>
-              <th className="text-left px-4 py-2 font-medium">Type</th>
-              <th className="text-left px-4 py-2 font-medium">Walk-in Folio Status</th>
-              <th className="text-right px-4 py-2 font-medium">Action</th>
+              <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Outlet</th>
+              <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Type</th>
+              <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Walk-in Folio</th>
+              <th className="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Action</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-gray-50">
             {locations.map(loc => (
-              <tr key={loc.id} className="hover:bg-gray-50">
-                <td className="px-4 py-3 font-medium text-gray-800">{loc.name}</td>
-                <td className="px-4 py-3 text-gray-500">{loc.locationType}</td>
-                <td className="px-4 py-3">
+              <tr key={loc.id} className="hover:bg-gray-50/50 transition-colors">
+                <td className="px-5 py-3.5 font-medium text-gray-900">{loc.name}</td>
+                <td className="px-5 py-3.5">
+                  <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{loc.locationType}</span>
+                </td>
+                <td className="px-5 py-3.5">
                   {loc.currentWalkInFolioId ? (
-                    <span className="inline-flex items-center gap-1 text-sm">
-                      <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-                      <span className="text-green-700">Active</span>
-                      <span className="text-gray-400 text-xs ml-1">({loc.currentWalkInFolioId.slice(0, 8)})</span>
+                    <span className="inline-flex items-center gap-1.5 text-sm">
+                      <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
+                      <span className="text-emerald-700 font-medium">Active</span>
+                      <span className="text-gray-400 text-xs">({loc.currentWalkInFolioId.slice(0, 8)})</span>
                     </span>
                   ) : (
-                    <span className="text-gray-400">No active folio</span>
+                    <span className="text-gray-400 text-sm">No active folio</span>
                   )}
                 </td>
-                <td className="px-4 py-3 text-right">
+                <td className="px-5 py-3.5 text-right">
                   {confirmId === loc.id ? (
                     <div className="flex items-center justify-end gap-2">
-                      <span className="text-xs text-amber-700">Confirm?</span>
+                      <span className="text-xs text-amber-700 font-medium">Confirm?</span>
                       <button onClick={() => handlePost(loc.id)} disabled={posting === loc.id}
-                        className="text-xs px-2 py-1 bg-amber-600 text-white rounded hover:bg-amber-700 disabled:opacity-50">
-                        {posting === loc.id ? 'Posting...' : 'Yes'}
+                        className="text-xs px-3 py-1.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors font-medium shadow-sm">
+                        {posting === loc.id ? 'Posting...' : 'Yes, Post'}
                       </button>
-                      <button onClick={() => setConfirmId(null)} className="text-xs px-2 py-1 border border-gray-300 rounded hover:bg-gray-50">No</button>
+                      <button onClick={() => setConfirmId(null)} className="text-xs px-3 py-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors font-medium">Cancel</button>
                     </div>
                   ) : (
                     <button onClick={() => setConfirmId(loc.id)} disabled={!loc.currentWalkInFolioId}
-                      className="text-xs px-3 py-1.5 bg-amber-600 text-white rounded hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                      className="text-xs px-3 py-1.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium shadow-sm">
                       Post & Archive
                     </button>
                   )}
@@ -536,49 +588,55 @@ function WalkInFoliosTab({ locations, onRefresh }: { locations: PosLocation[]; o
 
 function OrderHistoryTab({ locations }: { locations: PosLocation[] }) {
   const [selectedLocationId, setSelectedLocationId] = useState<string>(locations[0]?.id ?? '');
-  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-  const [fromDate, setFromDate] = useState(today);
+  const toISTDate = (d: Date) => d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  const today = toISTDate(new Date());
+  const thirtyDaysAgo = toISTDate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+  const [fromDate, setFromDate] = useState(thirtyDaysAgo);
   const [toDate, setToDate] = useState(today);
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [orders, setOrders] = useState<PosOrder[]>([]);
   const [summary, setSummary] = useState<OrderSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [orderError, setOrderError] = useState<string | null>(null);
 
   const loadOrders = useCallback(async () => {
     if (!selectedLocationId) return;
     setLoading(true);
+    setOrderError(null);
     try {
-      const [orderList, summaryData] = await Promise.all([
+      const [orderResult, summaryResult] = await Promise.allSettled([
         posApi.getOrders(selectedLocationId, fromDate, toDate, statusFilter || undefined),
         posApi.getOrderSummary(selectedLocationId, fromDate, toDate),
       ]);
-      setOrders(orderList);
-      setSummary(summaryData);
-    } catch {
-      setOrders([]); setSummary(null);
+      if (orderResult.status === 'fulfilled') {
+        setOrders(orderResult.value);
+      } else {
+        setOrders([]);
+        setOrderError('Failed to load orders. Please try again.');
+      }
+      setSummary(summaryResult.status === 'fulfilled' ? summaryResult.value : null);
     } finally { setLoading(false); }
   }, [selectedLocationId, fromDate, toDate, statusFilter]);
 
   useEffect(() => { loadOrders(); }, [loadOrders]);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3">
-        <select value={selectedLocationId} onChange={e => setSelectedLocationId(e.target.value)}
-          className="border border-gray-300 rounded px-3 py-1.5 text-sm">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-5 py-4 flex flex-wrap items-center gap-4">
+        <select value={selectedLocationId} onChange={e => setSelectedLocationId(e.target.value)} className={selectCls}>
           {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
         </select>
-        <div className="flex items-center gap-1">
-          <label className="text-xs text-gray-600">From:</label>
-          <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} className="border border-gray-300 rounded px-2 py-1.5 text-sm" />
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-gray-500 whitespace-nowrap">From</label>
+          <DateInput value={fromDate} onChange={setFromDate} />
         </div>
-        <div className="flex items-center gap-1">
-          <label className="text-xs text-gray-600">To:</label>
-          <input type="date" value={toDate} onChange={e => setToDate(e.target.value)} className="border border-gray-300 rounded px-2 py-1.5 text-sm" />
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-gray-500 whitespace-nowrap">To</label>
+          <DateInput value={toDate} onChange={setToDate} />
         </div>
-        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="border border-gray-300 rounded px-3 py-1.5 text-sm">
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className={selectCls}>
           <option value="">All Statuses</option>
           <option value="OPEN">Open</option>
           <option value="CLOSED">Closed</option>
@@ -590,90 +648,107 @@ function OrderHistoryTab({ locations }: { locations: PosLocation[] }) {
       {/* Summary cards */}
       {summary && (
         <div className="grid grid-cols-3 gap-4">
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <div className="text-xs text-gray-500 uppercase tracking-wide">Total Revenue</div>
-            <div className="text-2xl font-bold text-gray-800 mt-1">{fmt(summary.totalRevenue)}</div>
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 border-t-2 border-t-emerald-500">
+            <div className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-2">Total Revenue</div>
+            <div className="text-2xl font-bold text-gray-900">{fmt(summary.totalRevenue)}</div>
           </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <div className="text-xs text-gray-500 uppercase tracking-wide">Orders</div>
-            <div className="text-2xl font-bold text-gray-800 mt-1">{summary.orderCount}</div>
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 border-t-2 border-t-blue-500">
+            <div className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-2">Orders</div>
+            <div className="text-2xl font-bold text-gray-900">{summary.orderCount}</div>
           </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <div className="text-xs text-gray-500 uppercase tracking-wide">Avg Order Value</div>
-            <div className="text-2xl font-bold text-gray-800 mt-1">{fmt(summary.avgOrderValue)}</div>
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 border-t-2 border-t-purple-500">
+            <div className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-2">Avg Order Value</div>
+            <div className="text-2xl font-bold text-gray-900">{fmt(summary.avgOrderValue)}</div>
           </div>
         </div>
       )}
 
+      {orderError && (
+        <div className="bg-red-50 border border-red-100 text-red-700 px-4 py-3 rounded-lg text-sm flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+          </svg>
+          {orderError}
+        </div>
+      )}
+
       {/* Orders table */}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        {loading ? <div className="text-center py-8 text-gray-500">Loading orders...</div> : (
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        {loading ? (
+          <div className="text-center py-12 text-gray-400 text-sm">Loading orders...</div>
+        ) : (
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-gray-600">
+            <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
-                <th className="text-left px-4 py-2 font-medium">Order #</th>
-                <th className="text-left px-4 py-2 font-medium">Date</th>
-                <th className="text-right px-4 py-2 font-medium">Items</th>
-                <th className="text-right px-4 py-2 font-medium">Subtotal</th>
-                <th className="text-right px-4 py-2 font-medium">Discount</th>
-                <th className="text-right px-4 py-2 font-medium">Total</th>
-                <th className="text-center px-4 py-2 font-medium">Status</th>
-                <th className="text-center px-4 py-2 font-medium">Payment</th>
+                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Order #</th>
+                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Date</th>
+                <th className="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Items</th>
+                <th className="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Subtotal</th>
+                <th className="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Discount</th>
+                <th className="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Total</th>
+                <th className="text-center px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
+                <th className="text-center px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Payment</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-50">
               {orders.map(order => (
                 <>
-                  <tr key={order.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => setExpandedId(expandedId === order.id ? null : order.id)}>
-                    <td className="px-4 py-2 font-medium text-gray-800">{order.orderNumber}</td>
-                    <td className="px-4 py-2 text-gray-500">{new Date(order.orderDate).toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' }).replace(/\//g, '-') + ' ' + new Date(order.orderDate).toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' })}</td>
-                    <td className="px-4 py-2 text-right text-gray-500">{order.items?.length ?? 0}</td>
-                    <td className="px-4 py-2 text-right text-gray-500">{fmt(order.subtotal)}</td>
-                    <td className="px-4 py-2 text-right text-gray-500">
-                      {order.discountAmount > 0 ? <span className="text-green-600">-{fmt(order.discountAmount)}</span> : '—'}
+                  <tr key={order.id} className="hover:bg-gray-50/50 cursor-pointer transition-colors" onClick={() => setExpandedId(expandedId === order.id ? null : order.id)}>
+                    <td className="px-5 py-3.5 font-medium text-gray-900">{order.orderNumber}</td>
+                    <td className="px-5 py-3.5 text-gray-500 text-xs">
+                      {new Date(order.orderDate).toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' })}
+                      {' '}
+                      {new Date(order.orderDate).toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' })}
                     </td>
-                    <td className="px-4 py-2 text-right font-medium text-gray-800">{fmt(order.totalAmount)}</td>
-                    <td className="px-4 py-2 text-center">
-                      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
-                        order.status === 'CLOSED' ? 'bg-green-100 text-green-800' :
-                        order.status === 'CHARGED' ? 'bg-blue-100 text-blue-800' :
-                        order.status === 'CANCELLED' ? 'bg-red-100 text-red-800' :
-                        'bg-yellow-100 text-yellow-800'
+                    <td className="px-5 py-3.5 text-right text-gray-600">{order.items?.length ?? 0}</td>
+                    <td className="px-5 py-3.5 text-right text-gray-600">{fmt(order.subtotal)}</td>
+                    <td className="px-5 py-3.5 text-right">
+                      {order.discountAmount > 0 ? <span className="text-emerald-600 font-medium">−{fmt(order.discountAmount)}</span> : <span className="text-gray-400">—</span>}
+                    </td>
+                    <td className="px-5 py-3.5 text-right font-semibold text-gray-900">{fmt(order.totalAmount)}</td>
+                    <td className="px-5 py-3.5 text-center">
+                      <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold ${
+                        order.status === 'CLOSED' ? 'bg-emerald-100 text-emerald-700' :
+                        order.status === 'CHARGED' ? 'bg-blue-100 text-blue-700' :
+                        order.status === 'CANCELLED' ? 'bg-red-100 text-red-600' :
+                        'bg-amber-100 text-amber-700'
                       }`}>{order.status}</span>
                     </td>
-                    <td className="px-4 py-2 text-center text-xs text-gray-500">{order.paymentStatus}</td>
+                    <td className="px-5 py-3.5 text-center text-xs text-gray-500">{order.paymentStatus}</td>
                   </tr>
                   {expandedId === order.id && order.items && (
                     <tr key={`${order.id}-detail`}>
-                      <td colSpan={8} className="bg-gray-50 px-8 py-3">
+                      <td colSpan={8} className="bg-gray-50 px-8 py-4">
                         <table className="w-full text-xs">
-                          <thead><tr className="text-gray-500">
-                            <th className="text-left py-1">Item</th>
-                            <th className="text-right py-1">Qty</th>
-                            <th className="text-right py-1">Unit Price</th>
-                            <th className="text-right py-1">Tax</th>
-                            <th className="text-right py-1">Total</th>
-                          </tr></thead>
+                          <thead>
+                            <tr className="text-gray-500 border-b border-gray-200">
+                              <th className="text-left pb-2 font-medium">Item</th>
+                              <th className="text-right pb-2 font-medium">Qty</th>
+                              <th className="text-right pb-2 font-medium">Unit Price</th>
+                              <th className="text-right pb-2 font-medium">Tax</th>
+                              <th className="text-right pb-2 font-medium">Total</th>
+                            </tr>
+                          </thead>
                           <tbody>
                             {order.items.map((item, idx) => (
-                              <tr key={idx} className="border-t border-gray-200">
-                                <td className="py-1 text-gray-800">{item.itemName}</td>
-                                <td className="py-1 text-right text-gray-600">{item.quantity}</td>
-                                <td className="py-1 text-right text-gray-600">{fmt(item.unitPrice)}</td>
-                                <td className="py-1 text-right text-gray-600">{fmt(item.taxAmount)}</td>
-                                <td className="py-1 text-right font-medium text-gray-800">{fmt(item.totalAmount)}</td>
+                              <tr key={idx} className="border-t border-gray-100">
+                                <td className="py-1.5 text-gray-800">{item.itemName}</td>
+                                <td className="py-1.5 text-right text-gray-600">{item.quantity}</td>
+                                <td className="py-1.5 text-right text-gray-600">{fmt(item.unitPrice)}</td>
+                                <td className="py-1.5 text-right text-gray-600">{fmt(item.taxAmount)}</td>
+                                <td className="py-1.5 text-right font-semibold text-gray-800">{fmt(item.totalAmount)}</td>
                               </tr>
                             ))}
                           </tbody>
                         </table>
-                        {order.createdBy && <div className="mt-2 text-xs text-gray-400">Created by: {order.createdBy}</div>}
+                        {order.createdBy && <div className="mt-3 text-xs text-gray-400">Created by: {order.createdBy}</div>}
                       </td>
                     </tr>
                   )}
                 </>
               ))}
               {orders.length === 0 && (
-                <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">No orders found for this period.</td></tr>
+                <tr><td colSpan={8} className="px-5 py-10 text-center text-gray-400 text-sm">No orders found for this period.</td></tr>
               )}
             </tbody>
           </table>
@@ -707,15 +782,17 @@ export default function PosManagement() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 py-6">
+      <div className="max-w-7xl mx-auto px-6 py-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-gray-800">POS Management</h1>
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-4">
+            <h1 className="text-2xl font-bold text-gray-900">POS Management</h1>
             {(user.properties?.length ?? 0) > 1 && (
-              <select value={selectedPropertyId}
+              <select
+                value={selectedPropertyId}
                 onChange={e => { setSelectedPropertyId(e.target.value); setLocations([]); }}
-                className="border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                className={selectCls}
+              >
                 {user.properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             )}
@@ -724,32 +801,38 @@ export default function PosManagement() {
 
         {/* Tabs */}
         <div className="border-b border-gray-200 mb-6">
-          <div className="flex gap-0">
+          <div className="flex gap-1">
             {tabs.map(tab => (
               <button key={tab} onClick={() => setActiveTab(tab)}
-                className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === tab ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+                className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === tab
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}>{tab}</button>
             ))}
           </div>
         </div>
 
         {/* Tab content */}
-        {loading ? <div className="text-center py-12 text-gray-500">Loading...</div> : (
+        {loading ? (
+          <div className="text-center py-16 text-gray-400 text-sm">Loading...</div>
+        ) : (
           <>
             {activeTab === 'Outlets' && (
               <OutletsTab propertyId={selectedPropertyId} locations={locations} onRefresh={loadLocations} />
             )}
             {activeTab === 'Categories & Items' && (
-              locations.length > 0 ? <CategoriesItemsTab locations={locations} />
-                : <div className="text-center py-12 text-gray-400">Create an outlet first.</div>
+              locations.length > 0
+                ? <CategoriesItemsTab locations={locations} />
+                : <div className="text-center py-16 text-gray-400 text-sm">Create an outlet first.</div>
             )}
             {activeTab === 'Walk-in Folios' && (
               <WalkInFoliosTab locations={locations} onRefresh={loadLocations} />
             )}
             {activeTab === 'Order History' && (
-              locations.length > 0 ? <OrderHistoryTab locations={locations} />
-                : <div className="text-center py-12 text-gray-400">No outlets available.</div>
+              locations.length > 0
+                ? <OrderHistoryTab locations={locations} />
+                : <div className="text-center py-16 text-gray-400 text-sm">No outlets available.</div>
             )}
           </>
         )}

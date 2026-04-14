@@ -396,10 +396,14 @@ public class PosService {
     }
 
     public OrderSummaryDto getOrderSummary(UUID locationId, OffsetDateTime from, OffsetDateTime to) {
-        Object[] result = posOrderRepository.getOrderSummary(locationId, from, to);
-        long count = ((Number) result[0]).longValue();
-        BigDecimal totalRevenue = (BigDecimal) result[1];
-        BigDecimal avgValue = (BigDecimal) result[2];
+        List<Object[]> results = posOrderRepository.getOrderSummary(locationId, from, to);
+        if (results.isEmpty()) {
+            return new OrderSummaryDto(0, BigDecimal.ZERO, BigDecimal.ZERO);
+        }
+        Object[] row = results.get(0);
+        long count = ((Number) row[0]).longValue();
+        BigDecimal totalRevenue = (BigDecimal) row[1];
+        BigDecimal avgValue = (BigDecimal) row[2];
         return new OrderSummaryDto(count, totalRevenue, avgValue);
     }
 

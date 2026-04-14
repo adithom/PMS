@@ -4,6 +4,7 @@ import posApi from '../api/posApi';
 import folioApi from '../api/folioApi';
 import ProductCard from '../components/Pos/ProductCard';
 import GuestSearchModal from '../components/Pos/GuestSearchModal';
+import ConfirmModal from '../components/ConfirmModal';
 import type { PosLocation, PosProduct, CartEntry, PosSettleDto } from '../types/pos';
 import type { Booking } from '../types';
 import type { FolioDto } from '../api/folioApi';
@@ -97,57 +98,57 @@ function SettleNowModal({ isOpen, onClose, cart, location, propertyId, orderDisc
 
   const cartTotal = cart.reduce((sum, e) => sum + e.product.price * e.quantity, 0);
   const fmt = (n: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(n);
+  const inputCls = 'w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow';
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">
-        <div className="p-4 border-b border-gray-200 flex justify-between items-center">
-          <h3 className="text-lg font-semibold text-gray-800">Settle Now</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700 text-xl leading-none">&times;</button>
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+          <h3 className="text-lg font-semibold text-gray-900">Settle Order</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-xl leading-none">&times;</button>
         </div>
 
-        <div className="p-4 space-y-4">
-          <div className="bg-gray-50 rounded-lg p-3 text-sm">
-            <div className="flex justify-between font-semibold">
-              <span>Order Total</span>
-              <span>{fmt(cartTotal)}</span>
+        <div className="px-6 py-5 space-y-5 max-h-[70vh] overflow-y-auto">
+          <div className="bg-gray-50 rounded-xl p-4 flex justify-between items-center">
+            <div>
+              <div className="text-xs text-gray-500 mb-0.5">{cart.reduce((s, e) => s + e.quantity, 0)} items</div>
+              <div className="font-bold text-gray-900 text-lg">{fmt(cartTotal)}</div>
             </div>
-            <div className="text-xs text-gray-500 mt-1">{cart.reduce((s, e) => s + e.quantity, 0)} items</div>
+            <div className="text-xs text-gray-400 uppercase tracking-wide font-medium">Order Total</div>
           </div>
 
-          <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+          <div className="flex rounded-xl border border-gray-200 p-1 bg-gray-50 gap-1">
             <button
-              className={`flex-1 py-2 text-sm font-medium transition-colors ${tab === 'walk-in' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+              className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${tab === 'walk-in' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
               onClick={() => setTab('walk-in')}
             >Walk-in</button>
             <button
-              className={`flex-1 py-2 text-sm font-medium transition-colors ${tab === 'hotel-guest' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+              className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${tab === 'hotel-guest' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
               onClick={() => setTab('hotel-guest')}
             >Hotel Guest</button>
           </div>
 
           {tab === 'hotel-guest' && (
-            <div className="space-y-2">
+            <div className="space-y-3">
               {selectedBooking ? (
-                <div className="border border-green-200 rounded-lg p-3 bg-green-50 flex justify-between items-center">
+                <div className="border border-emerald-200 rounded-xl p-3.5 bg-emerald-50 flex justify-between items-center">
                   <div>
-                    <div className="font-medium text-sm text-green-800">{selectedBooking.guestName}</div>
-                    <div className="text-xs text-green-600">Room {selectedBooking.roomNumber || 'Unassigned'}</div>
+                    <div className="font-medium text-sm text-emerald-900">{selectedBooking.guestName}</div>
+                    <div className="text-xs text-emerald-600 mt-0.5">Room {selectedBooking.roomNumber || 'Unassigned'}</div>
                   </div>
                   <button onClick={() => { setSelectedBooking(null); setOpenFolios([]); setSelectedFolioId(''); }}
-                    className="text-xs text-green-700 underline hover:no-underline">Change</button>
+                    className="text-xs text-emerald-700 hover:text-emerald-900 font-medium underline transition-colors">Change</button>
                 </div>
               ) : (
                 <button onClick={() => setShowGuestPicker(true)}
-                  className="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-600 hover:border-blue-400 hover:text-blue-600 transition-colors">
+                  className="w-full py-3 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-500 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50/50 transition-all font-medium">
                   + Select Hotel Guest
                 </button>
               )}
               {openFolios.length > 1 && (
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Select Folio</label>
-                  <select value={selectedFolioId} onChange={e => setSelectedFolioId(e.target.value)}
-                    className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Select Folio</label>
+                  <select value={selectedFolioId} onChange={e => setSelectedFolioId(e.target.value)} className={inputCls}>
                     {openFolios.map(f => (
                       <option key={f.id} value={f.id}>{f.folioNumber || f.id.slice(0, 8)} — {f.folioType}</option>
                     ))}
@@ -155,15 +156,14 @@ function SettleNowModal({ isOpen, onClose, cart, location, propertyId, orderDisc
                 </div>
               )}
               {selectedBooking && openFolios.length === 0 && (
-                <div className="text-sm text-red-600 bg-red-50 rounded p-2">No open folios found for this booking.</div>
+                <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg p-3">No open folios found for this booking.</div>
               )}
             </div>
           )}
 
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Payment Method</label>
-            <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value as PosSettleDto['paymentMethod'])}
-              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Payment Method</label>
+            <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value as PosSettleDto['paymentMethod'])} className={inputCls}>
               <option value="CASH">Cash</option>
               <option value="CREDIT_CARD">Credit Card</option>
               <option value="DEBIT_CARD">Debit Card</option>
@@ -174,41 +174,41 @@ function SettleNowModal({ isOpen, onClose, cart, location, propertyId, orderDisc
 
           {(paymentMethod === 'CREDIT_CARD' || paymentMethod === 'DEBIT_CARD') && (
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Card Last 4 Digits</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Card Last 4 Digits</label>
               <input type="text" maxLength={4} placeholder="1234" value={cardLastFour}
-                onChange={e => setCardLastFour(e.target.value.replace(/\D/g, ''))}
-                className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                onChange={e => setCardLastFour(e.target.value.replace(/\D/g, ''))} className={inputCls} />
             </div>
           )}
           {paymentMethod === 'UPI' && (
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">UPI ID / Reference</label>
-              <input type="text" placeholder="guest@upi" value={upiId} onChange={e => setUpiId(e.target.value)}
-                className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">UPI ID / Reference</label>
+              <input type="text" placeholder="guest@upi" value={upiId} onChange={e => setUpiId(e.target.value)} className={inputCls} />
             </div>
           )}
           {paymentMethod !== 'CASH' && paymentMethod !== 'UPI' && (
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Transaction ID</label>
-              <input type="text" placeholder="TXN123456" value={transactionId} onChange={e => setTransactionId(e.target.value)}
-                className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Transaction ID</label>
+              <input type="text" placeholder="TXN123456" value={transactionId} onChange={e => setTransactionId(e.target.value)} className={inputCls} />
             </div>
           )}
 
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Notes (optional)</label>
-            <input type="text" placeholder="Any payment notes..." value={notes} onChange={e => setNotes(e.target.value)}
-              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Notes <span className="text-gray-400 font-normal">(optional)</span>
+            </label>
+            <input type="text" placeholder="Any payment notes..." value={notes} onChange={e => setNotes(e.target.value)} className={inputCls} />
           </div>
 
-          {error && <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm">{error}</div>}
+          {error && <div className="bg-red-50 border border-red-100 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>}
         </div>
 
-        <div className="p-4 border-t border-gray-200 bg-gray-50 rounded-b-lg flex justify-end gap-2">
+        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3">
           <button onClick={onClose} disabled={processing}
-            className="px-4 py-2 bg-white border border-gray-300 rounded text-gray-700 hover:bg-gray-50 disabled:opacity-50">Cancel</button>
+            className="px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors">
+            Cancel
+          </button>
           <button onClick={handleConfirm} disabled={processing || (tab === 'hotel-guest' && !selectedFolioId)}
-            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium">
+            className="px-5 py-2.5 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm">
             {processing ? 'Processing...' : 'Confirm Payment'}
           </button>
         </div>
@@ -231,20 +231,21 @@ interface FolioPickerModalProps {
 
 function FolioPickerModal({ isOpen, onClose, folios, onSelect }: FolioPickerModalProps) {
   if (!isOpen) return null;
+  const fmt = (n: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(n);
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
-        <div className="p-4 border-b border-gray-200 flex justify-between items-center">
-          <h3 className="text-lg font-semibold text-gray-800">Select Folio</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700 text-xl leading-none">&times;</button>
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+          <h3 className="text-lg font-semibold text-gray-900">Select Folio</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-xl leading-none">&times;</button>
         </div>
-        <div className="p-4 space-y-2">
-          <p className="text-sm text-gray-600 mb-3">Multiple open folios found. Select which one to charge:</p>
+        <div className="px-6 py-5 space-y-3">
+          <p className="text-sm text-gray-500">Multiple open folios found. Select which one to charge:</p>
           {folios.map(folio => (
             <button key={folio.id} onClick={() => onSelect(folio)}
-              className="w-full text-left border border-gray-200 rounded-lg p-3 hover:bg-blue-50 transition-colors">
-              <div className="font-medium text-sm">{folio.folioNumber || folio.id.slice(0, 8)}</div>
-              <div className="text-xs text-gray-500">{folio.folioType} — Balance: {folio.balanceDue ?? 0}</div>
+              className="w-full text-left border border-gray-200 rounded-xl p-4 hover:bg-blue-50 hover:border-blue-300 transition-all group">
+              <div className="font-medium text-sm text-gray-900 group-hover:text-blue-700">{folio.folioNumber || folio.id.slice(0, 8)}</div>
+              <div className="text-xs text-gray-500 mt-0.5">{folio.folioType} — Balance: {fmt(folio.balanceDue ?? 0)}</div>
             </button>
           ))}
         </div>
@@ -270,14 +271,14 @@ export default function PosInterface() {
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [orderDiscountRate, setOrderDiscountRate] = useState(0);
 
-  // Modals
   const [showGuestModal, setShowGuestModal] = useState(false);
   const [showSettleModal, setShowSettleModal] = useState(false);
   const [showFolioPickerModal, setShowFolioPickerModal] = useState(false);
 
-  // "Add to Room" state
   const [pendingBooking, setPendingBooking] = useState<Booking | null>(null);
   const [pendingFolios, setPendingFolios] = useState<FolioDto[]>([]);
+  const [pendingFolioId, setPendingFolioId] = useState<string | null>(null);
+  const [showChargeConfirm, setShowChargeConfirm] = useState(false);
   const [addToRoomError, setAddToRoomError] = useState<string | null>(null);
   const [addingToRoom, setAddingToRoom] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -285,7 +286,6 @@ export default function PosInterface() {
 
   const fmt = (n: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(n);
 
-  // ── Load locations ──
   const loadLocations = useCallback(async (propId: string) => {
     if (!propId) return;
     setLoadingLocations(true);
@@ -310,7 +310,6 @@ export default function PosInterface() {
     if (selectedPropertyId) loadLocations(selectedPropertyId);
   }, [selectedPropertyId, loadLocations]);
 
-  // ── Load products ──
   const loadProducts = useCallback(async () => {
     if (!location) return;
     setLoadingProducts(true);
@@ -334,7 +333,6 @@ export default function PosInterface() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location?.id]);
 
-  // ── Cart helpers ──
   const addToCart = (product: PosProduct) => {
     setCart(prev => {
       const existing = prev.find(e => e.product.id === product.id);
@@ -349,17 +347,15 @@ export default function PosInterface() {
 
   const clearCart = () => { setCart([]); setOrderDiscountRate(0); };
 
-  // ── Category filter ──
   const categories = ['All', ...Array.from(new Set(products.map(p => p.categoryName).filter(Boolean)))];
   const filteredProducts = categoryFilter === 'All' ? products : products.filter(p => p.categoryName === categoryFilter);
 
-  // ── Cart totals ──
   const cartSubtotal = cart.reduce((sum, e) => sum + e.product.price * e.quantity, 0);
   const cartTax = cart.reduce((sum, e) => sum + (e.product.price * e.quantity * e.product.taxRate) / 100, 0);
   const discountAmount = orderDiscountRate > 0 ? (cartSubtotal * orderDiscountRate) / 100 : 0;
   const cartTotal = cartSubtotal + cartTax - discountAmount;
+  const cartItemCount = cart.reduce((s, e) => s + e.quantity, 0);
 
-  // ── "Add to Room" flow ──
   const handleAddToRoomSelectGuest = async (booking: Booking) => {
     setShowGuestModal(false);
     setAddToRoomError(null);
@@ -374,7 +370,8 @@ export default function PosInterface() {
       setPendingBooking(booking);
       setPendingFolios(openFolios);
       if (openFolios.length === 1) {
-        await chargeToFolio(openFolios[0].id!, booking);
+        setPendingFolioId(openFolios[0].id!);
+        setShowChargeConfirm(true);
       } else {
         setShowFolioPickerModal(true);
       }
@@ -415,131 +412,216 @@ export default function PosInterface() {
     setTimeout(() => setSuccessMessage(null), 3000);
   };
 
+  const selectCls = 'border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow';
+
   if (!user) return null;
 
   return (
-    <div className="h-full flex flex-col bg-gray-100">
+    <div className="h-full flex flex-col bg-gray-50">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3 flex-shrink-0">
-        <h1 className="text-xl font-bold text-gray-800">POS</h1>
+      <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center gap-4 flex-shrink-0 shadow-sm">
+        <h1 className="text-xl font-bold text-gray-900">Point of Sale</h1>
 
         {isManager && (user.properties?.length ?? 0) > 1 && (
-          <select value={selectedPropertyId}
+          <select
+            value={selectedPropertyId}
             onChange={e => { setSelectedPropertyId(e.target.value); setLocation(null); setLocations([]); setProducts([]); clearCart(); }}
-            className="border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            className={selectCls}
+          >
             {user.properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
         )}
 
         {isManager && (
-          loadingLocations ? <span className="text-sm text-gray-500">Loading...</span> : (
-            <select value={location?.id ?? ''} onChange={e => setLocation(locations.find(l => l.id === e.target.value) ?? null)}
-              className="border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <option value="">Select Location</option>
-              {locations.map(loc => <option key={loc.id} value={loc.id}>{loc.name}</option>)}
-            </select>
-          )
+          loadingLocations
+            ? <span className="text-sm text-gray-400">Loading...</span>
+            : (
+              <select
+                value={location?.id ?? ''}
+                onChange={e => setLocation(locations.find(l => l.id === e.target.value) ?? null)}
+                className={selectCls}
+              >
+                <option value="">Select Location</option>
+                {locations.map(loc => <option key={loc.id} value={loc.id}>{loc.name}</option>)}
+              </select>
+            )
         )}
 
         {isPosUser && location && (
-          <span className="bg-blue-100 text-blue-800 text-sm font-medium px-2.5 py-0.5 rounded-full">{location.name}</span>
+          <span className="bg-blue-50 text-blue-700 text-sm font-medium px-3 py-1.5 rounded-full border border-blue-200">
+            {location.name}
+          </span>
         )}
       </div>
 
-      {/* Banners */}
-      {successMessage && <div className="bg-green-100 border-b border-green-300 text-green-800 px-4 py-2 text-sm text-center">{successMessage}</div>}
-      {pageError && <div className="bg-red-100 border-b border-red-300 text-red-800 px-4 py-2 text-sm text-center">{pageError}</div>}
-      {addToRoomError && <div className="bg-red-100 border-b border-red-300 text-red-800 px-4 py-2 text-sm text-center">{addToRoomError}</div>}
+      {/* Notification banners */}
+      {successMessage && (
+        <div className="bg-emerald-50 border-b border-emerald-100 text-emerald-800 px-6 py-2.5 text-sm font-medium flex items-center gap-2 flex-shrink-0">
+          <span className="text-emerald-500 font-bold">✓</span> {successMessage}
+        </div>
+      )}
+      {(pageError || addToRoomError) && (
+        <div className="bg-red-50 border-b border-red-100 text-red-700 px-6 py-2.5 text-sm flex items-center gap-2 flex-shrink-0">
+          <span>⚠</span> {pageError || addToRoomError}
+        </div>
+      )}
 
       {!location ? (
-        <div className="flex-1 flex items-center justify-center text-gray-500">
-          {loadingLocations ? 'Loading...' : isManager ? 'Select a POS location to get started.' : 'No POS location assigned to your account.'}
+        <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center px-6">
+          <div className="w-16 h-16 bg-white border border-gray-200 rounded-2xl flex items-center justify-center text-3xl shadow-sm">
+            🏪
+          </div>
+          <p className="text-gray-500 text-sm max-w-xs">
+            {loadingLocations
+              ? 'Loading locations...'
+              : isManager
+              ? 'Select a POS location above to get started.'
+              : 'No POS location assigned to your account.'}
+          </p>
         </div>
       ) : (
         <div className="flex-1 flex overflow-hidden">
           {/* Left: products */}
           <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="bg-white border-b border-gray-200 px-4 py-2 flex gap-2 overflow-x-auto flex-shrink-0">
+            {/* Category filter strip */}
+            <div className="bg-white border-b border-gray-100 px-6 py-3 flex gap-2 overflow-x-auto flex-shrink-0">
               {categories.map(cat => (
-                <button key={cat} onClick={() => setCategoryFilter(cat)}
-                  className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                    categoryFilter === cat ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}>{cat}</button>
+                <button
+                  key={cat}
+                  onClick={() => setCategoryFilter(cat)}
+                  className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                    categoryFilter === cat
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {cat}
+                </button>
               ))}
             </div>
-            <div className="flex-1 overflow-y-auto p-4">
+
+            {/* Product grid */}
+            <div className="flex-1 overflow-y-auto px-6 py-5">
               {loadingProducts ? (
-                <div className="text-center py-12 text-gray-500">Loading products...</div>
+                <div className="text-center py-16 text-gray-400 text-sm">Loading products...</div>
               ) : filteredProducts.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">{products.length === 0 ? 'No products available.' : 'No products in this category.'}</div>
+                <div className="text-center py-16 text-gray-400 text-sm">
+                  {products.length === 0 ? 'No products available.' : 'No products in this category.'}
+                </div>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                  {filteredProducts.map(product => <ProductCard key={product.id} product={product} onAdd={addToCart} />)}
+                  {filteredProducts.map(product => (
+                    <ProductCard key={product.id} product={product} onAdd={addToCart} />
+                  ))}
                 </div>
               )}
             </div>
           </div>
 
           {/* Right: cart */}
-          <div className="w-80 bg-white border-l border-gray-200 flex flex-col flex-shrink-0">
-            <div className="p-4 border-b border-gray-200 flex justify-between items-center">
-              <h2 className="font-semibold text-gray-800">Order</h2>
-              {cart.length > 0 && <button onClick={clearCart} className="text-xs text-red-500 hover:text-red-700">Clear</button>}
+          <div className="w-96 bg-white border-l border-gray-200 flex flex-col flex-shrink-0">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <h2 className="font-semibold text-gray-900">Order</h2>
+                {cartItemCount > 0 && (
+                  <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-0.5 rounded-full">
+                    {cartItemCount}
+                  </span>
+                )}
+              </div>
+              {cart.length > 0 && (
+                <button onClick={clearCart} className="text-xs text-red-400 hover:text-red-600 font-medium transition-colors">
+                  Clear all
+                </button>
+              )}
             </div>
 
-            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            <div className="flex-1 overflow-y-auto px-5">
               {cart.length === 0 ? (
-                <div className="text-center py-8 text-gray-400 text-sm">Add items to start an order</div>
-              ) : cart.map(entry => (
-                <div key={entry.product.id} className="flex items-center justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-gray-800 truncate">{entry.product.name}</div>
-                    <div className="text-xs text-gray-500">
-                      {fmt(entry.product.price)}
-                      {entry.product.discountRate != null && entry.product.discountRate > 0 && (
-                        <span className="ml-1 text-green-600">(-{entry.product.discountRate}%)</span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button onClick={() => updateCartQuantity(entry.product.id, -1)}
-                      className="w-6 h-6 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 flex items-center justify-center text-lg leading-none">−</button>
-                    <span className="w-6 text-center text-sm font-medium">{entry.quantity}</span>
-                    <button onClick={() => updateCartQuantity(entry.product.id, 1)}
-                      className="w-6 h-6 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 flex items-center justify-center text-lg leading-none">+</button>
-                  </div>
-                  <div className="text-sm font-medium text-gray-800 w-16 text-right">{fmt(entry.product.price * entry.quantity)}</div>
+                <div className="flex flex-col items-center justify-center py-16 gap-3 text-gray-400">
+                  <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center text-2xl">🛒</div>
+                  <p className="text-sm">Add items to start an order</p>
                 </div>
-              ))}
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {cart.map(entry => (
+                    <div key={entry.product.id} className="flex items-center gap-3 py-3.5">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-gray-800 truncate">{entry.product.name}</div>
+                        <div className="text-xs text-gray-400 mt-0.5">
+                          {fmt(entry.product.price)}
+                          {entry.product.discountRate != null && entry.product.discountRate > 0 && (
+                            <span className="ml-1 text-emerald-600">−{entry.product.discountRate}%</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <button
+                          onClick={() => updateCartQuantity(entry.product.id, -1)}
+                          className="w-7 h-7 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 flex items-center justify-center font-bold transition-colors text-base leading-none"
+                        >−</button>
+                        <span className="w-7 text-center text-sm font-semibold text-gray-800">{entry.quantity}</span>
+                        <button
+                          onClick={() => updateCartQuantity(entry.product.id, 1)}
+                          className="w-7 h-7 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 flex items-center justify-center font-bold transition-colors text-base leading-none"
+                        >+</button>
+                      </div>
+                      <div className="text-sm font-semibold text-gray-900 w-20 text-right shrink-0">
+                        {fmt(entry.product.price * entry.quantity)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {cart.length > 0 && (
-              <div className="border-t border-gray-200 p-4 space-y-3">
-                {/* Order discount input */}
-                <div className="flex items-center gap-2">
-                  <label className="text-xs text-gray-600 whitespace-nowrap">Discount %</label>
-                  <input type="number" min="0" max="100" step="0.5" value={orderDiscountRate || ''}
-                    onChange={e => setOrderDiscountRate(parseFloat(e.target.value) || 0)}
-                    placeholder="0"
-                    className="w-20 border border-gray-300 rounded px-2 py-1 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <div className="border-t border-gray-200 px-5 py-4 space-y-4 flex-shrink-0 bg-gray-50/50">
+                {/* Order discount */}
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-sm text-gray-600 whitespace-nowrap">Order Discount</label>
+                  <div className="relative">
+                    <input
+                      type="number" min="0" max="100" step="0.5"
+                      value={orderDiscountRate || ''} onChange={e => setOrderDiscountRate(parseFloat(e.target.value) || 0)}
+                      placeholder="0"
+                      className="w-24 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-7"
+                    />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">%</span>
+                  </div>
                 </div>
 
-                <div className="space-y-1 text-sm">
-                  <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{fmt(cartSubtotal)}</span></div>
-                  <div className="flex justify-between text-gray-600"><span>Tax</span><span>{fmt(cartTax)}</span></div>
+                {/* Totals */}
+                <div className="space-y-1.5 text-sm">
+                  <div className="flex justify-between text-gray-500">
+                    <span>Subtotal</span><span>{fmt(cartSubtotal)}</span>
+                  </div>
+                  <div className="flex justify-between text-gray-500">
+                    <span>Tax</span><span>{fmt(cartTax)}</span>
+                  </div>
                   {discountAmount > 0 && (
-                    <div className="flex justify-between text-green-600"><span>Discount ({orderDiscountRate}%)</span><span>-{fmt(discountAmount)}</span></div>
+                    <div className="flex justify-between text-emerald-600">
+                      <span>Discount ({orderDiscountRate}%)</span><span>−{fmt(discountAmount)}</span>
+                    </div>
                   )}
-                  <div className="flex justify-between font-semibold text-gray-800 pt-1 border-t border-gray-200"><span>Total</span><span>{fmt(cartTotal)}</span></div>
+                  <div className="flex justify-between font-bold text-gray-900 text-base pt-2 border-t border-gray-200">
+                    <span>Total</span><span>{fmt(cartTotal)}</span>
+                  </div>
                 </div>
 
-                <div className="space-y-2">
-                  <button onClick={() => { setAddToRoomError(null); setShowGuestModal(true); }} disabled={addingToRoom}
-                    className="w-full py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm">
+                {/* Action buttons */}
+                <div className="space-y-2 pt-1">
+                  <button
+                    onClick={() => { setAddToRoomError(null); setShowGuestModal(true); }}
+                    disabled={addingToRoom}
+                    className="w-full py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm shadow-sm"
+                  >
                     {addingToRoom ? 'Charging...' : 'Add to Room'}
                   </button>
-                  <button onClick={() => setShowSettleModal(true)}
-                    className="w-full py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors text-sm">
+                  <button
+                    onClick={() => setShowSettleModal(true)}
+                    className="w-full py-3 bg-emerald-600 text-white rounded-xl font-semibold hover:bg-emerald-700 transition-colors text-sm shadow-sm"
+                  >
                     Settle Now
                   </button>
                 </div>
@@ -550,17 +632,42 @@ export default function PosInterface() {
       )}
 
       {/* Modals */}
-      <GuestSearchModal isOpen={showGuestModal} onClose={() => setShowGuestModal(false)}
-        onSelectBooking={handleAddToRoomSelectGuest} propertyId={selectedPropertyId} />
+      <GuestSearchModal
+        isOpen={showGuestModal}
+        onClose={() => setShowGuestModal(false)}
+        onSelectBooking={handleAddToRoomSelectGuest}
+        propertyId={selectedPropertyId}
+      />
 
-      <FolioPickerModal isOpen={showFolioPickerModal}
+      <FolioPickerModal
+        isOpen={showFolioPickerModal}
         onClose={() => { setShowFolioPickerModal(false); setPendingBooking(null); setPendingFolios([]); }}
-        folios={pendingFolios} onSelect={folio => chargeToFolio(folio.id!)} />
+        folios={pendingFolios}
+        onSelect={folio => { setShowFolioPickerModal(false); setPendingFolioId(folio.id!); setShowChargeConfirm(true); }}
+      />
 
       {showSettleModal && location && (
-        <SettleNowModal isOpen={showSettleModal} onClose={() => setShowSettleModal(false)}
-          cart={cart} location={location} propertyId={selectedPropertyId}
-          orderDiscountRate={orderDiscountRate} onSuccess={handleSettleSuccess} />
+        <SettleNowModal
+          isOpen={showSettleModal}
+          onClose={() => setShowSettleModal(false)}
+          cart={cart}
+          location={location}
+          propertyId={selectedPropertyId}
+          orderDiscountRate={orderDiscountRate}
+          onSuccess={handleSettleSuccess}
+        />
+      )}
+
+      {showChargeConfirm && pendingBooking && pendingFolioId && (
+        <ConfirmModal
+          title="Charge to Room"
+          message={`Add ${fmt(cartTotal)} to ${pendingBooking.guestName}'s folio (Room ${pendingBooking.roomNumber || 'Unassigned'})?`}
+          confirmLabel="Charge"
+          variant="primary"
+          loading={addingToRoom}
+          onConfirm={() => { setShowChargeConfirm(false); chargeToFolio(pendingFolioId); }}
+          onCancel={() => { setShowChargeConfirm(false); setPendingFolioId(null); setPendingBooking(null); setPendingFolios([]); }}
+        />
       )}
     </div>
   );

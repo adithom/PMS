@@ -44,7 +44,7 @@ public class BookingController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK', 'AGENCY')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK', 'AGENCY', 'POS')")
     public ResponseEntity<List<BookingDto>> getAllBookingsForProperty(
             @PathVariable UUID propertyId,
             @RequestParam(required = false) String status,
