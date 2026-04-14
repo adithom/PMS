@@ -10,6 +10,8 @@ import com.adith.os.HMS.billing.folio.dto.ChargeDto;
 import com.adith.os.HMS.booking.Booking;
 import com.adith.os.HMS.booking.BookingRepository;
 import com.adith.os.HMS.property.PropertyRepository;
+import com.adith.os.HMS.storage.R2StorageService;
+import com.adith.os.HMS.storage.R2UploadException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -21,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -41,6 +44,7 @@ public class GroupBillGenerationService {
     private final GroupPdfGenerationService groupPdfGenerationService;
     private final GroupBillRepository groupBillRepository;
     private final InvoiceSequenceRepository sequenceRepository;
+    private final R2StorageService r2StorageService;
 
     private final ObjectMapper objectMapper;
 
@@ -51,7 +55,8 @@ public class GroupBillGenerationService {
             PropertyRepository propertyRepository,
             GroupPdfGenerationService groupPdfGenerationService,
             GroupBillRepository groupBillRepository,
-            InvoiceSequenceRepository sequenceRepository) {
+            InvoiceSequenceRepository sequenceRepository,
+            R2StorageService r2StorageService) {
         this.bookingRepository = bookingRepository;
         this.folioRepository = folioRepository;
         this.folioChargeRepository = folioChargeRepository;
@@ -59,6 +64,7 @@ public class GroupBillGenerationService {
         this.groupPdfGenerationService = groupPdfGenerationService;
         this.groupBillRepository = groupBillRepository;
         this.sequenceRepository = sequenceRepository;
+        this.r2StorageService = r2StorageService;
         this.objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
     }
 
@@ -166,7 +172,7 @@ public class GroupBillGenerationService {
                     roomTotals.subtotal(), roomTotals.tax(),
                     roomTotals.discount(), roomTotals.total(),
                     BigDecimal.ZERO, roomTotals.total(),
-                    false, null, null, null);
+                    false, null, null, null, null);
 
             GroupBill roomBillEntity = buildGroupBillEntity(
                     parent, ChargeCategory.ROOM_RENT, invoiceNumber,
@@ -178,9 +184,12 @@ public class GroupBillGenerationService {
             }
             folioChargeRepository.saveAll(allRoomChargesToLink);
 
-            String pdfPath = groupPdfGenerationService.generateGroupRoomRentPdf(roomRentBillDto);
-            roomBillEntity.setPdfFilePath(pdfPath);
+            String localPath = groupPdfGenerationService.generateGroupRoomRentPdf(roomRentBillDto);
+            String objectKey = "invoices/" + roomBillEntity.getInvoiceNumber() + ".pdf";
+            String signedUrl = uploadToR2WithFallback(localPath, objectKey, "GRP_INV_" + roomBillEntity.getInvoiceNumber() + ".pdf");
+            roomBillEntity.setPdfFilePath(objectKey);
             groupBillRepository.save(roomBillEntity);
+            roomRentBillDto = roomRentBillDto.withPdfDownloadUrl(signedUrl);
         }
 
         // --- ANCILLARY ---
@@ -198,7 +207,7 @@ public class GroupBillGenerationService {
                     ancTotals.subtotal(), ancTotals.tax(),
                     ancTotals.discount(), ancTotals.total(),
                     BigDecimal.ZERO, ancTotals.total(),
-                    false, null, null, null);
+                    false, null, null, null, null);
 
             GroupBill ancBillEntity = buildGroupBillEntity(
                     parent, ChargeCategory.ANCILLARY, invoiceNumber,
@@ -210,9 +219,12 @@ public class GroupBillGenerationService {
             }
             folioChargeRepository.saveAll(allAncillaryChargesToLink);
 
-            String pdfPath = groupPdfGenerationService.generateGroupAncillaryPdf(ancillaryBillDto);
-            ancBillEntity.setPdfFilePath(pdfPath);
+            String localPath = groupPdfGenerationService.generateGroupAncillaryPdf(ancillaryBillDto);
+            String objectKey = "invoices/" + ancBillEntity.getInvoiceNumber() + ".pdf";
+            String signedUrl = uploadToR2WithFallback(localPath, objectKey, "GRP_INV_" + ancBillEntity.getInvoiceNumber() + ".pdf");
+            ancBillEntity.setPdfFilePath(objectKey);
             groupBillRepository.save(ancBillEntity);
+            ancillaryBillDto = ancillaryBillDto.withPdfDownloadUrl(signedUrl);
         }
 
         return new GroupDoubleBillDto(roomRentBillDto, ancillaryBillDto);
@@ -282,9 +294,32 @@ public class GroupBillGenerationService {
         return groupBillRepository.findByParentBookingId(parentBookingId);
     }
 
+    public String generateDownloadUrl(UUID groupBillId) {
+        GroupBill bill = groupBillRepository.findById(groupBillId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Group bill not found"));
+        if (bill.getPdfFilePath() == null || bill.getPdfFilePath().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No PDF available for this group bill");
+        }
+        String fileName = "GRP_INV_" + bill.getInvoiceNumber() + ".pdf";
+        return r2StorageService.generatePresignedDownloadUrl(bill.getPdfFilePath(), fileName);
+    }
+
     // =========================================================================
     // PRIVATE HELPERS
     // =========================================================================
+
+    private String uploadToR2WithFallback(String localPath, String objectKey, String fileName) {
+        if (!r2StorageService.isConfigured()) {
+            return null;
+        }
+        try {
+            r2StorageService.uploadPdf(Path.of(localPath), objectKey);
+            return r2StorageService.generatePresignedDownloadUrl(objectKey, fileName);
+        } catch (R2UploadException e) {
+            log.error("R2 upload failed for key={}. PDF is saved locally at {}.", objectKey, localPath, e);
+            return null;
+        }
+    }
 
     private GroupBill buildGroupBillEntity(Booking parent,
                                            ChargeCategory category,

@@ -53,6 +53,9 @@ public record BillDto(
         boolean isVoided,
         String voidReason,
         LocalDateTime voidedAt,
-        String voidedBy
+        String voidedBy,
+
+        // Pre-signed R2 download URL — populated only at bill generation time, null otherwise
+        String pdfDownloadUrl
 ) {
 }

@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import folioApi from '../api/folioApi';
 import type { FolioDto } from '../api/folioApi';
+import billingApi from '../api/billingApi';
+import { triggerPresignedDownload } from '../utils/downloadUtils';
 
 import LoadingSpinner from '../components/LoadingSpinner';
 import FolioDetailModal from '../components/Billing/FolioDetailModal';
-
-// todo: make the generate bill actually work
 
 /* ────────────────────────────────────────────────────────────── */
 /* Types & Tokens                                               */
@@ -32,6 +32,7 @@ export default function FrontDeskBillingManager({ propertyId }: FrontDeskBilling
 
   // Modal State
   const [activeFolioId, setActiveFolioId] = useState<string | null>(null);
+  const [generatingFolioId, setGeneratingFolioId] = useState<string | null>(null);
 
   /* ═══════════════════════════════════════════════════════════ */
   /* Data Loading                                                */
@@ -118,15 +119,24 @@ export default function FrontDeskBillingManager({ propertyId }: FrontDeskBilling
     }).sort((a, b) => (b.balanceDue || 0) - (a.balanceDue || 0)); // Highest balance first
   }, [folios, filterPreset, searchQuery, todayDateString]);
 
-  const handleGenerateBill = (folio: FolioDto) => {
-    const balance = folio.balanceDue || 0;
-    
-    if (balance <= 0) {
-      console.log(`[System Log] Bill generated for Folio ${folio.folioNumber}`);
-      alert(`Success: Bill generated for ${folio.guestName}`);
-    } else {
-      console.log(`[System Log] Balance remaining warning for Folio ${folio.folioNumber}. Balance: ${balance}`);
-      alert(`Warning: Cannot generate bill. ${folio.guestName} still owes ${folio.currency} ${balance.toFixed(2)}.`);
+  const handleGenerateBill = async (folio: FolioDto) => {
+    const gstNumber = window.prompt('Enter guest GST number (optional, leave blank to skip):') ?? '';
+    setGeneratingFolioId(folio.id);
+    try {
+      const result = await billingApi.generateBills(folio.id, gstNumber || undefined);
+      if (result.roomRentBill?.pdfDownloadUrl) {
+        triggerPresignedDownload(result.roomRentBill.pdfDownloadUrl);
+      }
+      if (result.ancillaryBill?.pdfDownloadUrl) {
+        setTimeout(() => triggerPresignedDownload(result.ancillaryBill!.pdfDownloadUrl!), 300);
+      }
+      if (!result.roomRentBill?.pdfDownloadUrl && !result.ancillaryBill?.pdfDownloadUrl) {
+        alert('Invoice generated. PDF upload unavailable — contact admin.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Failed to generate invoice.');
+    } finally {
+      setGeneratingFolioId(null);
     }
   };
 
@@ -332,12 +342,13 @@ export default function FrontDeskBillingManager({ propertyId }: FrontDeskBilling
                         >
                           Open Ledger
                         </button>
-                        <button 
-                            onClick={() => handleGenerateBill(f)}
-                            className="rounded-lg bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-700 transition-colors hover:bg-indigo-100"
-                          >
-                            Generate Bill
-                          </button>
+                        <button
+                          onClick={() => handleGenerateBill(f)}
+                          disabled={generatingFolioId === f.id}
+                          className="rounded-lg bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-700 transition-colors hover:bg-indigo-100 disabled:opacity-50"
+                        >
+                          {generatingFolioId === f.id ? 'Generating...' : 'Generate Bill'}
+                        </button>
                       </td>
                     </tr>
                   );

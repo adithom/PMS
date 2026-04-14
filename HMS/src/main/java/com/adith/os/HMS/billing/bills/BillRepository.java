@@ -13,4 +13,6 @@ public interface BillRepository extends JpaRepository<Bill, UUID> {
     long countByFolioIdAndIsVoidedFalse(java.util.UUID folioId);
 
     List<Bill> findByFolioIdAndIsVoidedFalse(java.util.UUID folioId);
+
+    List<Bill> findByFolioId(java.util.UUID folioId);
 }

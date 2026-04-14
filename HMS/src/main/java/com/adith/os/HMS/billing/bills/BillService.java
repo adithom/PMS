@@ -3,13 +3,18 @@ package com.adith.os.HMS.billing.bills;
 import com.adith.os.HMS.billing.folio.*;
 import com.adith.os.HMS.billing.folio.dto.ChargeDto;
 import com.adith.os.HMS.billing.bills.dto.*;
+import com.adith.os.HMS.storage.R2StorageService;
+import com.adith.os.HMS.storage.R2UploadException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -18,25 +23,30 @@ import java.util.UUID;
 @Service
 public class BillService {
 
+    private static final Logger log = LoggerFactory.getLogger(BillService.class);
+
     private final FolioRepository folioRepository;
     private final FolioChargeRepository folioChargeRepository;
     private final BillRepository billRepository;
     private final InvoiceSequenceRepository sequenceRepository;
     private final ChargeMapper chargeMapper;
     private final PdfGenerationService pdfGenerationService;
+    private final R2StorageService r2StorageService;
 
     public BillService(FolioRepository folioRepository,
                        FolioChargeRepository folioChargeRepository,
                        BillRepository billRepository,
                        InvoiceSequenceRepository sequenceRepository,
                        ChargeMapper chargeMapper,
-                       PdfGenerationService pdfGenerationService) {
+                       PdfGenerationService pdfGenerationService,
+                       R2StorageService r2StorageService) {
         this.folioRepository = folioRepository;
         this.folioChargeRepository = folioChargeRepository;
         this.billRepository = billRepository;
         this.sequenceRepository = sequenceRepository;
         this.chargeMapper = chargeMapper;
         this.pdfGenerationService = pdfGenerationService;
+        this.r2StorageService = r2StorageService;
     }
 
     @Transactional
@@ -77,26 +87,49 @@ public class BillService {
         Bill roomBill = createAndSaveBill(folio, roomCharges, ChargeCategory.ROOM_RENT, guestGstNumber, batchId);
         Bill ancillaryBill = createAndSaveBill(folio, ancillaryCharges, ChargeCategory.ANCILLARY, guestGstNumber, batchId);
 
-        // 3. Map to DTOs and Generate PDFs
+        // 3. Map to DTOs, Generate PDFs, upload to R2
         BillDto roomBillDto = null;
         if (roomBill != null) {
-            // Passing the bill entity into the mapper now
-            roomBillDto = BillMapper.toBillDto(roomBill, folio, chargeMapper.toDtos(roomCharges), guestGstNumber);
-            String pdfPath = pdfGenerationService.generateInvoicePdf(roomBillDto);
-            roomBill.setPdfFilePath(pdfPath);
+            BillDto dtoForPdf = BillMapper.toBillDto(roomBill, folio, chargeMapper.toDtos(roomCharges), guestGstNumber);
+            String localPath = pdfGenerationService.generateInvoicePdf(dtoForPdf);
+            String objectKey = "invoices/" + roomBill.getInvoiceNumber() + ".pdf";
+            String signedUrl = uploadToR2WithFallback(localPath, objectKey, "INV_" + roomBill.getInvoiceNumber() + ".pdf");
+            roomBill.setPdfFilePath(objectKey);
             billRepository.save(roomBill);
+            roomBillDto = BillMapper.toBillDto(roomBill, folio, chargeMapper.toDtos(roomCharges), guestGstNumber, signedUrl);
         }
 
         BillDto ancillaryBillDto = null;
         if (ancillaryBill != null) {
-            // Passing the bill entity into the mapper now
-            ancillaryBillDto = BillMapper.toBillDto(ancillaryBill, folio, chargeMapper.toDtos(ancillaryCharges), guestGstNumber);
-            String pdfPath = pdfGenerationService.generateInvoicePdf(ancillaryBillDto);
-            ancillaryBill.setPdfFilePath(pdfPath);
+            BillDto dtoForPdf = BillMapper.toBillDto(ancillaryBill, folio, chargeMapper.toDtos(ancillaryCharges), guestGstNumber);
+            String localPath = pdfGenerationService.generateInvoicePdf(dtoForPdf);
+            String objectKey = "invoices/" + ancillaryBill.getInvoiceNumber() + ".pdf";
+            String signedUrl = uploadToR2WithFallback(localPath, objectKey, "INV_" + ancillaryBill.getInvoiceNumber() + ".pdf");
+            ancillaryBill.setPdfFilePath(objectKey);
             billRepository.save(ancillaryBill);
+            ancillaryBillDto = BillMapper.toBillDto(ancillaryBill, folio, chargeMapper.toDtos(ancillaryCharges), guestGstNumber, signedUrl);
         }
 
         return new DoubleBillDto(roomBillDto, ancillaryBillDto);
+    }
+
+    public List<BillDto> getBillsForFolio(UUID folioId) {
+        Folio folio = folioRepository.findById(folioId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Folio not found"));
+        return billRepository.findByFolioId(folioId).stream()
+                .map(bill -> BillMapper.toBillDto(bill, folio, chargeMapper.toDtos(
+                        folioChargeRepository.findByBillId(bill.getId())), bill.getGuestGstNumber()))
+                .toList();
+    }
+
+    public String generateDownloadUrl(UUID billId) {
+        Bill bill = billRepository.findById(billId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Bill not found"));
+        if (bill.getPdfFilePath() == null || bill.getPdfFilePath().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No PDF available for this bill");
+        }
+        String fileName = "INV_" + bill.getInvoiceNumber() + ".pdf";
+        return r2StorageService.generatePresignedDownloadUrl(bill.getPdfFilePath(), fileName);
     }
 
     @Transactional
@@ -176,6 +209,19 @@ public class BillService {
         folioChargeRepository.saveAll(charges);
 
         return savedBill;
+    }
+
+    private String uploadToR2WithFallback(String localPath, String objectKey, String fileName) {
+        if (!r2StorageService.isConfigured()) {
+            return null;
+        }
+        try {
+            r2StorageService.uploadPdf(Path.of(localPath), objectKey);
+            return r2StorageService.generatePresignedDownloadUrl(objectKey, fileName);
+        } catch (R2UploadException e) {
+            log.error("R2 upload failed for key={}. PDF is saved locally at {}.", objectKey, localPath, e);
+            return null;
+        }
     }
 
     private String generateInvoiceNumber() {

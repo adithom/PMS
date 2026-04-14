@@ -33,6 +33,7 @@ export interface BillDto {
   voidReason?: string;
   voidedAt?: string;
   voidedBy?: string;
+  pdfDownloadUrl?: string; // Pre-signed R2 URL — present only at generation time
 }
 
 export interface DoubleBillDto {
@@ -76,39 +77,54 @@ const billingApi = {
   generateBills: async (folioId: string, guestGstNumber?: string): Promise<DoubleBillDto> => {
     const params = new URLSearchParams();
     if (guestGstNumber) params.append('guestGstNumber', guestGstNumber);
-    return apiClient.post(`/api/bills/generate/${folioId}?${params.toString()}`);
+    return apiClient.post(`/bills/generate/${folioId}?${params.toString()}`);
   },
 
   voidBill: async (billId: string, reason: string): Promise<BillDto> => {
     const params = new URLSearchParams({ reason });
-    return apiClient.post(`/api/bills/${billId}/void?${params.toString()}`);
+    return apiClient.post(`/bills/${billId}/void?${params.toString()}`);
   },
 
   voidActiveBillsForFolio: async (folioId: string, reason: string): Promise<BillDto[]> => {
     const params = new URLSearchParams({ reason });
-    return apiClient.post(`/api/bills/folio/${folioId}/void-active?${params.toString()}`);
+    return apiClient.post(`/bills/folio/${folioId}/void-active?${params.toString()}`);
   },
 
   // Group Booking Bills
   getGroupBills: async (propertyId: string, parentBookingId: string): Promise<GroupBill[]> => {
-    return apiClient.get(`/api/properties/${propertyId}/group-bookings/${parentBookingId}/bills`);
+    return apiClient.get(`/properties/${propertyId}/group-bookings/${parentBookingId}/bills`);
   },
 
   generateGroupBills: async (propertyId: string, parentBookingId: string, guestGstNumber?: string): Promise<GroupDoubleBillDto> => {
     const params = new URLSearchParams();
     if (guestGstNumber) params.append('guestGstNumber', guestGstNumber);
-    return apiClient.post(`/api/properties/${propertyId}/group-bookings/${parentBookingId}/bills/generate?${params.toString()}`);
+    return apiClient.post(`/properties/${propertyId}/group-bookings/${parentBookingId}/bills/generate?${params.toString()}`);
   },
 
   voidGroupBill: async (propertyId: string, parentBookingId: string, groupBillId: string, reason: string): Promise<GroupBill> => {
     const params = new URLSearchParams({ reason });
-    return apiClient.post(`/api/properties/${propertyId}/group-bookings/${parentBookingId}/bills/${groupBillId}/void?${params.toString()}`);
+    return apiClient.post(`/properties/${propertyId}/group-bookings/${parentBookingId}/bills/${groupBillId}/void?${params.toString()}`);
   },
 
   voidAllGroupBills: async (propertyId: string, parentBookingId: string, reason: string): Promise<GroupBill[]> => {
     const params = new URLSearchParams({ reason });
-    return apiClient.post(`/api/properties/${propertyId}/group-bookings/${parentBookingId}/bills/void-all?${params.toString()}`);
-  }
+    return apiClient.post(`/properties/${propertyId}/group-bookings/${parentBookingId}/bills/void-all?${params.toString()}`);
+  },
+
+  // Get all bills (including voided) for a folio
+  getBillsForFolio: async (folioId: string): Promise<BillDto[]> => {
+    return apiClient.get(`/bills/folio/${folioId}`);
+  },
+
+  // Get a fresh pre-signed download URL for an existing individual bill
+  getDownloadUrl: async (billId: string): Promise<string> => {
+    return apiClient.get(`/bills/${billId}/download-url`);
+  },
+
+  // Get a fresh pre-signed download URL for an existing group bill
+  getGroupBillDownloadUrl: async (propertyId: string, parentBookingId: string, groupBillId: string): Promise<string> => {
+    return apiClient.get(`/properties/${propertyId}/group-bookings/${parentBookingId}/bills/${groupBillId}/download-url`);
+  },
 };
 
 export default billingApi;

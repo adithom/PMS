@@ -21,6 +21,16 @@ public class BillMapper {
             List<ChargeDto> charges,
             String guestGstNumber
     ) {
+        return toBillDto(bill, folio, charges, guestGstNumber, null);
+    }
+
+    public static BillDto toBillDto(
+            Bill bill,
+            Folio folio,
+            List<ChargeDto> charges,
+            String guestGstNumber,
+            String pdfDownloadUrl
+    ) {
 
         // 1. Filter out voided charges
         List<ChargeDto> validCharges = charges.stream()
@@ -107,7 +117,9 @@ public class BillMapper {
                 bill.isVoided(),
                 bill.getVoidReason(),
                 bill.getVoidedAt(),
-                bill.getVoidedBy()
+                bill.getVoidedBy(),
+
+                pdfDownloadUrl
         );
     }
 }

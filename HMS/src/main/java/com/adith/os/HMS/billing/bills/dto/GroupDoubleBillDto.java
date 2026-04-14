@@ -66,8 +66,26 @@ public record GroupDoubleBillDto(
             boolean isVoided,
             String voidReason,
             LocalDateTime voidedAt,
-            String voidedBy
-    ) {}
+            String voidedBy,
+
+            // Pre-signed R2 download URL — populated only at bill generation time, null otherwise
+            String pdfDownloadUrl
+    ) {
+        public GroupBillSectionDto withPdfDownloadUrl(String url) {
+            return new GroupBillSectionDto(
+                    invoiceNumber, invoiceDate, category,
+                    propertyName, propertyAddress, propertyGstNumber,
+                    parentBookingId, groupReference,
+                    organizerGuestName, organizerGuestPhone, organizerGuestEmail, organizerGuestGstNumber,
+                    checkIn, checkOut, currency, generatedAt,
+                    rooms,
+                    groupSubtotal, groupTaxAmount, groupDiscountAmount, groupGrandTotal,
+                    groupAmountPaid, groupBalanceDue,
+                    isVoided, voidReason, voidedAt, voidedBy,
+                    url
+            );
+        }
+    }
 
     /**
      * Charge line-items for one room within the group bill.
