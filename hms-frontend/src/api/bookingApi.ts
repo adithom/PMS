@@ -1,6 +1,7 @@
 // src/api/bookingApi.ts
 import api from './fetchClient';
-import type { Booking, BookingStatus } from '../types';
+import type { Booking, BookingStatus, RoomAssignmentDto } from '../types';
+export type { RoomAssignmentDto } from '../types';
 
 export interface NewTravelAgentDto {
   name: string;
@@ -50,17 +51,6 @@ export interface RoomShiftRequestDto {
   notes?: string;
 }
 
-export interface RoomAssignmentDto {
-  id: string;
-  bookingId: string;
-  roomId: string;
-  roomNumber: string;
-  unitName: string;
-  startDate: string;
-  endDate: string;
-  status: 'SCHEDULED' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
-  notes?: string;
-}
 
 const bookingApi = {
   // Get all bookings for a property
@@ -175,6 +165,13 @@ const bookingApi = {
   // GET /api/properties/{propertyId}/bookings/range?from=…&to=…
   getRange: (propertyId: string, from: string, to: string) =>
     api.get<Booking[]>(`/properties/${propertyId}/bookings/range`, { from, to }),
+
+  // Fetch all room assignments for a booking.
+  // GET /api/properties/{propertyId}/bookings/{bookingId}/room-assignments
+  getRoomAssignments: (propertyId: string, bookingId: string) =>
+    api.get<RoomAssignmentDto[]>(
+      `/properties/${propertyId}/bookings/${bookingId}/room-assignments`
+    ),
 };
 
 export default bookingApi;

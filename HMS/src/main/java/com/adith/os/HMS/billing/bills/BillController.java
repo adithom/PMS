@@ -21,10 +21,7 @@ public class BillController {
         this.billService = billService;
     }
 
-    /**
-     * Generates Room and Ancillary bills for a given Folio.
-     * Example URL: POST /api/bills/generate/123e4567-e89b-12d3-a456-426614174000?guestGstNumber=29ABCDE1234F1Z5
-     */
+    // Generates Room and Ancillary bills for a given Folio.
     @PostMapping("/generate/{folioId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
     public ResponseEntity<DoubleBillDto> generateBills(

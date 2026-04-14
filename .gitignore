@@ -2,7 +2,13 @@
 .DS_Store
 target/
 node_modules/
+token.txt
 .task-list.md
+hms-frontend/.env
+hms-frontend/.env.local
+.env.local
+deployment-instructions.md
+.dev.sh
 
 HMS/hms-data/.DS_Store
 
@@ -12,3 +18,5 @@ frontend-plans.md
 backend-plans.md
 
 CLAUDE.md
+task-list.md
+channel-manager.md

@@ -110,3 +110,15 @@ export type UnitDto = {
   sortOrder?: number;    // optional, can be undefined
   totalRooms?: number;   // optional, can be undefined
 };
+
+export interface RoomAssignmentDto {
+  id: string;
+  bookingId: string;
+  roomId: string;
+  roomNumber: string;
+  unitName: string;
+  startDate: string;
+  endDate: string;
+  status: 'SCHEDULED' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+  notes?: string;
+}

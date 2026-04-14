@@ -43,7 +43,7 @@ public interface PosOrderRepository extends JpaRepository<PosOrder, UUID> {
            "AND o.orderDate >= :from AND o.orderDate <= :to " +
            "AND o.status IN (com.adith.os.HMS.billing.pos.PosOrderStatus.CLOSED, " +
            "com.adith.os.HMS.billing.pos.PosOrderStatus.CHARGED)")
-    Object[] getOrderSummary(
+    List<Object[]> getOrderSummary(
             @Param("locationId") UUID locationId,
             @Param("from") OffsetDateTime from,
             @Param("to") OffsetDateTime to);

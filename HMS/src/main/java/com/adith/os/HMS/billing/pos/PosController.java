@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
@@ -148,8 +149,9 @@ public class PosController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) PosOrderStatus status) {
-        OffsetDateTime fromDt = from.atStartOfDay().atOffset(ZoneOffset.UTC);
-        OffsetDateTime toDt = to.plusDays(1).atStartOfDay().atOffset(ZoneOffset.UTC);
+        ZoneId ist = ZoneId.of("Asia/Kolkata");
+        OffsetDateTime fromDt = from.atStartOfDay(ist).toOffsetDateTime();
+        OffsetDateTime toDt = to.plusDays(1).atStartOfDay(ist).toOffsetDateTime();
         return ResponseEntity.ok(posService.getOrders(locationId, fromDt, toDt, status));
     }
 
@@ -159,8 +161,9 @@ public class PosController {
             @RequestParam UUID locationId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
-        OffsetDateTime fromDt = from.atStartOfDay().atOffset(ZoneOffset.UTC);
-        OffsetDateTime toDt = to.plusDays(1).atStartOfDay().atOffset(ZoneOffset.UTC);
+        ZoneId ist = ZoneId.of("Asia/Kolkata");
+        OffsetDateTime fromDt = from.atStartOfDay(ist).toOffsetDateTime();
+        OffsetDateTime toDt = to.plusDays(1).atStartOfDay(ist).toOffsetDateTime();
         return ResponseEntity.ok(posService.getOrderSummary(locationId, fromDt, toDt));
     }
 }
