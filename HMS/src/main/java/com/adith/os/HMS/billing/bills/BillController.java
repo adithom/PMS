@@ -9,6 +9,8 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -45,6 +47,18 @@ public class BillController {
         } catch (Exception e) {
             throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, e.getMessage());
         }
+    }
+
+    @GetMapping("/folio/{folioId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    public ResponseEntity<List<BillDto>> getBillsForFolio(@PathVariable UUID folioId) {
+        return ResponseEntity.ok(billService.getBillsForFolio(folioId));
+    }
+
+    @GetMapping("/{billId}/download-url")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    public ResponseEntity<String> getBillDownloadUrl(@PathVariable UUID billId) {
+        return ResponseEntity.ok(billService.generateDownloadUrl(billId));
     }
 
     @PostMapping("/folio/{folioId}/void-active")

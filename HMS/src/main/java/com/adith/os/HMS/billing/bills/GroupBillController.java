@@ -63,6 +63,20 @@ public class GroupBillController {
     }
 
     /**
+     * Get a fresh pre-signed download URL for an existing group bill PDF.
+     *
+     * GET /api/properties/{propertyId}/group-bookings/{parentBookingId}/bills/{groupBillId}/download-url
+     */
+    @GetMapping("/{groupBillId}/download-url")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    public ResponseEntity<String> getGroupBillDownloadUrl(
+            @PathVariable UUID propertyId,
+            @PathVariable UUID parentBookingId,
+            @PathVariable UUID groupBillId) {
+        return ResponseEntity.ok(groupBillGenerationService.generateDownloadUrl(groupBillId));
+    }
+
+    /**
      * Void a single GroupBill by its own ID.
      *
      * POST /api/properties/{propertyId}/group-bookings/{parentBookingId}/bills/{groupBillId}/void

@@ -2,6 +2,9 @@ import { useState, useEffect, useMemo } from 'react';
 import folioApi from '../../api/folioApi';
 import type { FolioDetailDto, ChargeDto } from '../../api/folioApi';
 import type { PaymentDto } from '../../api/paymentApi';
+import billingApi from '../../api/billingApi';
+import type { BillDto } from '../../api/billingApi';
+import { triggerPresignedDownload } from '../../utils/downloadUtils';
 import LoadingSpinner from '../LoadingSpinner';
 import ModalShell from '../ModalShell';
 import ChargeForm from './ChargeForm';
@@ -25,6 +28,11 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Bills
+  const [bills, setBills] = useState<BillDto[]>([]);
+  const [downloadingBillId, setDownloadingBillId] = useState<string | null>(null);
+  const [isGeneratingBill, setIsGeneratingBill] = useState(false);
+
   // Action states
   const [isProcessingId, setIsProcessingId] = useState<string | null>(null);
 
@@ -35,6 +43,7 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
 
   useEffect(() => {
     loadFolio();
+    loadBills();
   }, [propertyId, folioId]);
 
   const loadFolio = async () => {
@@ -46,6 +55,49 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
       setError(err.message || 'Failed to load folio details.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadBills = async () => {
+    try {
+      const data = await billingApi.getBillsForFolio(folioId);
+      setBills(data || []);
+    } catch {
+      // Non-critical — bills section just stays empty
+    }
+  };
+
+  const handleGenerateInvoice = async () => {
+    const gstNumber = window.prompt('Enter guest GST number (optional, leave blank to skip):') ?? '';
+    setIsGeneratingBill(true);
+    try {
+      const result = await billingApi.generateBills(folioId, gstNumber || undefined);
+      if (result.roomRentBill?.pdfDownloadUrl) {
+        triggerPresignedDownload(result.roomRentBill.pdfDownloadUrl);
+      }
+      if (result.ancillaryBill?.pdfDownloadUrl) {
+        setTimeout(() => triggerPresignedDownload(result.ancillaryBill!.pdfDownloadUrl!), 300);
+      }
+      if (!result.roomRentBill?.pdfDownloadUrl && !result.ancillaryBill?.pdfDownloadUrl) {
+        alert('Invoice generated but PDF upload unavailable. Contact admin.');
+      }
+      await loadBills();
+    } catch (err: any) {
+      alert(err.message || 'Failed to generate invoice.');
+    } finally {
+      setIsGeneratingBill(false);
+    }
+  };
+
+  const handleDownloadBill = async (bill: BillDto) => {
+    setDownloadingBillId(bill.id);
+    try {
+      const url = await billingApi.getDownloadUrl(bill.id);
+      triggerPresignedDownload(url);
+    } catch (err: any) {
+      alert(err.message || 'Failed to get download link.');
+    } finally {
+      setDownloadingBillId(null);
     }
   };
 
@@ -297,12 +349,47 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
                 
                 <div className="my-4 border-t border-slate-100"></div>
 
-                <button className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-all hover:bg-slate-50">
+                <button
+                  onClick={handleGenerateInvoice}
+                  disabled={isGeneratingBill}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-all hover:bg-slate-50 disabled:opacity-50"
+                >
                   <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                   </svg>
-                  Print Proforma Bill
+                  {isGeneratingBill ? 'Generating...' : 'Generate Invoice'}
                 </button>
+              </div>
+            )}
+
+            {/* Generated Invoices */}
+            {bills.length > 0 && (
+              <div className="mt-8">
+                <h3 className="mb-3 text-sm font-bold uppercase tracking-widest text-slate-400">Generated Invoices</h3>
+                <div className="space-y-2">
+                  {bills.map(bill => (
+                    <div key={bill.id} className={`flex items-center justify-between rounded-lg border px-3 py-2.5 ${bill.isVoided ? 'border-slate-100 bg-slate-50 opacity-60' : 'border-slate-200 bg-white'}`}>
+                      <div>
+                        <p className="text-xs font-bold text-slate-800">
+                          {bill.invoiceNumber}
+                          {bill.isVoided && <span className="ml-2 text-[10px] font-bold uppercase text-rose-500">Voided</span>}
+                        </p>
+                        <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
+                          {bill.category ?? (bill.charges?.[0] ? 'Invoice' : 'Invoice')}
+                        </p>
+                      </div>
+                      {!bill.isVoided && (
+                        <button
+                          onClick={() => handleDownloadBill(bill)}
+                          disabled={downloadingBillId === bill.id}
+                          className="rounded-md bg-indigo-50 px-2.5 py-1.5 text-[11px] font-bold text-indigo-700 transition-colors hover:bg-indigo-100 disabled:opacity-50"
+                        >
+                          {downloadingBillId === bill.id ? '...' : 'Download'}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
