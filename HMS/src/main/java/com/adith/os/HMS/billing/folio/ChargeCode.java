@@ -5,6 +5,7 @@ import java.math.BigDecimal;
 public enum ChargeCode {
 
     ROOM_RENT(ChargeCategory.ROOM_RENT, new BigDecimal("12.00")),
+    MEAL_PLAN(ChargeCategory.MEAL_PLAN, new BigDecimal("5.00")),
     RESTAURANT(ChargeCategory.ANCILLARY, new BigDecimal("5.00")),
     LAUNDRY(ChargeCategory.ANCILLARY, new BigDecimal("18.00")),
     SPA(ChargeCategory.ANCILLARY, new BigDecimal("18.00")),
@@ -34,5 +35,9 @@ public enum ChargeCode {
 
     public boolean isAncillary() {
         return this.category == ChargeCategory.ANCILLARY;
+    }
+
+    public boolean isMealPlan() {
+        return this.category == ChargeCategory.MEAL_PLAN;
     }
 }

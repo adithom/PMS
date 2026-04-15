@@ -1,6 +1,7 @@
 package com.adith.os.HMS.booking.dto;
 
 import com.adith.os.HMS.booking.BookingStatus;
+import com.adith.os.HMS.property.mealplan.MealPlanType;
 import com.adith.os.HMS.travelagent.dto.TravelAgentCreationDto;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
@@ -54,7 +55,9 @@ public record BookingCreationDto(
         UUID travelAgentId,          // Optional — reference an existing travel agent
 
         @Valid
-        TravelAgentCreationDto newTravelAgent  // Optional — create a new travel agent inline
+        TravelAgentCreationDto newTravelAgent,  // Optional — create a new travel agent inline
+
+        MealPlanType mealPlanType    // Optional — select a meal plan for this booking
 
 ) {
     public BookingCreationDto {

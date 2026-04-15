@@ -7,6 +7,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.UUID;
 
 @Entity
@@ -81,7 +82,7 @@ public class Bill {
             generatedAt = OffsetDateTime.now();
         }
         if (billDate == null) {
-            billDate = generatedAt.toLocalDate();
+            billDate = LocalDate.now(ZoneId.of("Asia/Kolkata"));
         }
     }
 

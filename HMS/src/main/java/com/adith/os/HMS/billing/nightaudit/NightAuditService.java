@@ -7,6 +7,8 @@ import com.adith.os.HMS.billing.folio.dto.ChargeCreationDto;
 import com.adith.os.HMS.booking.Booking;
 import com.adith.os.HMS.booking.BookingRepository;
 import com.adith.os.HMS.booking.BookingStatus;
+import com.adith.os.HMS.property.mealplan.MealPlanType;
+import com.adith.os.HMS.property.mealplan.PropertyMealPlanRepository;
 import com.adith.os.HMS.room.Room;
 import com.adith.os.HMS.roomassignment.RoomAssignment;
 import com.adith.os.HMS.roomassignment.RoomAssignmentRepository;
@@ -35,15 +37,18 @@ public class NightAuditService {
     private final FolioService folioService;
     private final BookingRepository bookingRepository;
     private final NightAuditLogRepository nightAuditLogRepository;
+    private final PropertyMealPlanRepository mealPlanRepository;
 
     public NightAuditService(RoomAssignmentRepository roomAssignmentRepository,
                              FolioService folioService,
                              BookingRepository bookingRepository,
-                             NightAuditLogRepository nightAuditLogRepository) {
+                             NightAuditLogRepository nightAuditLogRepository,
+                             PropertyMealPlanRepository mealPlanRepository) {
         this.roomAssignmentRepository = roomAssignmentRepository;
         this.folioService = folioService;
         this.bookingRepository = bookingRepository;
         this.nightAuditLogRepository = nightAuditLogRepository;
+        this.mealPlanRepository = mealPlanRepository;
     }
 
     /**
@@ -116,6 +121,8 @@ public class NightAuditService {
         int chargesPosted = 0;
         int chargesSkipped = 0;
         int errors = 0;
+        int mealPlanChargesPosted = 0;
+        int mealPlanChargesSkipped = 0;
 
         for (RoomAssignment assignment : assignments) {
             try {
@@ -182,6 +189,46 @@ public class NightAuditService {
                 log.info("Night Audit{}: Posted room rent charge for booking {} room {} on {}",
                         manualRun ? " (Manual)" : "", booking.getId(), room.getNumber(), chargeDate);
 
+                // Post meal plan charge if the booking has one
+                MealPlanType mealPlanType = booking.getMealPlanType();
+                if (mealPlanType != null) {
+                    boolean mealPlanChargeExists = masterFolio.getCharges() != null
+                            && masterFolio.getCharges().stream()
+                            .filter(c -> !c.isVoided())
+                            .filter(c -> c.getChargeCode() == ChargeCode.MEAL_PLAN)
+                            .anyMatch(c -> c.getChargeDate().equals(chargeDate));
+
+                    if (!mealPlanChargeExists) {
+                        var planOpt = mealPlanRepository
+                                .findByPropertyIdAndMealPlanType(booking.getProperty().getId(), mealPlanType);
+                        if (planOpt.isPresent() && planOpt.get().isActive()) {
+                            var plan = planOpt.get();
+                            ChargeCreationDto mealPlanCharge = new ChargeCreationDto(
+                                    chargeDate,
+                                    ChargeCode.MEAL_PLAN,
+                                    mealPlanType.name() + " - " + mealPlanType.getDisplayName(),
+                                    plan.getPricePerNight(),
+                                    BigDecimal.ONE,
+                                    null,
+                                    BigDecimal.ZERO,
+                                    "BOOKING",
+                                    booking.getId(),
+                                    manualRun ? "Night Audit - Manual run for " + chargeDate : "Night Audit - Auto-posted",
+                                    "NIGHT_AUDIT"
+                            );
+                            folioService.addCharge(booking.getProperty().getId(), masterFolio.getId(), mealPlanCharge);
+                            mealPlanChargesPosted++;
+                            log.info("Night Audit{}: Posted meal plan charge ({}) for booking {} on {}",
+                                    manualRun ? " (Manual)" : "", mealPlanType, booking.getId(), chargeDate);
+                        } else {
+                            log.warn("Night Audit: Meal plan {} has no active config for property {}. Skipping meal plan charge for booking {}.",
+                                    mealPlanType, booking.getProperty().getId(), booking.getId());
+                        }
+                    } else {
+                        mealPlanChargesSkipped++;
+                    }
+                }
+
             } catch (Exception e) {
                 errors++;
                 firstError.compareAndSet(null, e.getMessage());
@@ -191,7 +238,8 @@ public class NightAuditService {
             }
         }
 
-        return new NightAuditResultDto(chargeDate, assignments.size(), chargesPosted, chargesSkipped, errors);
+        return new NightAuditResultDto(chargeDate, assignments.size(), chargesPosted, chargesSkipped, errors,
+                mealPlanChargesPosted, mealPlanChargesSkipped);
     }
 
     private void performInventoryRollover(LocalDate businessDate) {
@@ -239,6 +287,8 @@ public class NightAuditService {
             int totalAssignments,
             int chargesPosted,
             int chargesSkipped,
-            int errors
+            int errors,
+            int mealPlanChargesPosted,
+            int mealPlanChargesSkipped
     ) {}
 }

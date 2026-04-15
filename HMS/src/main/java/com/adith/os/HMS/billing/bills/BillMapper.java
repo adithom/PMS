@@ -11,6 +11,7 @@ import com.adith.os.HMS.billing.payment.PaymentStatus;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 
 public class BillMapper {
@@ -44,9 +45,9 @@ public class BillMapper {
         Property property = folio.getProperty();
         Booking booking = folio.getBooking();
 
-        LocalDate invoiceDate = folio.getClosedAt() != null
-                ? folio.getClosedAt().toLocalDate()
-                : folio.getCreatedAt().toLocalDate();
+        LocalDate invoiceDate = bill.getBillDate() != null
+                ? bill.getBillDate()
+                : LocalDate.now(ZoneId.of("Asia/Kolkata"));
 
         String roomNumber = (booking != null && booking.getRoom() != null)
                 ? booking.getRoom().getNumber()

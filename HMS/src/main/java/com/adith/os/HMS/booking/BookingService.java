@@ -32,6 +32,8 @@ import com.adith.os.HMS.roomassignment.RoomAssignment;
 import com.adith.os.HMS.roomassignment.RoomAssignmentRepository;
 import com.adith.os.HMS.roomassignment.RoomAssignmentService;
 import com.adith.os.HMS.roomassignment.RoomAssignmentStatus;
+import com.adith.os.HMS.property.mealplan.PropertyMealPlan;
+import com.adith.os.HMS.property.mealplan.PropertyMealPlanRepository;
 import com.adith.os.HMS.travelagent.TravelAgent;
 import com.adith.os.HMS.travelagent.TravelAgentService;
 import com.adith.os.HMS.unit.Unit;
@@ -54,6 +56,7 @@ public class BookingService {
     private final RoomAssignmentService roomAssignmentService;
     private final RoomAssignmentRepository roomAssignmentRepository;
     private final TravelAgentService travelAgentService;
+    private final PropertyMealPlanRepository mealPlanRepository;
 
     // Active statuses for room assignments
     private static final List<RoomAssignmentStatus> ACTIVE_ASSIGNMENT_STATUSES =
@@ -68,7 +71,8 @@ public class BookingService {
                           BookingRepository bookingRepository, BookingMapper bookingMapper,
                           FolioService folioService, RoomAssignmentService roomAssignmentService,
                           RoomAssignmentRepository roomAssignmentRepository,
-                          TravelAgentService travelAgentService) {
+                          TravelAgentService travelAgentService,
+                          PropertyMealPlanRepository mealPlanRepository) {
         this.propertyRepository = propertyRepository;
         this.roomRepository = roomRepository;
         this.guestRepository = guestRepository;
@@ -79,6 +83,7 @@ public class BookingService {
         this.roomAssignmentService = roomAssignmentService;
         this.roomAssignmentRepository = roomAssignmentRepository;
         this.travelAgentService = travelAgentService;
+        this.mealPlanRepository = mealPlanRepository;
     }
 
     @Transactional
@@ -195,6 +200,18 @@ public class BookingService {
             if (travelAgent != null) {
                 booking.setTravelAgent(travelAgent);
                 booking.setCommissionRate(travelAgent.getCommissionRate());
+            }
+
+            if (bookingCreationDto.mealPlanType() != null) {
+                PropertyMealPlan plan = mealPlanRepository
+                        .findByPropertyIdAndMealPlanType(propertyId, bookingCreationDto.mealPlanType())
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                "Meal plan " + bookingCreationDto.mealPlanType() + " is not configured for this property"));
+                if (!plan.isActive()) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Meal plan " + bookingCreationDto.mealPlanType() + " is not active");
+                }
+                booking.setMealPlanType(bookingCreationDto.mealPlanType());
             }
 
             Booking savedBooking = bookingRepository.save(booking);
@@ -727,6 +744,21 @@ public class BookingService {
                 TravelAgent agent = travelAgentService.resolveOrCreate(dto.travelAgentId(), null);
                 booking.setTravelAgent(agent);
                 booking.setCommissionRate(agent.getCommissionRate());
+            }
+
+            // Meal plan partial update
+            if (Boolean.TRUE.equals(dto.clearMealPlan())) {
+                booking.setMealPlanType(null);
+            } else if (dto.mealPlanType() != null) {
+                PropertyMealPlan plan = mealPlanRepository
+                        .findByPropertyIdAndMealPlanType(propertyId, dto.mealPlanType())
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                "Meal plan " + dto.mealPlanType() + " is not configured for this property"));
+                if (!plan.isActive()) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Meal plan " + dto.mealPlanType() + " is not active");
+                }
+                booking.setMealPlanType(dto.mealPlanType());
             }
 
             if (datesChanged) {

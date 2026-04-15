@@ -27,6 +27,7 @@ import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
@@ -125,7 +126,8 @@ public class GroupBillGenerationService {
                     .toList();
 
             List<FolioCharge> roomCharges = validCharges.stream()
-                    .filter(c -> c.getChargeCode().getCategory() == ChargeCategory.ROOM_RENT)
+                    .filter(c -> c.getChargeCode().getCategory() == ChargeCategory.ROOM_RENT
+                              || c.getChargeCode().getCategory() == ChargeCategory.MEAL_PLAN)
                     .toList();
 
             List<FolioCharge> ancCharges = validCharges.stream()
@@ -151,7 +153,7 @@ public class GroupBillGenerationService {
         SectionTotals ancTotals  = sumSections(ancillarySections);
         UUID batchId = UUID.randomUUID();
 
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Kolkata"));
         OffsetDateTime now = OffsetDateTime.now();
         var property  = parent.getProperty();
         var organizer = parent.getGuest();
@@ -413,7 +415,7 @@ public class GroupBillGenerationService {
     }
 
     private String generateInvoiceNumber() {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Kolkata"));
         InvoiceSequence seq = sequenceRepository.findByIdWithLock(today)
                 .orElse(new InvoiceSequence(today, 1));
         int current = seq.getNextVal();
