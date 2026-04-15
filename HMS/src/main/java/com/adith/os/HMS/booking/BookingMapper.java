@@ -4,16 +4,25 @@ import com.adith.os.HMS.booking.dto.BookingCreationDto;
 import com.adith.os.HMS.booking.dto.BookingDto;
 import com.adith.os.HMS.guest.Guest;
 import com.adith.os.HMS.property.Property;
+import com.adith.os.HMS.property.mealplan.PropertyMealPlan;
+import com.adith.os.HMS.property.mealplan.PropertyMealPlanRepository;
 import com.adith.os.HMS.room.Room;
 import com.adith.os.HMS.unit.Unit;
 import jakarta.validation.Valid;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.stream.Collectors;
 
 @Component
 public class BookingMapper {
+
+    private final PropertyMealPlanRepository mealPlanRepository;
+
+    public BookingMapper(PropertyMealPlanRepository mealPlanRepository) {
+        this.mealPlanRepository = mealPlanRepository;
+    }
 
     public Booking toEntity(@Valid BookingCreationDto bookingCreationDto, Property property,
                             Room room, Guest guest, Unit unit) {
@@ -42,6 +51,7 @@ public class BookingMapper {
                 bookingCreationDto.isTwinBed()
         );
         booking.setReferenceNumber(bookingCreationDto.referenceNumber());
+        booking.setMealPlanType(bookingCreationDto.mealPlanType());
         return booking;
     }
 
@@ -77,8 +87,19 @@ public class BookingMapper {
                 booking.getReferenceNumber(),
                 booking.getTravelAgent() != null ? booking.getTravelAgent().getId() : null,
                 booking.getTravelAgent() != null ? booking.getTravelAgent().getName() : null,
-                booking.getCommissionRate()
+                booking.getCommissionRate(),
+                booking.getMealPlanType(),
+                booking.getMealPlanType() != null ? booking.getMealPlanType().getDisplayName() : null,
+                resolveMealPlanPrice(booking)
         );
+    }
+
+    private BigDecimal resolveMealPlanPrice(Booking booking) {
+        if (booking.getMealPlanType() == null || booking.getProperty() == null) return null;
+        return mealPlanRepository
+                .findByPropertyIdAndMealPlanType(booking.getProperty().getId(), booking.getMealPlanType())
+                .map(PropertyMealPlan::getPricePerNight)
+                .orElse(null);
     }
 
     public List<BookingDto> toDtoList(List<Booking> bookings) {

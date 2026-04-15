@@ -4,6 +4,7 @@ import com.adith.os.HMS.billing.folio.Folio;
 import com.adith.os.HMS.billing.folio.FolioType;
 import com.adith.os.HMS.guest.Guest;
 import com.adith.os.HMS.property.Property;
+import com.adith.os.HMS.property.mealplan.MealPlanType;
 import com.adith.os.HMS.room.Room;
 import com.adith.os.HMS.roomassignment.RoomAssignment;
 import com.adith.os.HMS.travelagent.TravelAgent;
@@ -120,6 +121,10 @@ public class Booking {
 
     @Column(name = "commission_rate", precision = 5, scale = 2)
     private BigDecimal commissionRate;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "meal_plan_type")
+    private MealPlanType mealPlanType;
 
     @PrePersist
     protected void onCreate() {
@@ -306,6 +311,9 @@ public class Booking {
 
     public BigDecimal getCommissionRate() { return commissionRate; }
     public void setCommissionRate(BigDecimal commissionRate) { this.commissionRate = commissionRate; }
+
+    public MealPlanType getMealPlanType() { return mealPlanType; }
+    public void setMealPlanType(MealPlanType mealPlanType) { this.mealPlanType = mealPlanType; }
 
     // Calculated fields - these compute values dynamically
 

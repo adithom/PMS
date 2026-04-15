@@ -38,7 +38,7 @@ export default function BillViewModal({ folio, bills, onClose, onBillsChanged }:
   };
 
   const handleVoid = async (bill: BillDto) => {
-    const reason = window.prompt(`Enter reason for voiding invoice ${bill.invoiceNumber}:`);
+    const reason = window.prompt(`Enter reason for voiding bill ${bill.invoiceNumber}:`);
     if (!reason?.trim()) return;
 
     setVoidingId(bill.id);
@@ -47,7 +47,7 @@ export default function BillViewModal({ folio, bills, onClose, onBillsChanged }:
       setLocalBills(prev => prev.map(b => b.id === bill.id ? { ...b, ...updated, isVoided: true } : b));
       onBillsChanged();
     } catch (err: any) {
-      alert(err.message || 'Failed to void invoice.');
+      alert(err.message || 'Failed to void bill.');
     } finally {
       setVoidingId(null);
     }
@@ -57,12 +57,12 @@ export default function BillViewModal({ folio, bills, onClose, onBillsChanged }:
 
   return (
     <ModalShell
-      title={`${folio.guestName ?? 'Guest'}'s Invoice`}
+      title={`${folio.guestName ?? 'Guest'}'s Bill`}
       subtitle={`Folio #${folio.folioNumber} · Room ${folio.roomNumber ?? '—'}`}
       onClose={onClose}
     >
       {activeBills.length === 0 ? (
-        <p className="py-4 text-center text-sm text-slate-500">All invoices for this folio have been voided.</p>
+        <p className="py-4 text-center text-sm text-slate-500">All bills for this folio have been voided.</p>
       ) : (
         <div className="space-y-3">
           {activeBills.map(bill => (
@@ -73,7 +73,7 @@ export default function BillViewModal({ folio, bills, onClose, onBillsChanged }:
                   <p className="mt-0.5 text-[11px] font-bold uppercase tracking-wider text-slate-400">
                     {bill.charges?.[0]
                       ? (bill.charges[0].chargeCode === 'ROOM_RENT' ? 'Room Rent' : 'Ancillary')
-                      : 'Invoice'}
+                      : 'Bill'}
                   </p>
                 </div>
                 <p className="text-lg font-extrabold text-slate-900">

@@ -1,6 +1,7 @@
 package com.adith.os.HMS.booking.dto;
 
 import com.adith.os.HMS.booking.BookingStatus;
+import com.adith.os.HMS.property.mealplan.MealPlanType;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -82,7 +83,11 @@ public record BookingDto(
 
         UUID travelAgentId,
         String travelAgentName,
-        BigDecimal commissionRate
+        BigDecimal commissionRate,
+
+        MealPlanType mealPlanType,
+        String mealPlanDisplayName,
+        BigDecimal mealPlanPricePerNight
 ) {
     // Compact constructor for validation and defaults
     public BookingDto {

@@ -1,6 +1,7 @@
 package com.adith.os.HMS.booking.dto;
 
 import com.adith.os.HMS.booking.BookingStatus;
+import com.adith.os.HMS.property.mealplan.MealPlanType;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 
@@ -41,6 +42,10 @@ public record BookingUpdateDto(
 
         UUID travelAgentId,         // null = no change (PATCH) or remove agent (PUT)
 
-        Boolean clearTravelAgent    // PATCH only: if true, explicitly removes travel agent
+        Boolean clearTravelAgent,   // PATCH only: if true, explicitly removes travel agent
+
+        MealPlanType mealPlanType,  // null = no change (PATCH)
+
+        Boolean clearMealPlan       // PATCH only: if true, explicitly removes meal plan
   ) {
 }

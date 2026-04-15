@@ -17,6 +17,7 @@ import java.math.BigDecimal;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 
@@ -76,7 +77,8 @@ public class BillService {
         }
 
         List<FolioCharge> roomCharges = unbilledValidCharges.stream()
-                .filter(c -> c.getChargeCode().getCategory() == ChargeCategory.ROOM_RENT)
+                .filter(c -> c.getChargeCode().getCategory() == ChargeCategory.ROOM_RENT
+                          || c.getChargeCode().getCategory() == ChargeCategory.MEAL_PLAN)
                 .toList();
 
         List<FolioCharge> ancillaryCharges = unbilledValidCharges.stream()
@@ -225,7 +227,7 @@ public class BillService {
     }
 
     private String generateInvoiceNumber() {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Kolkata"));
         InvoiceSequence sequence = sequenceRepository.findByIdWithLock(today)
                 .orElse(new InvoiceSequence(today, 1));
 
