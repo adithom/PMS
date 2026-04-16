@@ -43,9 +43,14 @@ const fetchApi = async <T>(endpoint: string, options: RequestInit = {}): Promise
       return null as T;
     }
 
+    const contentType = response.headers.get('content-type') ?? '';
     let data: any;
     try {
-      data = await response.json();
+      if (contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        data = await response.text();
+      }
     } catch {
       data = null;
     }
