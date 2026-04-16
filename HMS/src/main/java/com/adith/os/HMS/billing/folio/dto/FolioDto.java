@@ -29,5 +29,7 @@ public record FolioDto(
         UUID routedToFolioId,
         LocalDate checkInDate,
         LocalDate checkOutDate,
-        String roomNumber
+        String roomNumber,
+        UUID travelAgentId,
+        String travelAgentName
 ) {}

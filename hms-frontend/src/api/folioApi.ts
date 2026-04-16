@@ -44,6 +44,8 @@ export interface FolioDto {
   checkInDate?: string;
   checkOutDate?: string;
   roomNumber?: string;
+  travelAgentId?: string;
+  travelAgentName?: string;
 }
 
 export interface FolioDetailDto extends FolioDto {

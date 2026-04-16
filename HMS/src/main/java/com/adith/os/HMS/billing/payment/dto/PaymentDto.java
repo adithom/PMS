@@ -43,5 +43,8 @@ public record PaymentDto(
         String processedBy,
         OffsetDateTime paymentDate,
         OffsetDateTime createdAt,
-        String notes
+        String notes,
+
+        // Travel agent billing
+        UUID travelAgentId
 ) {}

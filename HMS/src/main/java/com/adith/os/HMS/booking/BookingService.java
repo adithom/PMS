@@ -1105,6 +1105,11 @@ public class BookingService {
         booking.setStatus(BookingStatus.CHECKED_OUT);
         Booking savedBooking = bookingRepository.save(booking);
 
+        // Close all open folios on this booking
+        if (masterFolio != null) {
+            folioService.closeOpenFoliosForBooking(bookingId);
+        }
+
         // Complete all room assignments
         roomAssignmentService.completeAssignments(savedBooking.getId());
 
@@ -1186,6 +1191,10 @@ public class BookingService {
         roomAssignmentService.truncateAndCompleteAssignments(bookingId, newCheckOutDate);
 
         bookingRepository.save(booking);
+
+        // Close all open folios at checkout
+        folioService.closeOpenFoliosForBooking(bookingId);
+
         return bookingMapper.toDto(booking);
     }
 

@@ -32,5 +32,7 @@ public record FolioDetailDto(
         LocalDate checkOutDate,
         String roomNumber,
         List<ChargeDto> charges,
-        List<PaymentDto> payments
+        List<PaymentDto> payments,
+        UUID travelAgentId,
+        String travelAgentName
 ) {}

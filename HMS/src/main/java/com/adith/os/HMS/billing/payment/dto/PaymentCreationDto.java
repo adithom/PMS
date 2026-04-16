@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 public record PaymentCreationDto(
         @NotNull(message = "Payment amount is required")
@@ -16,7 +17,6 @@ public record PaymentCreationDto(
         @NotNull(message = "Payment method is required")
         PaymentMethod paymentMethod,
 
-        @NotNull(message = "Target Category is required")
         ChargeCategory targetCategory,
 
         // Card payment details
@@ -34,5 +34,8 @@ public record PaymentCreationDto(
 
         // General
         String notes,
-        String processedBy
+        String processedBy,
+
+        // Travel agent billing
+        UUID travelAgentId
 ) {}

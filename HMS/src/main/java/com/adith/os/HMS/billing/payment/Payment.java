@@ -76,6 +76,10 @@ public class Payment {
     @Column(name = "upi_id", length = 100)
     private String upiId;
 
+    // Travel agent billing
+    @Column(name = "travel_agent_id")
+    private UUID travelAgentId;
+
     @Column(columnDefinition = "TEXT")
     private String notes;
 
@@ -353,6 +357,14 @@ public class Payment {
 
     public void setUpiId(String upiId) {
         this.upiId = upiId;
+    }
+
+    public UUID getTravelAgentId() {
+        return travelAgentId;
+    }
+
+    public void setTravelAgentId(UUID travelAgentId) {
+        this.travelAgentId = travelAgentId;
     }
 
     public String getNotes() {

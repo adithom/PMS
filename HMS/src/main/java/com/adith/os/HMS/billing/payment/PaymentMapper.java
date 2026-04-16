@@ -60,6 +60,11 @@ public class PaymentMapper {
         payment.setNotes(dto.notes());
         payment.setProcessedBy(dto.processedBy());
 
+        // Travel agent billing
+        if (dto.travelAgentId() != null) {
+            payment.setTravelAgentId(dto.travelAgentId());
+        }
+
         return payment;
     }
 
@@ -89,7 +94,8 @@ public class PaymentMapper {
                 payment.getProcessedBy(),
                 payment.getPaymentDate(),
                 payment.getCreatedAt(),
-                payment.getNotes()
+                payment.getNotes(),
+                payment.getTravelAgentId()
         );
     }
 

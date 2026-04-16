@@ -11,7 +11,7 @@ export interface PaymentDto {
   folioNumber?: string;
   amount?: number;
   currency?: string;
-  paymentMethod?: 'CASH' | 'CREDIT_CARD' | 'DEBIT_CARD' | 'UPI' | 'BANK_TRANSFER' | 'CHEQUE' | 'DIGITAL_WALLET';
+  paymentMethod?: 'CASH' | 'CREDIT_CARD' | 'DEBIT_CARD' | 'UPI' | 'BANK_TRANSFER' | 'CHEQUE' | 'DIGITAL_WALLET' | 'AGENT_BILLING';
   paymentStatus?: 'PENDING' | 'COMPLETED' | 'FAILED' | 'REFUNDED' | 'CANCELLED';
   targetCategory?: 'ROOM_RENT' | 'ANCILLARY';
   transactionId?: string;
@@ -28,11 +28,12 @@ export interface PaymentDto {
   paymentDate?: string;
   createdAt?: string;
   notes?: string;
+  travelAgentId?: string;
 }
 
 export interface PaymentCreationDto {
   amount: number;
-  paymentMethod: 'CASH' | 'CREDIT_CARD' | 'DEBIT_CARD' | 'UPI' | 'BANK_TRANSFER' | 'CHEQUE' | 'DIGITAL_WALLET';
+  paymentMethod: 'CASH' | 'CREDIT_CARD' | 'DEBIT_CARD' | 'UPI' | 'BANK_TRANSFER' | 'CHEQUE' | 'DIGITAL_WALLET' | 'AGENT_BILLING';
   targetCategory: 'ROOM_RENT' | 'ANCILLARY';
   transactionId?: string;
   cardLastFour?: string;
@@ -43,6 +44,7 @@ export interface PaymentCreationDto {
   upiId?: string;
   notes?: string;
   processedBy?: string;
+  travelAgentId?: string;
 }
 
 export interface RefundDto {

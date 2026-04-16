@@ -73,7 +73,7 @@ class PaymentServiceTest {
 
     private PaymentCreationDto buildPaymentDto(BigDecimal amount) {
         return new PaymentCreationDto(amount, PaymentMethod.CASH, ChargeCategory.ANCILLARY,
-                null, null, null, null, null, null, null, null, "user");
+                null, null, null, null, null, null, null, null, "user", null);
     }
 
     // =========================================================================

@@ -58,6 +58,10 @@ public record BillDto(
         String voidedBy,
 
         // Pre-signed R2 download URL — populated only at bill generation time, null otherwise
-        String pdfDownloadUrl
+        String pdfDownloadUrl,
+
+        // Travel agent billing
+        UUID travelAgentId,
+        String travelAgentName
 ) {
 }

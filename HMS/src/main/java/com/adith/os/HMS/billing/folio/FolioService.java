@@ -645,4 +645,19 @@ public class FolioService {
                     "Failed to route charge: " + e.getMessage());
         }
     }
+
+    /**
+     * Close all OPEN folios for a booking at checkout time.
+     * Routed child folios are skipped — their balance is absorbed by the parent.
+     */
+    @Transactional
+    public void closeOpenFoliosForBooking(UUID bookingId) {
+        List<Folio> folios = folioRepository.findAllByBookingId(bookingId);
+        for (Folio folio : folios) {
+            if (folio.getStatus() == FolioStatus.OPEN && !folio.isRouted()) {
+                folio.close();
+                folioRepository.save(folio);
+            }
+        }
+    }
 }

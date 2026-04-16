@@ -476,6 +476,9 @@ public class GroupBookingService {
         child.setStatus(BookingStatus.CHECKED_OUT);
         bookingRepository.save(child);
 
+        // Close all open folios on this child booking
+        folioService.closeOpenFoliosForBooking(childBookingId);
+
         Booking parent = bookingRepository.findById(parentBookingId).orElseThrow();
         List<Booking> children = bookingRepository.findByParentBookingId(parentBookingId);
         Folio parentFolio = parent.getMasterFolio();
