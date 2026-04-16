@@ -1,15 +1,20 @@
 package com.adith.os.HMS.billing.bills;
 
 import com.adith.os.HMS.billing.bills.dto.BillDto;
+import com.adith.os.HMS.billing.bills.dto.BillLedgerPageDto;
 import com.adith.os.HMS.billing.bills.dto.DoubleBillDto;
 import com.adith.os.HMS.security.UserPrincipal;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-
+import java.io.IOException;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 
@@ -59,6 +64,26 @@ public class BillController {
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
     public ResponseEntity<String> getBillDownloadUrl(@PathVariable UUID billId) {
         return ResponseEntity.ok(billService.generateDownloadUrl(billId));
+    }
+
+    @GetMapping("/ledger")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<BillLedgerPageDto> getBillLedger(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to,
+            @RequestParam(defaultValue = "false") boolean includeVoided) {
+        return ResponseEntity.ok(billService.getLedger(from, to, includeVoided));
+    }
+
+    @PostMapping("/ledger/download-zip")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public void downloadLedgerZip(
+            @RequestBody List<UUID> billIds,
+            HttpServletResponse response) throws IOException {
+        String fileName = "bills-export-" + LocalDate.now(ZoneId.of("Asia/Kolkata")) + ".zip";
+        response.setContentType("application/zip");
+        response.setHeader("Content-Disposition", "attachment; filename=\"" + fileName + "\"");
+        billService.downloadBillsAsZip(billIds, response.getOutputStream());
     }
 
     @PostMapping("/folio/{folioId}/void-active")

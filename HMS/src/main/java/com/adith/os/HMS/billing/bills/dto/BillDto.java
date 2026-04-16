@@ -13,6 +13,8 @@ public record BillDto(
         UUID id,
         UUID folioId,
         UUID generationBatchId,
+        UUID propertyId,
+        String category,
 
         // Hotel
         String PropertyName,

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import BillLedgerTab from '../components/Billing/BillLedgerTab';
 import authApi, { type UserInfo, type UpdateUserRequest, type CreateUserRequest } from '../api/authApi';
 import propertyApi from '../api/propertyApi';
 import posApi from '../api/posApi';
@@ -400,18 +401,7 @@ export default function AdminConsole() {
 
           {/* ── Right column: Bill Ledger ── */}
           <div className="flex flex-col w-1/2 min-h-0 rounded-2xl border-2 border-slate-200 bg-white">
-            <div className="px-5 py-2.5 border-b border-slate-100 flex-shrink-0">
-              <h2 className="text-sm font-semibold text-slate-600">Bill Ledger</h2>
-            </div>
-            <div className="overflow-y-auto flex-1 flex items-center justify-center">
-              <div className="text-center select-none">
-                <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-50 border-2 border-dashed border-slate-200 text-xl">
-                  🚧
-                </div>
-                <p className="text-sm font-semibold text-slate-500">Coming Soon</p>
-                <p className="mt-1 text-xs text-slate-400">Bill ledger is not yet available.</p>
-              </div>
-            </div>
+            <BillLedgerTab />
           </div>
 
         </div>{/* end panel row */}

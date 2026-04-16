@@ -5,8 +5,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import software.amazon.awssdk.core.ResponseBytes;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
@@ -89,5 +91,18 @@ public class R2StorageService {
 
         PresignedGetObjectRequest presigned = s3Presigner.presignGetObject(presignRequest);
         return presigned.url().toString();
+    }
+
+    /**
+     * Downloads an object from R2 and returns its raw bytes.
+     * Used for bulk ZIP packaging.
+     */
+    public byte[] downloadObjectAsBytes(String objectKey) {
+        GetObjectRequest req = GetObjectRequest.builder()
+                .bucket(bucketName)
+                .key(objectKey)
+                .build();
+        ResponseBytes<GetObjectResponse> result = s3Client.getObjectAsBytes(req);
+        return result.asByteArray();
     }
 }

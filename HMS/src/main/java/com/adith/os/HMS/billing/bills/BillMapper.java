@@ -84,6 +84,8 @@ public class BillMapper {
                 bill.getId(),
                 folio.getId(),
                 bill.getGenerationBatchId(),
+                property.getId(),
+                bill.getCategory().name(),
 
                 property.getName(),
                 property.getAddress(),
@@ -121,6 +123,71 @@ public class BillMapper {
                 bill.getVoidedBy(),
 
                 pdfDownloadUrl
+        );
+    }
+
+    /**
+     * Lightweight mapper for the bill ledger list view.
+     * Uses stored totals from the Bill entity (no charge line items loaded).
+     * Requires Bill.folio, folio.property, folio.guest, folio.booking to be JOIN FETCHed.
+     */
+    public static BillDto toLedgerRowDto(Bill bill) {
+        Folio folio = bill.getFolio();
+        Guest guest = folio.getGuest();
+        Property property = folio.getProperty();
+        Booking booking = folio.getBooking();
+
+        LocalDate invoiceDate = bill.getBillDate() != null
+                ? bill.getBillDate()
+                : LocalDate.now(ZoneId.of("Asia/Kolkata"));
+
+        String roomNumber = (booking != null && booking.getRoom() != null)
+                ? booking.getRoom().getNumber() : "N/A";
+        LocalDate checkIn  = booking != null ? booking.getCheckIn()  : null;
+        LocalDate checkOut = booking != null ? booking.getCheckOut() : null;
+
+        return new BillDto(
+                bill.getId(),
+                folio.getId(),
+                bill.getGenerationBatchId(),
+                property.getId(),
+                bill.getCategory().name(),
+
+                property.getName(),
+                property.getAddress(),
+                property.getGstNumber(),
+
+                bill.getInvoiceNumber(),
+                invoiceDate,
+                folio.getFolioNumber(),
+
+                guest.getFullName(),
+                guest.getPhone(),
+                guest.getEmail(),
+                bill.getGuestGstNumber() != null ? bill.getGuestGstNumber() : "",
+
+                roomNumber,
+                checkIn,
+                checkOut,
+
+                List.of(),              // no line items for ledger row
+
+                bill.getSubtotal(),
+                bill.getTaxAmount(),
+                bill.getDiscountAmount(),
+                bill.getTotalAmount(),  // grandTotal
+
+                BigDecimal.ZERO,        // amountPaid — not needed for ledger
+                BigDecimal.ZERO,        // balanceDue — not needed for ledger
+
+                folio.getNotes(),
+
+                bill.isVoided(),
+                bill.getVoidReason(),
+                bill.getVoidedAt(),
+                bill.getVoidedBy(),
+
+                null                    // pdfDownloadUrl — not pre-signed for list
         );
     }
 }

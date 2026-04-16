@@ -4,10 +4,18 @@ import apiClient from './fetchClient';
 /* Types & DTOs                                                   */
 /* ────────────────────────────────────────────────────────────── */
 
+export interface BillLedgerPageDto {
+  bills: BillDto[];
+  totalCount: number;
+  grandTotalSum: number;
+}
+
 export interface BillDto {
   id: string;
   folioId?: string;
   generationBatchId?: string;
+  propertyId?: string;
+  category?: 'ROOM_RENT' | 'ANCILLARY';
   PropertyName?: string;
   PropertyAddress?: string;
   gstNumber?: string;
@@ -124,6 +132,36 @@ const billingApi = {
   // Get a fresh pre-signed download URL for an existing group bill
   getGroupBillDownloadUrl: async (propertyId: string, parentBookingId: string, groupBillId: string): Promise<string> => {
     return apiClient.get(`/properties/${propertyId}/group-bookings/${parentBookingId}/bills/${groupBillId}/download-url`);
+  },
+
+  // Global bill ledger — all bills across all folios in a date range
+  getLedger: async (from: string, to: string, includeVoided = false): Promise<BillLedgerPageDto> => {
+    return apiClient.get('/bills/ledger', { from, to, includeVoided });
+  },
+
+  // Bulk ZIP download — fetches PDFs server-side and streams as a ZIP
+  downloadLedgerZip: async (billIds: string[]): Promise<void> => {
+    const token = localStorage.getItem('accessToken');
+    const base = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
+    const res = await fetch(`${base}/bills/ledger/download-zip`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(billIds),
+    });
+    if (!res.ok) throw new Error(`ZIP download failed: HTTP ${res.status}`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = Object.assign(document.createElement('a'), {
+      href: url,
+      download: `bills-export-${new Date().toISOString().split('T')[0]}.zip`,
+    });
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   },
 };
 

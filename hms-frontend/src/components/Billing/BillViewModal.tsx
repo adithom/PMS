@@ -12,9 +12,13 @@ interface BillViewModalProps {
   onBillsChanged: () => void;
 }
 
+function billLabel(bill: BillDto): string {
+  return bill.charges?.[0]?.chargeCode === 'ROOM_RENT' ? 'Room Rent' : 'Ancillary';
+}
+
 export default function BillViewModal({ folio, bills, onClose, onBillsChanged }: BillViewModalProps) {
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
-  const [voidingId, setVoidingId] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState(false);
+  const [voiding, setVoiding] = useState(false);
   const [localBills, setLocalBills] = useState<BillDto[]>(bills);
 
   // Close automatically once all bills are voided
@@ -25,35 +29,39 @@ export default function BillViewModal({ folio, bills, onClose, onBillsChanged }:
     }
   }, [localBills]);
 
-  const handleDownload = async (bill: BillDto) => {
-    setDownloadingId(bill.id);
+  const activeBills = localBills.filter(b => !b.isVoided);
+
+  const handleDownloadAll = async () => {
+    setDownloading(true);
     try {
-      const url = await billingApi.getDownloadUrl(bill.id);
-      triggerPresignedDownload(url);
+      await Promise.all(
+        activeBills.map(async (bill) => {
+          const url = await billingApi.getDownloadUrl(bill.id);
+          triggerPresignedDownload(url);
+        })
+      );
     } catch (err: any) {
       alert(err.message || 'Failed to get download link.');
     } finally {
-      setDownloadingId(null);
+      setDownloading(false);
     }
   };
 
-  const handleVoid = async (bill: BillDto) => {
-    const reason = window.prompt(`Enter reason for voiding bill ${bill.invoiceNumber}:`);
+  const handleVoidAll = async () => {
+    const reason = window.prompt('Enter reason for voiding all bills on this folio:');
     if (!reason?.trim()) return;
 
-    setVoidingId(bill.id);
+    setVoiding(true);
     try {
-      const updated = await billingApi.voidBill(bill.id, reason.trim());
-      setLocalBills(prev => prev.map(b => b.id === bill.id ? { ...b, ...updated, isVoided: true } : b));
+      await billingApi.voidActiveBillsForFolio(folio.id, reason.trim());
+      setLocalBills(prev => prev.map(b => ({ ...b, isVoided: true })));
       onBillsChanged();
     } catch (err: any) {
-      alert(err.message || 'Failed to void bill.');
+      alert(err.message || 'Failed to void bills.');
     } finally {
-      setVoidingId(null);
+      setVoiding(false);
     }
   };
-
-  const activeBills = localBills.filter(b => !b.isVoided);
 
   return (
     <ModalShell
@@ -64,42 +72,42 @@ export default function BillViewModal({ folio, bills, onClose, onBillsChanged }:
       {activeBills.length === 0 ? (
         <p className="py-4 text-center text-sm text-slate-500">All bills for this folio have been voided.</p>
       ) : (
-        <div className="space-y-3">
-          {activeBills.map(bill => (
-            <div key={bill.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-sm font-bold text-slate-900">#{bill.invoiceNumber}</p>
-                  <p className="mt-0.5 text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                    {bill.charges?.[0]
-                      ? (bill.charges[0].chargeCode === 'ROOM_RENT' ? 'Room Rent' : 'Ancillary')
-                      : 'Bill'}
+        <>
+          <div className="space-y-3">
+            {activeBills.map(bill => (
+              <div key={bill.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-bold text-slate-900">#{bill.invoiceNumber}</p>
+                    <p className="mt-0.5 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                      {billLabel(bill)}
+                    </p>
+                  </div>
+                  <p className="text-lg font-extrabold text-slate-900">
+                    {folio.currency ?? '₹'} {bill.grandTotal?.toFixed(2) ?? '0.00'}
                   </p>
                 </div>
-                <p className="text-lg font-extrabold text-slate-900">
-                  {folio.currency ?? '₹'} {bill.grandTotal?.toFixed(2) ?? '0.00'}
-                </p>
               </div>
+            ))}
+          </div>
 
-              <div className="mt-4 flex items-center justify-end gap-2">
-                <button
-                  onClick={() => handleDownload(bill)}
-                  disabled={downloadingId === bill.id}
-                  className="rounded-lg bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-700 transition-colors hover:bg-indigo-100 disabled:opacity-50"
-                >
-                  {downloadingId === bill.id ? 'Fetching...' : 'Download'}
-                </button>
-                <button
-                  onClick={() => handleVoid(bill)}
-                  disabled={voidingId === bill.id}
-                  className="rounded-lg bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 transition-colors hover:bg-rose-100 disabled:opacity-50"
-                >
-                  {voidingId === bill.id ? 'Voiding...' : 'Void Bill'}
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+          <div className="mt-4 flex items-center justify-end gap-2">
+            <button
+              onClick={handleDownloadAll}
+              disabled={downloading || voiding}
+              className="rounded-lg bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-700 transition-colors hover:bg-indigo-100 disabled:opacity-50"
+            >
+              {downloading ? 'Fetching...' : 'Download'}
+            </button>
+            <button
+              onClick={handleVoidAll}
+              disabled={voiding || downloading}
+              className="rounded-lg bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 transition-colors hover:bg-rose-100 disabled:opacity-50"
+            >
+              {voiding ? 'Voiding...' : 'Void Bills'}
+            </button>
+          </div>
+        </>
       )}
     </ModalShell>
   );
