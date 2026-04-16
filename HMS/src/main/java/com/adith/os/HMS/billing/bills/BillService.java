@@ -13,13 +13,19 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.io.BufferedOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 @Service
 public class BillService {
@@ -180,6 +186,40 @@ public class BillService {
         return activeBills.stream()
                 .map(bill -> voidBill(bill.getId(), reason, username))
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public BillLedgerPageDto getLedger(OffsetDateTime from, OffsetDateTime to, boolean includeVoided) {
+        List<Bill> bills = includeVoided
+                ? billRepository.findAllBillsInRange(from, to)
+                : billRepository.findActiveBillsInRange(from, to);
+
+        List<BillDto> dtos = bills.stream().map(BillMapper::toLedgerRowDto).toList();
+
+        BigDecimal grandTotalSum = bills.stream()
+                .map(Bill::getTotalAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        return new BillLedgerPageDto(dtos, dtos.size(), grandTotalSum);
+    }
+
+    public void downloadBillsAsZip(List<UUID> billIds, OutputStream out) throws IOException {
+        List<Bill> bills = billRepository.findActiveByIds(billIds);
+        try (ZipOutputStream zip = new ZipOutputStream(new BufferedOutputStream(out))) {
+            for (Bill bill : bills) {
+                if (bill.getPdfFilePath() == null || bill.getPdfFilePath().isBlank()) {
+                    log.warn("Bill {} has no pdfFilePath, skipping from ZIP", bill.getId());
+                    continue;
+                }
+                byte[] pdf = r2StorageService.downloadObjectAsBytes(bill.getPdfFilePath());
+                String entryName = "INV_" + bill.getInvoiceNumber() + ".pdf";
+                ZipEntry entry = new ZipEntry(entryName);
+                entry.setSize(pdf.length);
+                zip.putNextEntry(entry);
+                zip.write(pdf);
+                zip.closeEntry();
+            }
+        }
     }
 
     // Helper method updated to accept Batch ID
