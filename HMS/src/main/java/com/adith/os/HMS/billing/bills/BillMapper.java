@@ -8,6 +8,7 @@ import com.adith.os.HMS.guest.Guest;
 import com.adith.os.HMS.property.Property;
 import com.adith.os.HMS.billing.payment.Payment;
 import com.adith.os.HMS.billing.payment.PaymentStatus;
+import com.adith.os.HMS.travelagent.TravelAgent;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -44,6 +45,7 @@ public class BillMapper {
         Guest guest = folio.getGuest();
         Property property = folio.getProperty();
         Booking booking = folio.getBooking();
+        TravelAgent agent = (booking != null) ? booking.getTravelAgent() : null;
 
         LocalDate invoiceDate = bill.getBillDate() != null
                 ? bill.getBillDate()
@@ -122,7 +124,10 @@ public class BillMapper {
                 bill.getVoidedAt(),
                 bill.getVoidedBy(),
 
-                pdfDownloadUrl
+                pdfDownloadUrl,
+
+                agent != null ? agent.getId() : null,
+                agent != null ? agent.getName() : null
         );
     }
 
@@ -136,6 +141,7 @@ public class BillMapper {
         Guest guest = folio.getGuest();
         Property property = folio.getProperty();
         Booking booking = folio.getBooking();
+        TravelAgent agent = (booking != null) ? booking.getTravelAgent() : null;
 
         LocalDate invoiceDate = bill.getBillDate() != null
                 ? bill.getBillDate()
@@ -187,7 +193,10 @@ public class BillMapper {
                 bill.getVoidedAt(),
                 bill.getVoidedBy(),
 
-                null                    // pdfDownloadUrl — not pre-signed for list
+                null,                   // pdfDownloadUrl — not pre-signed for list
+
+                agent != null ? agent.getId() : null,
+                agent != null ? agent.getName() : null
         );
     }
 }

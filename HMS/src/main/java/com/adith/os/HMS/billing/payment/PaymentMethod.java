@@ -7,5 +7,6 @@ public enum PaymentMethod {
     UPI,
     BANK_TRANSFER,
     CHEQUE,
-    DIGITAL_WALLET
+    DIGITAL_WALLET,
+    AGENT_BILLING
 }

@@ -369,7 +369,8 @@ public class PosService {
                 null,   // referenceNumber
                 dto.upiId(),
                 dto.notes(),
-                username
+                username,
+                null    // travelAgentId
         );
 
         paymentService.recordPayment(order.getProperty().getId(), folioId, paymentDto, username);

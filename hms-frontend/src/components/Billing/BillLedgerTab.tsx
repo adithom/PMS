@@ -35,6 +35,7 @@ export default function BillLedgerTab() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<'ALL' | 'ROOM_RENT' | 'ANCILLARY'>('ALL');
+  const [propertyFilter, setPropertyFilter] = useState<string>('ALL');
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const loadLedger = async () => {
@@ -54,21 +55,27 @@ export default function BillLedgerTab() {
 
   useEffect(() => { void loadLedger(); }, []);
 
+  const propertyNames = useMemo<string[]>(() => {
+    if (!ledger) return [];
+    return [...new Set(ledger.bills.map(b => b.PropertyName ?? '').filter(Boolean))].sort();
+  }, [ledger]);
+
   const filteredBills = useMemo<BillDto[]>(() => {
     if (!ledger) return [];
     return ledger.bills.filter(b => {
+      if (propertyFilter !== 'ALL' && b.PropertyName !== propertyFilter) return false;
       if (categoryFilter !== 'ALL' && b.category !== categoryFilter) return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         return (
           b.invoiceNumber?.toLowerCase().includes(q) ||
           b.guestName?.toLowerCase().includes(q) ||
-          b.roomNumber?.toLowerCase().includes(q)
+          b.PropertyName?.toLowerCase().includes(q)
         );
       }
       return true;
     });
-  }, [ledger, categoryFilter, searchQuery]);
+  }, [ledger, propertyFilter, categoryFilter, searchQuery]);
 
   const filteredTotal = useMemo(
     () => filteredBills.reduce((sum, b) => sum + (b.grandTotal ?? 0), 0),
@@ -91,13 +98,12 @@ export default function BillLedgerTab() {
   };
 
   const handleExportCsv = () => {
-    const headers = ['Invoice #', 'Date', 'Property', 'Guest', 'Room', 'Category', 'Grand Total'];
+    const headers = ['Invoice #', 'Date', 'Property', 'Guest', 'Category', 'Grand Total'];
     const rows = filteredBills.map(b => [
       b.invoiceNumber ?? '',
       b.invoiceDate ?? '',
       b.PropertyName ?? '',
       b.guestName ?? '',
-      b.roomNumber ?? '',
       b.category ?? '',
       b.grandTotal?.toFixed(2) ?? '0.00',
     ]);
@@ -177,6 +183,16 @@ export default function BillLedgerTab() {
             <option value="ROOM_RENT">Room Rent</option>
             <option value="ANCILLARY">Ancillary</option>
           </select>
+          <select
+            value={propertyFilter}
+            onChange={e => setPropertyFilter(e.target.value)}
+            className={inputCls}
+          >
+            <option value="ALL">All Properties</option>
+            {propertyNames.map(p => (
+              <option key={p} value={p}>{p}</option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -232,7 +248,7 @@ export default function BillLedgerTab() {
                 <th className="px-4 py-2 font-medium">Invoice #</th>
                 <th className="px-3 py-2 font-medium">Date</th>
                 <th className="px-3 py-2 font-medium">Guest</th>
-                <th className="px-3 py-2 font-medium">Room</th>
+                <th className="px-3 py-2 font-medium">Property</th>
                 <th className="px-3 py-2 font-medium">Type</th>
                 <th className="px-3 py-2 font-medium text-right">Amount</th>
                 <th className="px-4 py-2 font-medium text-center">PDF</th>
@@ -262,8 +278,8 @@ export default function BillLedgerTab() {
                   <td className="px-3 py-2 text-xs text-slate-700 max-w-[110px] truncate">
                     {bill.guestName ?? '—'}
                   </td>
-                  <td className="px-3 py-2 text-xs text-slate-500">
-                    {bill.roomNumber ?? '—'}
+                  <td className="px-3 py-2 text-xs text-slate-500 max-w-[100px] truncate">
+                    {bill.PropertyName ?? '—'}
                   </td>
                   <td className="px-3 py-2">
                     <span className={`inline-block rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${

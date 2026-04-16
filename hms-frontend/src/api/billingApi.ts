@@ -42,6 +42,8 @@ export interface BillDto {
   voidedAt?: string;
   voidedBy?: string;
   pdfDownloadUrl?: string; // Pre-signed R2 URL — present only at generation time
+  travelAgentId?: string;
+  travelAgentName?: string;
 }
 
 export interface DoubleBillDto {

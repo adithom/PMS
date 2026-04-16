@@ -11,6 +11,7 @@ import com.adith.os.HMS.booking.Booking;
 import com.adith.os.HMS.guest.Guest;
 import com.adith.os.HMS.property.Property;
 import com.adith.os.HMS.roomassignment.RoomAssignment;
+import com.adith.os.HMS.travelagent.TravelAgent;
 import jakarta.validation.Valid;
 import org.springframework.stereotype.Component;
 
@@ -50,6 +51,7 @@ public class FolioMapper {
         LocalDate checkInDate = booking != null ? booking.getCheckIn() : null;
         LocalDate checkOutDate = booking != null ? booking.getCheckOut() : null;
         String roomNumber = extractRoomNumber(booking);
+        TravelAgent agent = (booking != null) ? booking.getTravelAgent() : null;
 
         return new FolioDto(
                 folio.getId(),
@@ -72,7 +74,9 @@ public class FolioMapper {
                 folio.getRoutedToFolio() != null ? folio.getRoutedToFolio().getId() : null,
                 checkInDate,
                 checkOutDate,
-                roomNumber
+                roomNumber,
+                agent != null ? agent.getId() : null,
+                agent != null ? agent.getName() : null
         );
     }
 
@@ -104,6 +108,7 @@ public class FolioMapper {
         LocalDate checkInDate = booking != null ? booking.getCheckIn() : null;
         LocalDate checkOutDate = booking != null ? booking.getCheckOut() : null;
         String roomNumber = extractRoomNumber(booking);
+        TravelAgent agent = (booking != null) ? booking.getTravelAgent() : null;
 
         return new FolioDetailDto(
                 folio.getId(),
@@ -127,7 +132,9 @@ public class FolioMapper {
                 checkOutDate,
                 roomNumber,
                 chargeDtos,
-                paymentDtos
+                paymentDtos,
+                agent != null ? agent.getId() : null,
+                agent != null ? agent.getName() : null
         );
     }
 

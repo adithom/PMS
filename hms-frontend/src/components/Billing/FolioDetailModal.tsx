@@ -9,6 +9,7 @@ import LoadingSpinner from '../LoadingSpinner';
 import ModalShell from '../ModalShell';
 import ChargeForm from './ChargeForm';
 import PaymentForm from './PaymentForm';
+import AgentPaymentForm from './AgentPaymentForm';
 import FolioRoutingForm from './FolioRoutingForm';
 import BillViewModal from './BillViewModal';
 
@@ -40,6 +41,7 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
   // Sub-modal states
   const [showAddCharge, setShowAddCharge] = useState(false);
   const [showAddPayment, setShowAddPayment] = useState(false);
+  const [showAgentPayment, setShowAgentPayment] = useState(false);
   const [showRouting, setShowRouting] = useState(false);
   const [showBillView, setShowBillView] = useState(false);
 
@@ -323,23 +325,32 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
               </div>
             </div>
 
-            {/* Quick Actions */}
+            {/* Quick Actions — charge/payment/routing only for OPEN folios */}
             {!readOnly && folio.status === 'OPEN' && (
               <div className="mt-8 space-y-3">
-                <button 
+                <button
                   onClick={() => setShowAddCharge(true)}
                   className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-all hover:border-slate-300 hover:bg-slate-50"
                 >
                   + Post Manual Charge
                 </button>
-                <button 
+                <button
                   onClick={() => setShowAddPayment(true)}
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white shadow-sm transition-all hover:bg-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-400"
                 >
                   Receive Payment
                 </button>
 
-                <button 
+                {folio.travelAgentId && (
+                  <button
+                    onClick={() => setShowAgentPayment(true)}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-amber-600 px-4 py-3 text-sm font-bold text-white shadow-sm transition-all hover:bg-amber-700 focus-visible:ring-2 focus-visible:ring-amber-400"
+                  >
+                    Assign to Agent
+                  </button>
+                )}
+
+                <button
                   onClick={() => setShowRouting(true)}
                   className="flex w-full items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-bold text-indigo-700 transition-all hover:bg-indigo-100"
                 >
@@ -348,8 +359,13 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
                   </svg>
                   Route Charges
                 </button>
-                
-                <div className="my-4 border-t border-slate-100"></div>
+              </div>
+            )}
+
+            {/* Bill section — shown for both OPEN and CLOSED folios */}
+            {!readOnly && (folio.status === 'OPEN' || folio.status === 'CLOSED') && (
+              <div className={folio.status === 'OPEN' ? 'mt-0 space-y-3 px-0' : 'mt-8 space-y-3'}>
+                {folio.status === 'OPEN' && <div className="my-4 border-t border-slate-100"></div>}
 
                 {bills.filter(b => !b.isVoided).length > 0 ? (
                   <button
@@ -423,13 +439,26 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
       )}
       {showAddPayment && (
         <ModalShell title="Receive Payment" onClose={() => setShowAddPayment(false)}>
-           <PaymentForm 
-             propertyId={propertyId} 
-             folioId={folioId} 
-             balanceDue={folio.balanceDue} 
-             onSuccess={() => { setShowAddPayment(false); loadFolio(); }} 
-             onCancel={() => setShowAddPayment(false)} 
+           <PaymentForm
+             propertyId={propertyId}
+             folioId={folioId}
+             balanceDue={folio.balanceDue}
+             onSuccess={() => { setShowAddPayment(false); loadFolio(); }}
+             onCancel={() => setShowAddPayment(false)}
            />
+        </ModalShell>
+      )}
+      {showAgentPayment && folio.travelAgentId && folio.travelAgentName && (
+        <ModalShell title="Assign Balance to Agent" onClose={() => setShowAgentPayment(false)}>
+          <AgentPaymentForm
+            propertyId={propertyId}
+            folioId={folioId}
+            travelAgentId={folio.travelAgentId}
+            travelAgentName={folio.travelAgentName}
+            balanceDue={folio.balanceDue}
+            onSuccess={() => { setShowAgentPayment(false); loadFolio(); }}
+            onCancel={() => setShowAgentPayment(false)}
+          />
         </ModalShell>
       )}
       {showRouting && (

@@ -103,6 +103,9 @@ public class PdfGenerationService {
             if (billDto.guestGstNumber() != null && !billDto.guestGstNumber().isEmpty()) {
                 drawText(contentStream, "Guest GSTIN: " + billDto.guestGstNumber(), 50, 625, fontRegular, 10);
             }
+            if (billDto.travelAgentName() != null && !billDto.travelAgentName().isBlank()) {
+                drawText(contentStream, "Billed to Agent: " + billDto.travelAgentName(), 50, 610, fontBold, 10);
+            }
 
             // Right column: booking details aligned under invoice block
             drawText(contentStream, "Booking Details:", 455, 685, fontBold, 12);
@@ -217,7 +220,9 @@ public class PdfGenerationService {
             // --- 5. TOTALS SECTION (full page width) ---
             yPosition -= 8; // small gap between charge table and totals
 
-            String[] labels = {"Subtotal", "Tax", "Grand Total", "Amount Paid", "Balance Due"};
+            boolean isAgentBilled = billDto.travelAgentName() != null && !billDto.travelAgentName().isBlank()
+                    && billDto.balanceDue() != null && billDto.balanceDue().compareTo(BigDecimal.ZERO) == 0;
+            String[] labels = {"Subtotal", "Tax", "Grand Total", "Amount Paid", isAgentBilled ? "Billed to Agent" : "Balance Due"};
             String[] values = {
                     billDto.subtotal()   != null ? billDto.subtotal().setScale(2, RoundingMode.HALF_UP).toString()   : "0.00",
                     billDto.totalTax()   != null ? billDto.totalTax().setScale(2, RoundingMode.HALF_UP).toString()   : "0.00",
@@ -268,7 +273,10 @@ public class PdfGenerationService {
             }
 
             // --- 6. FOOTER ---
-            drawText(contentStream, "Balance Due (in words): " + convertToIndianCurrency(billDto.balanceDue()), margin, yPosition - 35, fontBold, 10);
+            String footerLabel = isAgentBilled
+                    ? "Billed to Agent: " + billDto.travelAgentName()
+                    : "Balance Due (in words): " + convertToIndianCurrency(billDto.balanceDue());
+            drawText(contentStream, footerLabel, margin, yPosition - 35, fontBold, 10);
 
             contentStream.moveTo(margin, 130);
             contentStream.lineTo(545, 130);
