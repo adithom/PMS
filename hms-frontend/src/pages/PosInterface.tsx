@@ -283,6 +283,7 @@ export default function PosInterface() {
   const [addingToRoom, setAddingToRoom] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [pageError, setPageError] = useState<string | null>(null);
+  const [showCartSheet, setShowCartSheet] = useState(false);
 
   const fmt = (n: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(n);
 
@@ -412,15 +413,15 @@ export default function PosInterface() {
     setTimeout(() => setSuccessMessage(null), 3000);
   };
 
-  const selectCls = 'border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow';
+  const selectCls = 'border border-gray-200 rounded-lg px-2 py-1.5 text-xs sm:px-3 sm:py-2 sm:text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow';
 
   if (!user) return null;
 
   return (
     <div className="h-full flex flex-col bg-gray-50">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center gap-4 flex-shrink-0 shadow-sm">
-        <h1 className="text-xl font-bold text-gray-900">Point of Sale</h1>
+      <div className="bg-white border-b border-gray-200 px-3 py-3 sm:px-4 sm:py-4 flex items-center gap-2 sm:gap-3 flex-shrink-0 shadow-sm flex-wrap">
+        <h1 className="text-lg sm:text-xl font-bold text-gray-900">Point of Sale</h1>
 
         {isManager && (user.properties?.length ?? 0) > 1 && (
           <select
@@ -456,19 +457,19 @@ export default function PosInterface() {
 
       {/* Notification banners */}
       {successMessage && (
-        <div className="bg-emerald-50 border-b border-emerald-100 text-emerald-800 px-6 py-2.5 text-sm font-medium flex items-center gap-2 flex-shrink-0">
+        <div className="bg-emerald-50 border-b border-emerald-100 text-emerald-800 px-4 py-2 sm:px-6 sm:py-2.5 text-xs sm:text-sm font-medium flex items-center gap-2 flex-shrink-0">
           <span className="text-emerald-500 font-bold">✓</span> {successMessage}
         </div>
       )}
       {(pageError || addToRoomError) && (
-        <div className="bg-red-50 border-b border-red-100 text-red-700 px-6 py-2.5 text-sm flex items-center gap-2 flex-shrink-0">
+        <div className="bg-red-50 border-b border-red-100 text-red-700 px-4 py-2 sm:px-6 sm:py-2.5 text-xs sm:text-sm flex items-center gap-2 flex-shrink-0">
           <span>⚠</span> {pageError || addToRoomError}
         </div>
       )}
 
       {!location ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center px-6">
-          <div className="w-16 h-16 bg-white border border-gray-200 rounded-2xl flex items-center justify-center text-3xl shadow-sm">
+          <div className="w-14 h-14 sm:w-16 sm:h-16 bg-white border border-gray-200 rounded-2xl flex items-center justify-center text-2xl sm:text-3xl shadow-sm">
             🏪
           </div>
           <p className="text-gray-500 text-sm max-w-xs">
@@ -480,155 +481,237 @@ export default function PosInterface() {
           </p>
         </div>
       ) : (
-        <div className="flex-1 flex overflow-hidden">
-          {/* Left: products */}
-          <div className="flex-1 flex flex-col overflow-hidden">
-            {/* Category filter strip */}
-            <div className="bg-white border-b border-gray-100 px-6 py-3 flex gap-2 overflow-x-auto flex-shrink-0">
-              {categories.map(cat => (
-                <button
-                  key={cat}
-                  onClick={() => setCategoryFilter(cat)}
-                  className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                    categoryFilter === cat
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
+        <>
+          {/* ── Shared product panel (full-width on mobile, left panel on desktop) ── */}
+          <div className="flex-1 flex overflow-hidden">
+            <div className="flex-1 flex flex-col overflow-hidden">
+              {/* Category filter strip */}
+              <div className="bg-white border-b border-gray-100 px-3 py-2 sm:px-4 sm:py-3 flex gap-1.5 sm:gap-2 overflow-x-auto flex-shrink-0">
+                {categories.map(cat => (
+                  <button
+                    key={cat}
+                    onClick={() => setCategoryFilter(cat)}
+                    className={`px-3 py-1 sm:px-4 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium whitespace-nowrap transition-colors ${
+                      categoryFilter === cat
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
 
-            {/* Product grid */}
-            <div className="flex-1 overflow-y-auto px-6 py-5">
-              {loadingProducts ? (
-                <div className="text-center py-16 text-gray-400 text-sm">Loading products...</div>
-              ) : filteredProducts.length === 0 ? (
-                <div className="text-center py-16 text-gray-400 text-sm">
-                  {products.length === 0 ? 'No products available.' : 'No products in this category.'}
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                  {filteredProducts.map(product => (
-                    <ProductCard key={product.id} product={product} onAdd={addToCart} />
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Right: cart */}
-          <div className="w-96 bg-white border-l border-gray-200 flex flex-col flex-shrink-0">
-            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
-              <div className="flex items-center gap-2">
-                <h2 className="font-semibold text-gray-900">Order</h2>
-                {cartItemCount > 0 && (
-                  <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-0.5 rounded-full">
-                    {cartItemCount}
-                  </span>
+              {/* Product grid — bottom padding on mobile to clear the cart bar */}
+              <div className="flex-1 overflow-y-auto px-3 py-4 pb-24 sm:px-4 sm:py-5 md:pb-5 md:px-6">
+                {loadingProducts ? (
+                  <div className="text-center py-16 text-gray-400 text-sm">Loading products...</div>
+                ) : filteredProducts.length === 0 ? (
+                  <div className="text-center py-16 text-gray-400 text-sm">
+                    {products.length === 0 ? 'No products available.' : 'No products in this category.'}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
+                    {filteredProducts.map(product => (
+                      <ProductCard key={product.id} product={product} onAdd={addToCart} />
+                    ))}
+                  </div>
                 )}
               </div>
-              {cart.length > 0 && (
-                <button onClick={clearCart} className="text-xs text-red-400 hover:text-red-600 font-medium transition-colors">
-                  Clear all
-                </button>
-              )}
             </div>
 
-            <div className="flex-1 overflow-y-auto px-5">
-              {cart.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 gap-3 text-gray-400">
-                  <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center text-2xl">🛒</div>
-                  <p className="text-sm">Add items to start an order</p>
+            {/* ── Desktop cart sidebar (hidden on mobile) ── */}
+            <div className="hidden md:flex md:w-80 lg:w-96 bg-white border-l border-gray-200 flex-col flex-shrink-0">
+              <div className="px-4 py-3 lg:px-5 lg:py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+                <div className="flex items-center gap-2">
+                  <h2 className="font-semibold text-gray-900">Order</h2>
+                  {cartItemCount > 0 && (
+                    <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-0.5 rounded-full">
+                      {cartItemCount}
+                    </span>
+                  )}
                 </div>
-              ) : (
-                <div className="divide-y divide-gray-50">
-                  {cart.map(entry => (
-                    <div key={entry.product.id} className="flex items-center gap-3 py-3.5">
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-gray-800 truncate">{entry.product.name}</div>
-                        <div className="text-xs text-gray-400 mt-0.5">
-                          {fmt(entry.product.price)}
-                          {entry.product.discountRate != null && entry.product.discountRate > 0 && (
-                            <span className="ml-1 text-emerald-600">−{entry.product.discountRate}%</span>
-                          )}
+                {cart.length > 0 && (
+                  <button onClick={clearCart} className="text-xs text-red-400 hover:text-red-600 font-medium transition-colors">
+                    Clear all
+                  </button>
+                )}
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-4 lg:px-5">
+                {cart.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 gap-3 text-gray-400">
+                    <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center text-2xl">🛒</div>
+                    <p className="text-sm">Add items to start an order</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-gray-50">
+                    {cart.map(entry => (
+                      <div key={entry.product.id} className="flex items-center gap-3 py-3.5">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-gray-800 truncate">{entry.product.name}</div>
+                          <div className="text-xs text-gray-400 mt-0.5">
+                            {fmt(entry.product.price)}
+                            {entry.product.discountRate != null && entry.product.discountRate > 0 && (
+                              <span className="ml-1 text-emerald-600">−{entry.product.discountRate}%</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <button onClick={() => updateCartQuantity(entry.product.id, -1)}
+                            className="w-8 h-8 lg:w-7 lg:h-7 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 flex items-center justify-center font-bold transition-colors text-base leading-none">−</button>
+                          <span className="w-7 text-center text-sm font-semibold text-gray-800">{entry.quantity}</span>
+                          <button onClick={() => updateCartQuantity(entry.product.id, 1)}
+                            className="w-8 h-8 lg:w-7 lg:h-7 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 flex items-center justify-center font-bold transition-colors text-base leading-none">+</button>
+                        </div>
+                        <div className="text-sm font-semibold text-gray-900 w-20 text-right shrink-0">
+                          {fmt(entry.product.price * entry.quantity)}
                         </div>
                       </div>
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        <button
-                          onClick={() => updateCartQuantity(entry.product.id, -1)}
-                          className="w-7 h-7 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 flex items-center justify-center font-bold transition-colors text-base leading-none"
-                        >−</button>
-                        <span className="w-7 text-center text-sm font-semibold text-gray-800">{entry.quantity}</span>
-                        <button
-                          onClick={() => updateCartQuantity(entry.product.id, 1)}
-                          className="w-7 h-7 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 flex items-center justify-center font-bold transition-colors text-base leading-none"
-                        >+</button>
-                      </div>
-                      <div className="text-sm font-semibold text-gray-900 w-20 text-right shrink-0">
-                        {fmt(entry.product.price * entry.quantity)}
-                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {cart.length > 0 && (
+                <div className="border-t border-gray-200 px-4 py-3 lg:px-5 lg:py-4 space-y-4 flex-shrink-0 bg-gray-50/50">
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="text-sm text-gray-600 whitespace-nowrap">Order Discount</label>
+                    <div className="relative">
+                      <input type="number" min="0" max="100" step="0.5"
+                        value={orderDiscountRate || ''} onChange={e => setOrderDiscountRate(parseFloat(e.target.value) || 0)}
+                        placeholder="0"
+                        className="w-24 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-7" />
+                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">%</span>
                     </div>
-                  ))}
+                  </div>
+                  <div className="space-y-1.5 text-sm">
+                    <div className="flex justify-between text-gray-500"><span>Subtotal</span><span>{fmt(cartSubtotal)}</span></div>
+                    <div className="flex justify-between text-gray-500"><span>Tax</span><span>{fmt(cartTax)}</span></div>
+                    {discountAmount > 0 && (
+                      <div className="flex justify-between text-emerald-600">
+                        <span>Discount ({orderDiscountRate}%)</span><span>−{fmt(discountAmount)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between font-bold text-gray-900 text-base pt-2 border-t border-gray-200">
+                      <span>Total</span><span>{fmt(cartTotal)}</span>
+                    </div>
+                  </div>
+                  <div className="space-y-2 pt-1">
+                    <button onClick={() => { setAddToRoomError(null); setShowGuestModal(true); }} disabled={addingToRoom}
+                      className="w-full py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm shadow-sm">
+                      {addingToRoom ? 'Charging...' : 'Add to Room'}
+                    </button>
+                    <button onClick={() => setShowSettleModal(true)}
+                      className="w-full py-3 bg-emerald-600 text-white rounded-xl font-semibold hover:bg-emerald-700 transition-colors text-sm shadow-sm">
+                      Settle Now
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
+          </div>
 
-            {cart.length > 0 && (
-              <div className="border-t border-gray-200 px-5 py-4 space-y-4 flex-shrink-0 bg-gray-50/50">
-                {/* Order discount */}
-                <div className="flex items-center justify-between gap-3">
-                  <label className="text-sm text-gray-600 whitespace-nowrap">Order Discount</label>
-                  <div className="relative">
-                    <input
-                      type="number" min="0" max="100" step="0.5"
-                      value={orderDiscountRate || ''} onChange={e => setOrderDiscountRate(parseFloat(e.target.value) || 0)}
-                      placeholder="0"
-                      className="w-24 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-7"
-                    />
-                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">%</span>
+          {/* ── Mobile cart bar (hidden on desktop) ── */}
+          {cart.length > 0 && (
+            <div className="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-gray-200 px-4 py-3 shadow-lg z-30">
+              <button
+                onClick={() => setShowCartSheet(true)}
+                className="w-full bg-blue-600 text-white rounded-xl py-3.5 flex items-center justify-between px-5 shadow-sm active:bg-blue-700 transition-colors"
+              >
+                <span className="bg-blue-500 text-white text-xs font-bold px-2 py-0.5 rounded-full min-w-[1.5rem] text-center">
+                  {cartItemCount}
+                </span>
+                <span className="font-semibold text-sm">View Order</span>
+                <span className="font-bold text-sm">{fmt(cartTotal)}</span>
+              </button>
+            </div>
+          )}
+
+          {/* ── Mobile cart bottom sheet ── */}
+          {showCartSheet && (
+            <div className="md:hidden fixed inset-0 z-40 flex flex-col justify-end">
+              <div className="absolute inset-0 bg-black/40" onClick={() => setShowCartSheet(false)} />
+              <div className="relative bg-white rounded-t-2xl shadow-2xl flex flex-col max-h-[80vh] sm:max-h-[75vh]">
+                {/* Handle */}
+                <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
+                  <div className="w-10 h-1 bg-gray-300 rounded-full" />
+                </div>
+                {/* Sheet header */}
+                <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+                  <div className="flex items-center gap-2">
+                    <h2 className="font-semibold text-gray-900">Order</h2>
+                    <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-0.5 rounded-full">{cartItemCount}</span>
+                  </div>
+                  <button onClick={clearCart} className="text-xs text-red-400 font-medium">Clear all</button>
+                </div>
+                {/* Cart items */}
+                <div className="flex-1 overflow-y-auto px-5">
+                  <div className="divide-y divide-gray-50">
+                    {cart.map(entry => (
+                      <div key={entry.product.id} className="flex items-center gap-3 py-3 sm:py-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-gray-800 truncate">{entry.product.name}</div>
+                          <div className="text-xs text-gray-400 mt-0.5">
+                            {fmt(entry.product.price)}
+                            {entry.product.discountRate != null && entry.product.discountRate > 0 && (
+                              <span className="ml-1 text-emerald-600">−{entry.product.discountRate}%</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <button onClick={() => updateCartQuantity(entry.product.id, -1)}
+                            className="w-9 h-9 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center font-bold text-lg leading-none active:bg-gray-200">−</button>
+                          <span className="w-7 text-center text-sm font-semibold text-gray-800">{entry.quantity}</span>
+                          <button onClick={() => updateCartQuantity(entry.product.id, 1)}
+                            className="w-9 h-9 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center font-bold text-lg leading-none active:bg-gray-200">+</button>
+                        </div>
+                        <div className="text-sm font-semibold text-gray-900 w-20 text-right shrink-0">
+                          {fmt(entry.product.price * entry.quantity)}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-
-                {/* Totals */}
-                <div className="space-y-1.5 text-sm">
-                  <div className="flex justify-between text-gray-500">
-                    <span>Subtotal</span><span>{fmt(cartSubtotal)}</span>
-                  </div>
-                  <div className="flex justify-between text-gray-500">
-                    <span>Tax</span><span>{fmt(cartTax)}</span>
-                  </div>
-                  {discountAmount > 0 && (
-                    <div className="flex justify-between text-emerald-600">
-                      <span>Discount ({orderDiscountRate}%)</span><span>−{fmt(discountAmount)}</span>
+                {/* Totals + actions */}
+                <div className="border-t border-gray-200 px-5 py-4 space-y-4 flex-shrink-0 bg-gray-50/50">
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="text-sm text-gray-600 whitespace-nowrap">Order Discount</label>
+                    <div className="relative">
+                      <input type="number" min="0" max="100" step="0.5"
+                        value={orderDiscountRate || ''} onChange={e => setOrderDiscountRate(parseFloat(e.target.value) || 0)}
+                        placeholder="0"
+                        className="w-24 border border-gray-200 rounded-lg px-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-7" />
+                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">%</span>
                     </div>
-                  )}
-                  <div className="flex justify-between font-bold text-gray-900 text-base pt-2 border-t border-gray-200">
-                    <span>Total</span><span>{fmt(cartTotal)}</span>
                   </div>
-                </div>
-
-                {/* Action buttons */}
-                <div className="space-y-2 pt-1">
-                  <button
-                    onClick={() => { setAddToRoomError(null); setShowGuestModal(true); }}
-                    disabled={addingToRoom}
-                    className="w-full py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm shadow-sm"
-                  >
-                    {addingToRoom ? 'Charging...' : 'Add to Room'}
-                  </button>
-                  <button
-                    onClick={() => setShowSettleModal(true)}
-                    className="w-full py-3 bg-emerald-600 text-white rounded-xl font-semibold hover:bg-emerald-700 transition-colors text-sm shadow-sm"
-                  >
-                    Settle Now
-                  </button>
+                  <div className="space-y-1.5 text-sm">
+                    <div className="flex justify-between text-gray-500"><span>Subtotal</span><span>{fmt(cartSubtotal)}</span></div>
+                    <div className="flex justify-between text-gray-500"><span>Tax</span><span>{fmt(cartTax)}</span></div>
+                    {discountAmount > 0 && (
+                      <div className="flex justify-between text-emerald-600">
+                        <span>Discount ({orderDiscountRate}%)</span><span>−{fmt(discountAmount)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between font-bold text-gray-900 text-base pt-2 border-t border-gray-200">
+                      <span>Total</span><span>{fmt(cartTotal)}</span>
+                    </div>
+                  </div>
+                  <div className="space-y-2 pt-1">
+                    <button onClick={() => { setShowCartSheet(false); setAddToRoomError(null); setShowGuestModal(true); }} disabled={addingToRoom}
+                      className="w-full py-3.5 bg-blue-600 text-white rounded-xl font-semibold active:bg-blue-700 disabled:opacity-50 transition-colors text-sm shadow-sm">
+                      {addingToRoom ? 'Charging...' : 'Add to Room'}
+                    </button>
+                    <button onClick={() => { setShowCartSheet(false); setShowSettleModal(true); }}
+                      className="w-full py-3.5 bg-emerald-600 text-white rounded-xl font-semibold active:bg-emerald-700 transition-colors text-sm shadow-sm">
+                      Settle Now
+                    </button>
+                  </div>
                 </div>
               </div>
-            )}
-          </div>
-        </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Modals */}
