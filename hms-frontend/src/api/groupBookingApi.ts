@@ -10,7 +10,7 @@ export interface GroupRoomRequestDto {
   childGuestId?: string;    // Optional: who is actually staying in this room
   adults?: number;
   children?: number;
-  totalPrice?: number;
+  nightlyRate?: number;
   specialRequests?: string;
   isTwinBed?: boolean;     
 }

@@ -37,8 +37,8 @@ public record BookingCreationDto(
 
         String currency,  // Defaults to "INR"
 
-        @PositiveOrZero(message = "Total price cannot be negative")
-        BigDecimal totalPrice,
+        @PositiveOrZero(message = "Nightly rate cannot be negative")
+        BigDecimal nightlyRate,
 
         @PositiveOrZero(message = "Paid amount cannot be negative")
         BigDecimal paidAmount,
@@ -73,8 +73,8 @@ public record BookingCreationDto(
         if (status == null) {
             status = PENDING;
         }
-        if (totalPrice == null) {
-            totalPrice = BigDecimal.ZERO;
+        if (nightlyRate == null) {
+            nightlyRate = BigDecimal.ZERO;
         }
         if (paidAmount == null) {
             paidAmount = BigDecimal.ZERO;

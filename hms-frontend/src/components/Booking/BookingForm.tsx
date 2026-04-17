@@ -78,7 +78,12 @@ export default function BookingForm({
   const [adults, setAdults] = useState<number>(booking?.adults ?? 1);
   const [children, setChildren] = useState<number>(booking?.children ?? 0);
   const [currency, setCurrency] = useState<string>(booking?.currency ?? 'INR');
-  const [totalPrice, setTotalPrice] = useState<number>(booking?.totalPrice ?? 0);
+  const [nightlyRate, setNightlyRate] = useState<number>(() => {
+    if (!booking) return 0;
+    const inD = new Date(booking.checkIn), outD = new Date(booking.checkOut);
+    const nights = Math.round((outD.getTime() - inD.getTime()) / (1000 * 60 * 60 * 24));
+    return nights > 0 ? Math.round(booking.totalPrice / nights) : booking.totalPrice;
+  });
   const [paidAmount, setPaidAmount] = useState<number>(booking?.paidAmount ?? 0);
   const [specialRequests, setSpecialRequests] = useState<string>(booking?.specialRequests ?? '');
   const [status, setStatus] = useState<string>(booking?.status ?? 'PENDING');
@@ -224,18 +229,11 @@ export default function BookingForm({
     return () => { mounted = false; };
   }, [selectedPropertyId, selectedUnitId, checkIn, checkOut, isEditMode, booking, preselectedRoom]);
 
-  // Auto-calculate total price from room baseRate × nights
+  // Pre-fill nightly rate from room's base rate when a room is selected (create mode only)
   useEffect(() => {
     if (isEditMode) return;
-    if (room && checkIn && checkOut) {
-      const inDate = new Date(checkIn);
-      const outDate = new Date(checkOut);
-      if (outDate > inDate) {
-        const nights = Math.round((outDate.getTime() - inDate.getTime()) / (1000 * 60 * 60 * 24));
-        setTotalPrice(room.baseRate * nights);
-      }
-    }
-  }, [room, checkIn, checkOut, isEditMode]);
+    if (room) setNightlyRate(room.baseRate);
+  }, [room, isEditMode]);
 
   // Guest Search Effect
   useEffect(() => {
@@ -327,18 +325,25 @@ export default function BookingForm({
         }
       }
 
-      const payload: BookingCreationDto = {
+      const inD = new Date(checkIn), outD = new Date(checkOut);
+      const nights = checkIn && checkOut && outD > inD
+        ? Math.round((outD.getTime() - inD.getTime()) / (1000 * 60 * 60 * 24))
+        : 0;
+      const computedTotalPrice = nightlyRate * nights;
+
+      const payload = {
         roomId: getRoomId(room) ?? undefined,
         guestId: finalGuestId,
-        unitId: selectedUnitId, // Now strictly passed
+        unitId: selectedUnitId,
         status: status as any,
-        checkIn, checkOut, adults, children, currency, totalPrice, paidAmount, specialRequests,
+        checkIn, checkOut, adults, children, currency, paidAmount, specialRequests,
         isTwinBed,
         referenceNumber: referenceNumber || undefined,
+        ...(isEditMode ? { totalPrice: computedTotalPrice } : { nightlyRate }),
         ...travelAgentPayload
       };
 
-      const result = (isEditMode && booking?.id) 
+      const result = (isEditMode && booking?.id)
         ? await bookingApi.partialUpdate(selectedPropertyId, booking.id, payload)
         : await bookingApi.create(selectedPropertyId, payload);
 
@@ -623,16 +628,41 @@ export default function BookingForm({
         <div className="grid gap-4 sm:grid-cols-3">
           <label><span className={labelCls}>Currency</span><input className={inputCls} value={currency} onChange={e => setCurrency(e.target.value)} /></label>
           <div>
-            <label><span className={labelCls}>Total Price</span><input type="number" min={0} className={inputCls} value={totalPrice} onChange={e => setTotalPrice(Number(e.target.value) || 0)} /></label>
+            <label>
+              <span className={labelCls}>Nightly Rate</span>
+              <input type="number" min={0} className={inputCls} value={nightlyRate} onChange={e => setNightlyRate(Number(e.target.value) || 0)} />
+            </label>
+            {room && (
+              <p className="mt-1.5 text-xs text-slate-500">
+                Base rate: {currency} {room.baseRate.toLocaleString()}/night
+              </p>
+            )}
+          </div>
+          <div>
+            <label>
+              <span className={labelCls}>Total Price</span>
+              <input
+                type="number"
+                className={cn(inputCls, 'bg-slate-50 cursor-not-allowed')}
+                value={(() => {
+                  if (!checkIn || !checkOut) return 0;
+                  const inD = new Date(checkIn), outD = new Date(checkOut);
+                  if (outD <= inD) return 0;
+                  const nights = Math.round((outD.getTime() - inD.getTime()) / (1000 * 60 * 60 * 24));
+                  return nightlyRate * nights;
+                })()}
+                readOnly
+              />
+            </label>
             {(() => {
-              if (!room || !checkIn || !checkOut) return null;
+              if (!checkIn || !checkOut) return null;
               const inD = new Date(checkIn), outD = new Date(checkOut);
               if (outD <= inD) return null;
               const nights = Math.round((outD.getTime() - inD.getTime()) / (1000 * 60 * 60 * 24));
-              const expected = room.baseRate * nights;
+              const total = nightlyRate * nights;
               return (
                 <p className="mt-1.5 text-xs text-slate-500">
-                  Room {room.number} — {currency} {room.baseRate.toLocaleString()}/night × {nights} night{nights !== 1 ? 's' : ''} = {currency} {expected.toLocaleString()}
+                  {currency} {nightlyRate.toLocaleString()}/night × {nights} night{nights !== 1 ? 's' : ''} = {currency} {total.toLocaleString()}
                 </p>
               );
             })()}

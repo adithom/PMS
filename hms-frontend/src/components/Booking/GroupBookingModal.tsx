@@ -29,7 +29,7 @@ export default function GroupBookingModal({ propertyId, onClose, onSuccess }: Gr
     groupReference: '',
     billingMode: 'SEPARATE',
     roomRequests: [
-      { unitId: '', adults: 1, children: 0, totalPrice: 0 } 
+      { unitId: '', adults: 1, children: 0, nightlyRate: 0 }
     ]
   });
 
@@ -72,7 +72,7 @@ export default function GroupBookingModal({ propertyId, onClose, onSuccess }: Gr
   const addRoomRequest = () => {
     setFormData(prev => ({
       ...prev,
-      roomRequests: [...prev.roomRequests, { unitId: '', adults: 1, children: 0, totalPrice: 0 }]
+      roomRequests: [...prev.roomRequests, { unitId: '', adults: 1, children: 0, nightlyRate: 0 }]
     }));
   };
 
@@ -354,10 +354,10 @@ export default function GroupBookingModal({ propertyId, onClose, onSuccess }: Gr
                           />
                         </div>
                         <div>
-                          <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-slate-500">Price (Total per Night)</label>
-                          <input 
-                            type="number" min="0" step="0.01" className={inputCls} 
-                            value={req.totalPrice} onChange={(e) => updateRoomRequest(index, 'totalPrice', parseFloat(e.target.value))}
+                          <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-slate-500">Nightly Rate</label>
+                          <input
+                            type="number" min="0" step="0.01" className={inputCls}
+                            value={req.nightlyRate} onChange={(e) => updateRoomRequest(index, 'nightlyRate', parseFloat(e.target.value))}
                           />
                         </div>
                       </div>

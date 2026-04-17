@@ -23,13 +23,18 @@ export interface BookingCreationDto {
   adults?: number;
   children?: number;
   currency?: string;
-  totalPrice?: number;
+  nightlyRate?: number;
   paidAmount?: number;
   specialRequests?: string;
   isTwinBed?: boolean;
   referenceNumber?: string;
   travelAgentId?: string;
   newTravelAgent?: NewTravelAgentDto;
+}
+
+export interface BookingUpdatePayload extends Omit<BookingCreationDto, 'nightlyRate'> {
+  totalPrice?: number;
+  nightlyRate?: number;
 }
 
 export interface ExtendBookingRequestDto {
@@ -90,11 +95,11 @@ const bookingApi = {
     api.post<Booking>(`/properties/${propertyId}/bookings`, data),
 
   // Full update (PUT)
-  update: (propertyId: string, bookingId: string, data: Partial<BookingCreationDto>) =>
+  update: (propertyId: string, bookingId: string, data: Partial<BookingUpdatePayload>) =>
     api.put<Booking>(`/properties/${propertyId}/bookings/${bookingId}`, data),
 
   // Partial update (PATCH)
-  partialUpdate: (propertyId: string, bookingId: string, data: Partial<BookingCreationDto>) =>
+  partialUpdate: (propertyId: string, bookingId: string, data: Partial<BookingUpdatePayload>) =>
     api.patch<Booking>(`/properties/${propertyId}/bookings/${bookingId}`, data),
 
   // Update booking status

@@ -12,6 +12,7 @@ import jakarta.validation.Valid;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -33,6 +34,12 @@ public class BookingMapper {
 
         // REMOVED: Status validation - now handled by compact constructor with default
 
+        long nights = ChronoUnit.DAYS.between(bookingCreationDto.checkIn(), bookingCreationDto.checkOut());
+        BigDecimal computedTotalPrice = (bookingCreationDto.nightlyRate() != null
+                && bookingCreationDto.nightlyRate().compareTo(BigDecimal.ZERO) > 0 && nights > 0)
+                ? bookingCreationDto.nightlyRate().multiply(BigDecimal.valueOf(nights))
+                : BigDecimal.ZERO;
+
         // Create new booking using constructor
         Booking booking = new Booking(
                 property,
@@ -41,13 +48,13 @@ public class BookingMapper {
                 unit,
                 bookingCreationDto.checkIn(),
                 bookingCreationDto.checkOut(),
-                bookingCreationDto.adults(),      // Already defaults to 1 in DTO
-                bookingCreationDto.children(),    // Already defaults to 0 in DTO
-                bookingCreationDto.currency(),    // Already defaults to "INR" in DTO
-                bookingCreationDto.totalPrice(),  // Already defaults to 0.0 in DTO
-                bookingCreationDto.specialRequests(),  // ADDED: Special requests mapping
-                bookingCreationDto.status(),      // Already defaults to PENDING in DTO
-                bookingCreationDto.paidAmount(),  // Already defaults to ZERO in DTO
+                bookingCreationDto.adults(),
+                bookingCreationDto.children(),
+                bookingCreationDto.currency(),
+                computedTotalPrice,
+                bookingCreationDto.specialRequests(),
+                bookingCreationDto.status(),
+                bookingCreationDto.paidAmount(),
                 bookingCreationDto.isTwinBed()
         );
         booking.setReferenceNumber(bookingCreationDto.referenceNumber());

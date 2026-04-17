@@ -153,7 +153,12 @@ public class GroupBookingService {
             child.setAdults(vr.request().adults());
             child.setChildren(vr.request().children());
             child.setCurrency(dto.currency());
-            child.setTotalPrice(vr.request().totalPrice());
+            long nights = ChronoUnit.DAYS.between(dto.checkIn(), dto.checkOut());
+            BigDecimal childTotal = (vr.request().nightlyRate() != null
+                    && vr.request().nightlyRate().compareTo(BigDecimal.ZERO) > 0 && nights > 0)
+                    ? vr.request().nightlyRate().multiply(BigDecimal.valueOf(nights))
+                    : BigDecimal.ZERO;
+            child.setTotalPrice(childTotal);
             child.setPaidAmount(BigDecimal.ZERO);
             child.setSpecialRequests(vr.request().specialRequests());
             child.setStatus(BookingStatus.CONFIRMED);
@@ -167,7 +172,7 @@ public class GroupBookingService {
 
             Booking savedChild = bookingRepository.save(child);
             savedChildren.add(savedChild);
-            totalGroupPrice = totalGroupPrice.add(vr.request().totalPrice());
+            totalGroupPrice = totalGroupPrice.add(childTotal);
 
             // ---- 4. Create master folio for this child booking ----
             UUID routedTo = dto.billingMode() == GroupBookingCreationDto.GroupBillingMode.CONSOLIDATED
