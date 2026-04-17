@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/night-audit")
@@ -42,5 +43,11 @@ public class NightAuditController {
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<List<NightAuditLog>> getHistory() {
         return ResponseEntity.ok(nightAuditLogRepository.findTop30ByOrderByRanAtDesc());
+    }
+
+    @GetMapping("/status")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<Map<String, Object>> getStatus() {
+        return ResponseEntity.ok(Map.of("isRunning", nightAuditService.isAuditRunning()));
     }
 }

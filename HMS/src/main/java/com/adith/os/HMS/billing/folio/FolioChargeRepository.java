@@ -28,4 +28,7 @@ public interface FolioChargeRepository extends JpaRepository<FolioCharge, UUID> 
     List<FolioCharge> findByBillId(UUID billId);
 
     List<FolioCharge> findByGroupBillId(UUID groupBillId);
+
+    boolean existsByFolioIdAndChargeCodeAndChargeDateAndIsVoidedFalse(
+            UUID folioId, ChargeCode chargeCode, LocalDate chargeDate);
 }

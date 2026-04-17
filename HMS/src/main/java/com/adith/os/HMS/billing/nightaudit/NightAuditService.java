@@ -2,6 +2,7 @@ package com.adith.os.HMS.billing.nightaudit;
 
 import com.adith.os.HMS.billing.folio.ChargeCode;
 import com.adith.os.HMS.billing.folio.Folio;
+import com.adith.os.HMS.billing.folio.FolioChargeRepository;
 import com.adith.os.HMS.billing.folio.FolioService;
 import com.adith.os.HMS.billing.folio.dto.ChargeCreationDto;
 import com.adith.os.HMS.booking.Booking;
@@ -22,6 +23,8 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 @Service
@@ -32,23 +35,32 @@ public class NightAuditService {
             List.of(RoomAssignmentStatus.SCHEDULED, RoomAssignmentStatus.ACTIVE, RoomAssignmentStatus.COMPLETED);
     private static final List<RoomAssignmentStatus> COMPLETABLE_ASSIGNMENT_STATUSES =
             List.of(RoomAssignmentStatus.SCHEDULED, RoomAssignmentStatus.ACTIVE);
+    private static final int CATCH_UP_LOOKBACK_DAYS = 7;
 
     private final RoomAssignmentRepository roomAssignmentRepository;
     private final FolioService folioService;
+    private final FolioChargeRepository folioChargeRepository;
     private final BookingRepository bookingRepository;
     private final NightAuditLogRepository nightAuditLogRepository;
     private final PropertyMealPlanRepository mealPlanRepository;
+    private final AtomicBoolean isRunning = new AtomicBoolean(false);
 
     public NightAuditService(RoomAssignmentRepository roomAssignmentRepository,
                              FolioService folioService,
+                             FolioChargeRepository folioChargeRepository,
                              BookingRepository bookingRepository,
                              NightAuditLogRepository nightAuditLogRepository,
                              PropertyMealPlanRepository mealPlanRepository) {
         this.roomAssignmentRepository = roomAssignmentRepository;
         this.folioService = folioService;
+        this.folioChargeRepository = folioChargeRepository;
         this.bookingRepository = bookingRepository;
         this.nightAuditLogRepository = nightAuditLogRepository;
         this.mealPlanRepository = mealPlanRepository;
+    }
+
+    public boolean isAuditRunning() {
+        return isRunning.get();
     }
 
     /**
@@ -74,27 +86,38 @@ public class NightAuditService {
         AtomicReference<String> firstError = new AtomicReference<>();
         NightAuditResultDto result = runNightAuditInternal(chargeDate, true, firstError);
         log.info("Night Audit (Manual): Completed for {}. Posted: {}, Skipped: {}, Errors: {}",
-                chargeDate, result.chargesPosted(), result.chargesSkipped(), result.errors());
+                chargeDate, result.chargesPosted(),
+                result.skippedAlreadyPosted() + result.skippedFolioNotOpen() + result.skippedNoFolio(),
+                result.errors());
         saveLog(chargeDate, "MANUAL", result, firstError.get());
         return result;
     }
 
     @Transactional
     public NightAuditResultDto runFullNightAuditForDate(LocalDate auditDate, String runType) {
-        LocalDate businessDate = auditDate.plusDays(1);
+        if (!isRunning.compareAndSet(false, true)) {
+            throw new IllegalStateException("Night audit is already in progress. Try again shortly.");
+        }
+        try {
+            LocalDate businessDate = auditDate.plusDays(1);
 
-        log.info("--- STARTING FULL NIGHT AUDIT FOR {} ({}) ---", auditDate, runType);
+            log.info("--- STARTING FULL NIGHT AUDIT FOR {} ({}) ---", auditDate, runType);
 
-        AtomicReference<String> firstError = new AtomicReference<>();
-        boolean manualRun = "MANUAL".equals(runType);
-        NightAuditResultDto result = runNightAuditInternal(auditDate, manualRun, firstError);
-        performInventoryRollover(businessDate);
+            AtomicReference<String> firstError = new AtomicReference<>();
+            boolean manualRun = "MANUAL".equals(runType);
+            NightAuditResultDto result = runNightAuditInternal(auditDate, manualRun, firstError);
+            performInventoryRollover(businessDate);
 
-        log.info("--- COMPLETED FULL NIGHT AUDIT FOR {} ({}). Posted: {}, Skipped: {}, Errors: {} ---",
-                auditDate, runType, result.chargesPosted(), result.chargesSkipped(), result.errors());
+            log.info("--- COMPLETED FULL NIGHT AUDIT FOR {} ({}). Posted: {}, Skipped: {}, Errors: {} ---",
+                    auditDate, runType, result.chargesPosted(),
+                    result.skippedAlreadyPosted() + result.skippedFolioNotOpen() + result.skippedNoFolio(),
+                    result.errors());
 
-        saveLog(auditDate, runType, result, firstError.get());
-        return result;
+            saveLog(auditDate, runType, result, firstError.get());
+            return result;
+        } finally {
+            isRunning.set(false);
+        }
     }
 
     private void saveLog(LocalDate auditDate, String runType, NightAuditResultDto result, String errorSummary) {
@@ -102,7 +125,9 @@ public class NightAuditService {
             nightAuditLogRepository.save(new NightAuditLog(
                     auditDate, runType,
                     result.totalAssignments(), result.chargesPosted(),
-                    result.chargesSkipped(), result.errors(),
+                    result.skippedAlreadyPosted() + result.skippedFolioNotOpen() + result.skippedNoFolio(),
+                    result.errors(),
+                    result.mealPlanChargesPosted(), result.mealPlanChargesSkipped(),
                     errorSummary
             ));
         } catch (Exception e) {
@@ -119,7 +144,9 @@ public class NightAuditService {
                 manualRun ? " (Manual)" : "", assignments.size(), chargeDate);
 
         int chargesPosted = 0;
-        int chargesSkipped = 0;
+        int skippedNoFolio = 0;
+        int skippedFolioNotOpen = 0;
+        int skippedAlreadyPosted = 0;
         int errors = 0;
         int mealPlanChargesPosted = 0;
         int mealPlanChargesSkipped = 0;
@@ -131,33 +158,26 @@ public class NightAuditService {
                 Folio masterFolio = booking.getMasterFolio();
 
                 if (masterFolio == null) {
-                    if (!manualRun) {
-                        log.warn("Night Audit: No master folio found for booking {}. Skipping.", booking.getId());
-                    }
-                    chargesSkipped++;
+                    log.warn("Night Audit: No master folio found for booking {}. Skipping.", booking.getId());
+                    skippedNoFolio++;
                     continue;
                 }
 
                 if (masterFolio.getStatus() != com.adith.os.HMS.billing.folio.FolioStatus.OPEN) {
-                    if (!manualRun) {
-                        log.warn("Night Audit: Folio {} for booking {} is {} (not OPEN). Skipping.",
-                                masterFolio.getId(), booking.getId(), masterFolio.getStatus());
-                    }
-                    chargesSkipped++;
+                    log.warn("Night Audit: Folio {} for booking {} is {} (not OPEN). Skipping.",
+                            masterFolio.getId(), booking.getId(), masterFolio.getStatus());
+                    skippedFolioNotOpen++;
                     continue;
                 }
 
-                boolean chargeExists = masterFolio.getCharges() != null && masterFolio.getCharges().stream()
-                        .filter(c -> !c.isVoided())
-                        .filter(c -> c.getChargeCode() == ChargeCode.ROOM_RENT)
-                        .anyMatch(c -> c.getChargeDate().equals(chargeDate));
+                boolean chargeExists = folioChargeRepository
+                        .existsByFolioIdAndChargeCodeAndChargeDateAndIsVoidedFalse(
+                                masterFolio.getId(), ChargeCode.ROOM_RENT, chargeDate);
 
                 if (chargeExists) {
-                    if (!manualRun) {
-                        log.debug("Night Audit: Room rent charge already exists for booking {} on {}. Skipping.",
-                                booking.getId(), chargeDate);
-                    }
-                    chargesSkipped++;
+                    log.debug("Night Audit: Room rent charge already exists for booking {} on {}. Skipping.",
+                            booking.getId(), chargeDate);
+                    skippedAlreadyPosted++;
                     continue;
                 }
 
@@ -165,13 +185,17 @@ public class NightAuditService {
                         ? assignment.getNightlyRate()
                         : room.getBaseRate();
 
+                BigDecimal roomRentTaxRate = nightlyRate.compareTo(new BigDecimal("7500")) < 0
+                        ? new BigDecimal("5.00")
+                        : new BigDecimal("18.00");
+
                 ChargeCreationDto chargeDto = new ChargeCreationDto(
                         chargeDate,
                         ChargeCode.ROOM_RENT,
                         "Room " + room.getNumber() + " - Nightly Rate",
                         nightlyRate,
                         BigDecimal.ONE,
-                        null,
+                        roomRentTaxRate,
                         BigDecimal.ZERO,
                         "ROOM_ASSIGNMENT",
                         assignment.getId(),
@@ -192,11 +216,9 @@ public class NightAuditService {
                 // Post meal plan charge if the booking has one
                 MealPlanType mealPlanType = booking.getMealPlanType();
                 if (mealPlanType != null) {
-                    boolean mealPlanChargeExists = masterFolio.getCharges() != null
-                            && masterFolio.getCharges().stream()
-                            .filter(c -> !c.isVoided())
-                            .filter(c -> c.getChargeCode() == ChargeCode.MEAL_PLAN)
-                            .anyMatch(c -> c.getChargeDate().equals(chargeDate));
+                    boolean mealPlanChargeExists = folioChargeRepository
+                            .existsByFolioIdAndChargeCodeAndChargeDateAndIsVoidedFalse(
+                                    masterFolio.getId(), ChargeCode.MEAL_PLAN, chargeDate);
 
                     if (!mealPlanChargeExists) {
                         var planOpt = mealPlanRepository
@@ -238,8 +260,43 @@ public class NightAuditService {
             }
         }
 
-        return new NightAuditResultDto(chargeDate, assignments.size(), chargesPosted, chargesSkipped, errors,
-                mealPlanChargesPosted, mealPlanChargesSkipped);
+        return new NightAuditResultDto(chargeDate, assignments.size(), chargesPosted,
+                skippedAlreadyPosted, skippedFolioNotOpen, skippedNoFolio,
+                errors, mealPlanChargesPosted, mealPlanChargesSkipped);
+    }
+
+    @Scheduled(cron = "${hms.night-audit.catchup-cron:0 0 3 * * *}")
+    @Transactional
+    public void runCatchUpAudit() {
+        if (!isRunning.compareAndSet(false, true)) {
+            log.warn("Catch-Up Audit: skipped — another audit run is in progress.");
+            return;
+        }
+        try {
+            LocalDate today = LocalDate.now();
+            log.info("--- STARTING CATCH-UP NIGHT AUDIT (lookback {} days) ---", CATCH_UP_LOOKBACK_DAYS);
+            int rerunCount = 0;
+
+            for (int i = 1; i <= CATCH_UP_LOOKBACK_DAYS; i++) {
+                LocalDate date = today.minusDays(i);
+                Optional<NightAuditLog> lastLog =
+                        nightAuditLogRepository.findTopByAuditDateOrderByRanAtDesc(date);
+
+                boolean needsRerun = lastLog.isEmpty() || lastLog.get().getErrors() > 0;
+                if (needsRerun) {
+                    log.info("Catch-Up Audit: {} — {} — re-running charges.", date,
+                            lastLog.isEmpty() ? "no audit found"
+                                    : "previous run had " + lastLog.get().getErrors() + " errors");
+                    AtomicReference<String> firstError = new AtomicReference<>();
+                    NightAuditResultDto result = runNightAuditInternal(date, false, firstError);
+                    saveLog(date, "CATCH_UP", result, firstError.get());
+                    rerunCount++;
+                }
+            }
+            log.info("--- COMPLETED CATCH-UP NIGHT AUDIT. Re-ran {} date(s). ---", rerunCount);
+        } finally {
+            isRunning.set(false);
+        }
     }
 
     private void performInventoryRollover(LocalDate businessDate) {
@@ -286,7 +343,9 @@ public class NightAuditService {
             LocalDate date,
             int totalAssignments,
             int chargesPosted,
-            int chargesSkipped,
+            int skippedAlreadyPosted,
+            int skippedFolioNotOpen,
+            int skippedNoFolio,
             int errors,
             int mealPlanChargesPosted,
             int mealPlanChargesSkipped

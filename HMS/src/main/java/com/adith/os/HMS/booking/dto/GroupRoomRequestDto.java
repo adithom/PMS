@@ -33,8 +33,8 @@ public record GroupRoomRequestDto(
         @PositiveOrZero(message = "Children cannot be negative")
         Integer children,
 
-        @PositiveOrZero(message = "Total price cannot be negative")
-        BigDecimal totalPrice,
+        @PositiveOrZero(message = "Nightly rate cannot be negative")
+        BigDecimal nightlyRate,
 
         String specialRequests,
 
@@ -43,6 +43,6 @@ public record GroupRoomRequestDto(
     public GroupRoomRequestDto {
         if (adults == null) adults = 1;
         if (children == null) children = 0;
-        if (totalPrice == null) totalPrice = BigDecimal.ZERO;
+        if (nightlyRate == null) nightlyRate = BigDecimal.ZERO;
     }
 }
