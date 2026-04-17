@@ -23,7 +23,7 @@
 - [ ] reports
 > financial (incoming revenue - cash, cc, upi account transfer, endpoint: transferred to folio) daily sales report, mtd report, country, domestic states, meal plan, months, ytd, mtd (compare to last year)
 - [x] birthday in calender
-- [ ] meal plan and automated price estimate
+- [x] meal plan and automated price estimate
 - [x] travel agent optional, reservation no. in order
 - [ ] discounts - rate and number
 

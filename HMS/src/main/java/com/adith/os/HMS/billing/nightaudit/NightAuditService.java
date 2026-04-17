@@ -14,7 +14,6 @@ import com.adith.os.HMS.room.Room;
 import com.adith.os.HMS.roomassignment.RoomAssignment;
 import com.adith.os.HMS.roomassignment.RoomAssignmentRepository;
 import com.adith.os.HMS.roomassignment.RoomAssignmentStatus;
-import jakarta.transaction.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -71,7 +70,6 @@ public class NightAuditService {
      * Runs at the configured cron schedule (default: 2:00 AM daily).
      */
     @Scheduled(cron = "${hms.night-audit.cron:0 0 2 * * *}")
-    @Transactional
     public void runFullNightAudit() {
         runFullNightAuditForDate(LocalDate.now().minusDays(1), "AUTO");
     }
@@ -80,7 +78,6 @@ public class NightAuditService {
      * Manually trigger the night audit for a specific date.
      * Useful for backfilling charges or re-running after an error.
      */
-    @Transactional
     public NightAuditResultDto runNightAuditForDate(LocalDate chargeDate) {
         log.info("Night Audit (Manual): Running for date {}", chargeDate);
         AtomicReference<String> firstError = new AtomicReference<>();
@@ -93,7 +90,6 @@ public class NightAuditService {
         return result;
     }
 
-    @Transactional
     public NightAuditResultDto runFullNightAuditForDate(LocalDate auditDate, String runType) {
         if (!isRunning.compareAndSet(false, true)) {
             throw new IllegalStateException("Night audit is already in progress. Try again shortly.");
@@ -266,7 +262,6 @@ public class NightAuditService {
     }
 
     @Scheduled(cron = "${hms.night-audit.catchup-cron:0 0 3 * * *}")
-    @Transactional
     public void runCatchUpAudit() {
         if (!isRunning.compareAndSet(false, true)) {
             log.warn("Catch-Up Audit: skipped — another audit run is in progress.");
