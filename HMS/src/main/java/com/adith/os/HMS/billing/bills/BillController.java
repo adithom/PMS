@@ -5,10 +5,13 @@ import com.adith.os.HMS.billing.bills.dto.BillLedgerPageDto;
 import com.adith.os.HMS.billing.bills.dto.DoubleBillDto;
 import com.adith.os.HMS.security.UserPrincipal;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.ConstraintViolationException;
+import jakarta.validation.constraints.Size;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
@@ -18,6 +21,7 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 
+@Validated
 @RestController
 @RequestMapping("/api/bills")
 public class BillController {
@@ -78,12 +82,21 @@ public class BillController {
     @PostMapping("/ledger/download-zip")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public void downloadLedgerZip(
-            @RequestBody List<UUID> billIds,
+            @RequestBody @Size(max = 150, message = "Maximum 150 bills per ZIP request") List<UUID> billIds,
             HttpServletResponse response) throws IOException {
         String fileName = "bills-export-" + LocalDate.now(ZoneId.of("Asia/Kolkata")) + ".zip";
         response.setContentType("application/zip");
         response.setHeader("Content-Disposition", "attachment; filename=\"" + fileName + "\"");
         billService.downloadBillsAsZip(billIds, response.getOutputStream());
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<String> handleConstraintViolation(ConstraintViolationException ex) {
+        String msg = ex.getConstraintViolations().stream()
+                .map(cv -> cv.getMessage())
+                .findFirst()
+                .orElse("Validation failed");
+        return ResponseEntity.badRequest().body(msg);
     }
 
     @PostMapping("/folio/{folioId}/void-active")
