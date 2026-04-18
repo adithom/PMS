@@ -126,6 +126,9 @@ public class Booking {
     @Column(name = "meal_plan_type")
     private MealPlanType mealPlanType;
 
+    @Column(name = "meal_plan_price_per_night", precision = 10, scale = 2)
+    private BigDecimal mealPlanPricePerNight;
+
     @PrePersist
     protected void onCreate() {
         if (createdAt == null) {
@@ -314,6 +317,8 @@ public class Booking {
 
     public MealPlanType getMealPlanType() { return mealPlanType; }
     public void setMealPlanType(MealPlanType mealPlanType) { this.mealPlanType = mealPlanType; }
+    public BigDecimal getMealPlanPricePerNight() { return mealPlanPricePerNight; }
+    public void setMealPlanPricePerNight(BigDecimal mealPlanPricePerNight) { this.mealPlanPricePerNight = mealPlanPricePerNight; }
 
     // Calculated fields - these compute values dynamically
 

@@ -749,6 +749,7 @@ public class BookingService {
             // Meal plan partial update
             if (Boolean.TRUE.equals(dto.clearMealPlan())) {
                 booking.setMealPlanType(null);
+                booking.setMealPlanPricePerNight(null);
             } else if (dto.mealPlanType() != null) {
                 PropertyMealPlan plan = mealPlanRepository
                         .findByPropertyIdAndMealPlanType(propertyId, dto.mealPlanType())
@@ -759,6 +760,11 @@ public class BookingService {
                             "Meal plan " + dto.mealPlanType() + " is not active");
                 }
                 booking.setMealPlanType(dto.mealPlanType());
+                if (dto.mealPlanPricePerNight() != null) {
+                    booking.setMealPlanPricePerNight(dto.mealPlanPricePerNight());
+                }
+            } else if (dto.mealPlanPricePerNight() != null) {
+                booking.setMealPlanPricePerNight(dto.mealPlanPricePerNight());
             }
 
             if (datesChanged) {

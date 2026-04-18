@@ -221,11 +221,14 @@ public class NightAuditService {
                                 .findByPropertyIdAndMealPlanType(booking.getProperty().getId(), mealPlanType);
                         if (planOpt.isPresent() && planOpt.get().isActive()) {
                             var plan = planOpt.get();
+                            var effectivePrice = booking.getMealPlanPricePerNight() != null
+                                    ? booking.getMealPlanPricePerNight()
+                                    : plan.getPricePerNight();
                             ChargeCreationDto mealPlanCharge = new ChargeCreationDto(
                                     chargeDate,
                                     ChargeCode.MEAL_PLAN,
                                     mealPlanType.name() + " - " + mealPlanType.getDisplayName(),
-                                    plan.getPricePerNight(),
+                                    effectivePrice,
                                     BigDecimal.ONE,
                                     null,
                                     BigDecimal.ZERO,

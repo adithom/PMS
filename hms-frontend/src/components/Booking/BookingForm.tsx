@@ -3,9 +3,10 @@ import propertyApi from '../../api/propertyApi';
 import guestApi from '../../api/guestApi';
 import bookingApi, { type BookingCreationDto } from '../../api/bookingApi';
 import travelAgentApi from '../../api/travelAgentApi';
+import mealPlanApi from '../../api/mealPlanApi';
 import roomApi from '../../api/roomApi';
 import availabilityApi from '../../api/availabilityApi';
-import type { Property, Room, UnitDto, Booking, TravelAgent } from '../../types';
+import type { Property, Room, UnitDto, Booking, TravelAgent, MealPlan, MealPlanType } from '../../types';
 
 /* ────────────────────────────────────────────────────────────── */
 /* Types & Tokens                                               */
@@ -120,6 +121,14 @@ export default function BookingForm({
   const [newAgentPhone, setNewAgentPhone] = useState<string>('');
   const [newAgentIataCode, setNewAgentIataCode] = useState<string>('');
   const [newAgentCommissionRate, setNewAgentCommissionRate] = useState<string>('');
+
+  // ── Meal Plan State ──
+  const [mealPlanOpen, setMealPlanOpen] = useState<boolean>(!!booking?.mealPlanType);
+  const [selectedMealPlan, setSelectedMealPlan] = useState<MealPlanType | null>(booking?.mealPlanType ?? null);
+  const [mealPlanPrice, setMealPlanPrice] = useState<string>(
+    booking?.mealPlanPricePerNight?.toString() ?? ''
+  );
+  const [propertyMealPlans, setPropertyMealPlans] = useState<MealPlan[]>([]);
 
   // ── UI State ──
   const [loading, setLoading] = useState<boolean>(false);
@@ -253,6 +262,24 @@ export default function BookingForm({
     return () => { mounted = false; };
   }, [guestQuery, isEditMode]);
 
+  // Fetch property meal plans when property changes
+  useEffect(() => {
+    if (!selectedPropertyId) { setPropertyMealPlans([]); return; }
+    mealPlanApi.getByProperty(selectedPropertyId)
+      .then(plans => setPropertyMealPlans(plans || []))
+      .catch(() => setPropertyMealPlans([]));
+  }, [selectedPropertyId]);
+
+  // Auto-fill meal plan price when plan type is selected (only if price not already set)
+  useEffect(() => {
+    if (!selectedMealPlan) return;
+    const plan = propertyMealPlans.find(p => p.mealPlanType === selectedMealPlan);
+    if (plan && !mealPlanPrice) {
+      setMealPlanPrice(plan.pricePerNight.toString());
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedMealPlan, propertyMealPlans]);
+
   // Travel Agent Search Effect
   useEffect(() => {
     if (!agentQuery || agentQuery.length < 2 || selectedAgentId) return;
@@ -331,6 +358,10 @@ export default function BookingForm({
         : 0;
       const computedTotalPrice = nightlyRate * nights;
 
+      const mealPlanPayload = mealPlanOpen && selectedMealPlan
+        ? { mealPlanType: selectedMealPlan, mealPlanPricePerNight: mealPlanPrice ? Number(mealPlanPrice) : undefined }
+        : isEditMode ? { clearMealPlan: true } : {};
+
       const payload = {
         roomId: getRoomId(room) ?? undefined,
         guestId: finalGuestId,
@@ -340,7 +371,8 @@ export default function BookingForm({
         isTwinBed,
         referenceNumber: referenceNumber || undefined,
         ...(isEditMode ? { totalPrice: computedTotalPrice } : { nightlyRate }),
-        ...travelAgentPayload
+        ...travelAgentPayload,
+        ...mealPlanPayload
       };
 
       const result = (isEditMode && booking?.id)
@@ -601,6 +633,85 @@ export default function BookingForm({
         )}
       </div>
 
+      {/* ── Meal Plan ── */}
+      <div className="space-y-4 rounded-xl border border-slate-100 bg-white p-5 shadow-sm">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+          <div>
+            <h4 className="text-sm font-bold tracking-tight text-slate-900">Meal Plan</h4>
+            {!mealPlanOpen && <p className="text-xs text-slate-400 mt-0.5">Optional — leave blank for room-only</p>}
+          </div>
+          {!mealPlanOpen ? (
+            <button type="button" onClick={() => setMealPlanOpen(true)}
+              className="text-xs font-bold text-emerald-600 hover:text-emerald-700">
+              + Add Meal Plan
+            </button>
+          ) : (
+            <button type="button" onClick={() => {
+              setMealPlanOpen(false);
+              setSelectedMealPlan(null);
+              setMealPlanPrice('');
+            }} className="text-xs font-medium text-slate-400 hover:text-rose-500">
+              Remove
+            </button>
+          )}
+        </div>
+
+        {mealPlanOpen && (
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-3">
+              {(['CP', 'MAP', 'AP'] as MealPlanType[]).map(type => {
+                const plan = propertyMealPlans.find(p => p.mealPlanType === type);
+                const label = type === 'CP' ? 'Continental (CP)' : type === 'MAP' ? 'Half Board (MAP)' : 'Full Board (AP)';
+                return (
+                  <label key={type}
+                    className={cn(
+                      'flex cursor-pointer flex-col gap-1 rounded-lg border p-3 transition-all',
+                      selectedMealPlan === type
+                        ? 'border-emerald-400 bg-emerald-50/50 ring-1 ring-emerald-300'
+                        : 'border-slate-200 hover:border-slate-300'
+                    )}>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="mealPlanType"
+                        value={type}
+                        checked={selectedMealPlan === type}
+                        onChange={() => {
+                          setMealPlanPrice('');
+                          setSelectedMealPlan(type);
+                        }}
+                        className="h-4 w-4 border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                      />
+                      <span className="text-sm font-semibold text-slate-800">{label}</span>
+                    </div>
+                    {plan && (
+                      <span className="pl-6 text-xs text-slate-400">
+                        Default: {plan.pricePerNight.toLocaleString()}/night
+                      </span>
+                    )}
+                  </label>
+                );
+              })}
+            </div>
+
+            {selectedMealPlan && (
+              <label>
+                <span className={labelCls}>Price / Night <span className="font-normal text-slate-400">(editable)</span></span>
+                <input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  className={inputCls}
+                  placeholder="Enter price per night"
+                  value={mealPlanPrice}
+                  onChange={e => setMealPlanPrice(e.target.value)}
+                />
+              </label>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* ── Booking Specifics ── */}
       <div className="space-y-4 rounded-xl border border-slate-100 bg-white p-5 shadow-sm">
         <h4 className="text-sm font-bold tracking-tight text-slate-900 border-b border-slate-100 pb-2">Stay Parameters</h4>
@@ -630,12 +741,28 @@ export default function BookingForm({
           <div>
             <label>
               <span className={labelCls}>Nightly Rate</span>
-              <input type="number" min={0} className={inputCls} value={nightlyRate} onChange={e => setNightlyRate(Number(e.target.value) || 0)} />
+              <input
+                type="number" min={0} className={inputCls}
+                value={nightlyRate + (mealPlanOpen && selectedMealPlan && mealPlanPrice ? Number(mealPlanPrice) : 0)}
+                onChange={e => {
+                  const mpPrice = mealPlanOpen && selectedMealPlan && mealPlanPrice ? Number(mealPlanPrice) : 0;
+                  setNightlyRate(Math.max(0, (Number(e.target.value) || 0) - mpPrice));
+                }}
+              />
             </label>
-            {room && (
-              <p className="mt-1.5 text-xs text-slate-500">
-                Base rate: {currency} {room.baseRate.toLocaleString()}/night
-              </p>
+            {(room || (mealPlanOpen && selectedMealPlan && mealPlanPrice)) && (
+              <div className="mt-1.5 space-y-0.5">
+                {room && (
+                  <p className="text-xs text-slate-500">
+                    Base rate: {currency} {room.baseRate.toLocaleString()}/night
+                  </p>
+                )}
+                {mealPlanOpen && selectedMealPlan && mealPlanPrice && (
+                  <p className="text-xs text-slate-400">
+                    + {selectedMealPlan} {currency} {Number(mealPlanPrice).toLocaleString()}/night
+                  </p>
+                )}
+              </div>
             )}
           </div>
           <div>
@@ -643,15 +770,17 @@ export default function BookingForm({
               <span className={labelCls}>Total Price</span>
               <input
                 type="number"
-                className={cn(inputCls, 'bg-slate-50 cursor-not-allowed')}
+                className={cn(inputCls, 'bg-slate-50 pointer-events-none select-none')}
                 value={(() => {
                   if (!checkIn || !checkOut) return 0;
                   const inD = new Date(checkIn), outD = new Date(checkOut);
                   if (outD <= inD) return 0;
                   const nights = Math.round((outD.getTime() - inD.getTime()) / (1000 * 60 * 60 * 24));
-                  return nightlyRate * nights;
+                  const mpPrice = mealPlanOpen && selectedMealPlan && mealPlanPrice ? Number(mealPlanPrice) : 0;
+                  return nightlyRate * nights + mpPrice * nights;
                 })()}
                 readOnly
+                tabIndex={-1}
               />
             </label>
             {(() => {
@@ -660,10 +789,18 @@ export default function BookingForm({
               if (outD <= inD) return null;
               const nights = Math.round((outD.getTime() - inD.getTime()) / (1000 * 60 * 60 * 24));
               const total = nightlyRate * nights;
+              const mpPrice = mealPlanOpen && selectedMealPlan && mealPlanPrice ? Number(mealPlanPrice) : null;
               return (
-                <p className="mt-1.5 text-xs text-slate-500">
-                  {currency} {nightlyRate.toLocaleString()}/night × {nights} night{nights !== 1 ? 's' : ''} = {currency} {total.toLocaleString()}
-                </p>
+                <div className="mt-1.5 space-y-0.5">
+                  <p className="text-xs text-slate-500">
+                    {currency} {nightlyRate.toLocaleString()}/night × {nights} night{nights !== 1 ? 's' : ''} = {currency} {total.toLocaleString()}
+                  </p>
+                  {mpPrice != null && (
+                    <p className="text-xs text-slate-400">
+                      + {selectedMealPlan} {currency} {mpPrice.toLocaleString()}/night × {nights} night{nights !== 1 ? 's' : ''} = {currency} {(mpPrice * nights).toLocaleString()} meal plan
+                    </p>
+                  )}
+                </div>
               );
             })()}
           </div>

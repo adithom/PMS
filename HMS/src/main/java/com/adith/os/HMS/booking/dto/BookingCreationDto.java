@@ -57,7 +57,10 @@ public record BookingCreationDto(
         @Valid
         TravelAgentCreationDto newTravelAgent,  // Optional — create a new travel agent inline
 
-        MealPlanType mealPlanType    // Optional — select a meal plan for this booking
+        MealPlanType mealPlanType,   // Optional — select a meal plan for this booking
+
+        @PositiveOrZero(message = "Meal plan price cannot be negative")
+        BigDecimal mealPlanPricePerNight  // Optional — overrides property default price
 
 ) {
     public BookingCreationDto {

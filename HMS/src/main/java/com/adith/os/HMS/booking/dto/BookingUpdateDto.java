@@ -46,6 +46,9 @@ public record BookingUpdateDto(
 
         MealPlanType mealPlanType,  // null = no change (PATCH)
 
-        Boolean clearMealPlan       // PATCH only: if true, explicitly removes meal plan
+        Boolean clearMealPlan,      // PATCH only: if true, explicitly removes meal plan
+
+        @PositiveOrZero(message = "Meal plan price cannot be negative")
+        BigDecimal mealPlanPricePerNight  // Optional — overrides property default price
   ) {
 }
