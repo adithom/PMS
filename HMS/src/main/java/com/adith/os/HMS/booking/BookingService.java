@@ -750,6 +750,7 @@ public class BookingService {
             if (Boolean.TRUE.equals(dto.clearMealPlan())) {
                 booking.setMealPlanType(null);
                 booking.setMealPlanPricePerNight(null);
+                booking.setMealPlanChildrenPricePerNight(null);
             } else if (dto.mealPlanType() != null) {
                 PropertyMealPlan plan = mealPlanRepository
                         .findByPropertyIdAndMealPlanType(propertyId, dto.mealPlanType())
@@ -763,8 +764,16 @@ public class BookingService {
                 if (dto.mealPlanPricePerNight() != null) {
                     booking.setMealPlanPricePerNight(dto.mealPlanPricePerNight());
                 }
-            } else if (dto.mealPlanPricePerNight() != null) {
-                booking.setMealPlanPricePerNight(dto.mealPlanPricePerNight());
+                if (dto.mealPlanChildrenPricePerNight() != null) {
+                    booking.setMealPlanChildrenPricePerNight(dto.mealPlanChildrenPricePerNight());
+                }
+            } else {
+                if (dto.mealPlanPricePerNight() != null) {
+                    booking.setMealPlanPricePerNight(dto.mealPlanPricePerNight());
+                }
+                if (dto.mealPlanChildrenPricePerNight() != null) {
+                    booking.setMealPlanChildrenPricePerNight(dto.mealPlanChildrenPricePerNight());
+                }
             }
 
             if (datesChanged) {

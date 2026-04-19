@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { RefreshCw, LogOut, AlertTriangle, CheckCircle, Search } from 'lucide-react';
 import folioApi from '../api/folioApi';
 import type { FolioDto } from '../api/folioApi';
 import billingApi from '../api/billingApi';
@@ -195,9 +196,7 @@ export default function FrontDeskBillingManager({ propertyId }: FrontDeskBilling
           </p>
         </div>
         <button onClick={loadData} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-600 shadow-sm transition-all hover:bg-slate-50">
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
+          <RefreshCw className="h-4 w-4" />
           Refresh
         </button>
       </div>
@@ -221,9 +220,7 @@ export default function FrontDeskBillingManager({ propertyId }: FrontDeskBilling
         >
           <div className="flex items-center gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-rose-100 text-rose-600">
-              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
+              <LogOut className="h-6 w-6" />
             </div>
             <div>
               <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Departing Today</p>
@@ -246,9 +243,7 @@ export default function FrontDeskBillingManager({ propertyId }: FrontDeskBilling
         >
           <div className="flex items-center gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-600">
-              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
+              <AlertTriangle className="h-6 w-6" />
             </div>
             <div>
               <p className="text-xs font-bold uppercase tracking-widest text-slate-500">In-House High Balance</p>
@@ -271,9 +266,7 @@ export default function FrontDeskBillingManager({ propertyId }: FrontDeskBilling
         >
           <div className="flex items-center gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
-              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+              <CheckCircle className="h-6 w-6" />
             </div>
             <div>
               <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Recently Closed</p>
@@ -290,9 +283,7 @@ export default function FrontDeskBillingManager({ propertyId }: FrontDeskBilling
       <div className="mb-4 flex items-center gap-4">
         <div className="relative flex-1 max-w-md">
           <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-            <svg className="h-5 w-5 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
-            </svg>
+            <Search className="h-5 w-5 text-slate-400" />
           </div>
           <input
             type="text"

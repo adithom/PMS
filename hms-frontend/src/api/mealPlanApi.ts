@@ -4,9 +4,9 @@ import type { MealPlan } from '../types';
 const mealPlanApi = {
   getByProperty: (propertyId: string) =>
     api.get<MealPlan[]>(`/properties/${propertyId}/meal-plans`),
-  create: (propertyId: string, data: { mealPlanType: string; pricePerNight: number }) =>
+  create: (propertyId: string, data: { mealPlanType: string; pricePerNight: number; childrenPricePerNight?: number }) =>
     api.post<MealPlan>(`/properties/${propertyId}/meal-plans`, data),
-  update: (propertyId: string, id: string, data: { pricePerNight: number }) =>
+  update: (propertyId: string, id: string, data: { pricePerNight?: number; childrenPricePerNight?: number }) =>
     api.patch<MealPlan>(`/properties/${propertyId}/meal-plans/${id}`, data),
 };
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { X } from 'lucide-react';
 import bookingApi from '../../api/bookingApi';
 import type { Booking } from '../../types';
 
@@ -56,9 +57,7 @@ export default function GuestSearchModal({ isOpen, onClose, onSelectBooking, pro
                         onClick={onClose}
                         className="text-gray-400 hover:text-gray-600 transition-colors w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100"
                     >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
+                        <X className="h-5 w-5" />
                     </button>
                 </div>
 

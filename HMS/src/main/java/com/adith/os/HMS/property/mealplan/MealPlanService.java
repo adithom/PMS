@@ -65,6 +65,7 @@ public class MealPlanService {
         plan.setProperty(property);
         plan.setMealPlanType(dto.mealPlanType());
         plan.setPricePerNight(dto.pricePerNight());
+        plan.setChildrenPricePerNight(dto.childrenPricePerNight() != null ? dto.childrenPricePerNight() : java.math.BigDecimal.ZERO);
         plan.setActive(dto.active() == null ? true : dto.active());
 
         return mealPlanMapper.toDto(mealPlanRepository.save(plan));
@@ -80,6 +81,9 @@ public class MealPlanService {
         }
         if (dto.pricePerNight() != null) {
             plan.setPricePerNight(dto.pricePerNight());
+        }
+        if (dto.childrenPricePerNight() != null) {
+            plan.setChildrenPricePerNight(dto.childrenPricePerNight());
         }
         if (dto.active() != null) {
             plan.setActive(dto.active());

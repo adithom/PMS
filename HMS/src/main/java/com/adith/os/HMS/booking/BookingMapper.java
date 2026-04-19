@@ -60,6 +60,7 @@ public class BookingMapper {
         booking.setReferenceNumber(bookingCreationDto.referenceNumber());
         booking.setMealPlanType(bookingCreationDto.mealPlanType());
         booking.setMealPlanPricePerNight(bookingCreationDto.mealPlanPricePerNight());
+        booking.setMealPlanChildrenPricePerNight(bookingCreationDto.mealPlanChildrenPricePerNight());
         return booking;
     }
 
@@ -98,7 +99,8 @@ public class BookingMapper {
                 booking.getCommissionRate(),
                 booking.getMealPlanType(),
                 booking.getMealPlanType() != null ? booking.getMealPlanType().getDisplayName() : null,
-                resolveMealPlanPrice(booking)
+                resolveMealPlanPrice(booking),
+                resolveMealPlanChildrenPrice(booking)
         );
     }
 
@@ -108,6 +110,15 @@ public class BookingMapper {
         return mealPlanRepository
                 .findByPropertyIdAndMealPlanType(booking.getProperty().getId(), booking.getMealPlanType())
                 .map(PropertyMealPlan::getPricePerNight)
+                .orElse(null);
+    }
+
+    private BigDecimal resolveMealPlanChildrenPrice(Booking booking) {
+        if (booking.getMealPlanType() == null || booking.getProperty() == null) return null;
+        if (booking.getMealPlanChildrenPricePerNight() != null) return booking.getMealPlanChildrenPricePerNight();
+        return mealPlanRepository
+                .findByPropertyIdAndMealPlanType(booking.getProperty().getId(), booking.getMealPlanType())
+                .map(PropertyMealPlan::getChildrenPricePerNight)
                 .orElse(null);
     }
 

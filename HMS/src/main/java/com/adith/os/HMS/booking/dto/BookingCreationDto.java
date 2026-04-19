@@ -60,7 +60,10 @@ public record BookingCreationDto(
         MealPlanType mealPlanType,   // Optional — select a meal plan for this booking
 
         @PositiveOrZero(message = "Meal plan price cannot be negative")
-        BigDecimal mealPlanPricePerNight  // Optional — overrides property default price
+        BigDecimal mealPlanPricePerNight,  // Optional — overrides property default adult price per person
+
+        @PositiveOrZero(message = "Children meal plan price cannot be negative")
+        BigDecimal mealPlanChildrenPricePerNight  // Optional — overrides property default children price per person
 
 ) {
     public BookingCreationDto {

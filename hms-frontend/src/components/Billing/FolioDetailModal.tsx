@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { X, ArrowRightLeft, FileText, Printer } from 'lucide-react';
 import folioApi from '../../api/folioApi';
 import type { FolioDetailDto, ChargeDto } from '../../api/folioApi';
 import type { PaymentDto } from '../../api/paymentApi';
@@ -209,9 +210,7 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
             </p>
           </div>
           <button onClick={onClose} className="rounded-lg bg-slate-100 p-2 text-slate-500 hover:bg-slate-200 hover:text-slate-900 transition-colors">
-            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <X className="h-6 w-6" />
           </button>
         </div>
 
@@ -354,9 +353,7 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
                   onClick={() => setShowRouting(true)}
                   className="flex w-full items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-bold text-indigo-700 transition-all hover:bg-indigo-100"
                 >
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                  </svg>
+                  <ArrowRightLeft className="h-4 w-4" />
                   Route Charges
                 </button>
               </div>
@@ -372,9 +369,7 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
                     onClick={() => setShowBillView(true)}
                     className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700 transition-all hover:bg-emerald-100"
                   >
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
+                    <FileText className="h-4 w-4" />
                     View Bill
                   </button>
                 ) : (
@@ -383,9 +378,7 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
                     disabled={isGeneratingBill}
                     className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-all hover:bg-slate-50 disabled:opacity-50"
                   >
-                    <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                    </svg>
+                    <Printer className="h-4 w-4 text-slate-400" />
                     {isGeneratingBill ? 'Generating...' : 'Generate Bill'}
                   </button>
                 )}

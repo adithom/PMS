@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { Calendar, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import posApi from '../api/posApi';
 import ConfirmModal from '../components/ConfirmModal';
@@ -27,9 +28,7 @@ function DateInput({ value, onChange }: { value: string; onChange: (v: string) =
         className={`${selectCls} flex items-center gap-2`}
       >
         <span className="tabular-nums">{display}</span>
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-        </svg>
+        <Calendar className="h-4 w-4 text-gray-400 shrink-0" />
       </button>
       <input
         ref={ref}
@@ -665,9 +664,7 @@ function OrderHistoryTab({ locations }: { locations: PosLocation[] }) {
 
       {orderError && (
         <div className="bg-red-50 border border-red-100 text-red-700 px-4 py-3 rounded-lg text-sm flex items-center gap-2">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-          </svg>
+          <AlertTriangle className="h-4 w-4 shrink-0" />
           {orderError}
         </div>
       )}

@@ -87,7 +87,8 @@ public record BookingDto(
 
         MealPlanType mealPlanType,
         String mealPlanDisplayName,
-        BigDecimal mealPlanPricePerNight
+        BigDecimal mealPlanPricePerNight,
+        BigDecimal mealPlanChildrenPricePerNight
 ) {
     // Compact constructor for validation and defaults
     public BookingDto {

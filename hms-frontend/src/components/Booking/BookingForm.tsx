@@ -128,6 +128,9 @@ export default function BookingForm({
   const [mealPlanPrice, setMealPlanPrice] = useState<string>(
     booking?.mealPlanPricePerNight?.toString() ?? ''
   );
+  const [mealPlanChildrenPrice, setMealPlanChildrenPrice] = useState<string>(
+    booking?.mealPlanChildrenPricePerNight?.toString() ?? ''
+  );
   const [propertyMealPlans, setPropertyMealPlans] = useState<MealPlan[]>([]);
 
   // ── UI State ──
@@ -270,12 +273,13 @@ export default function BookingForm({
       .catch(() => setPropertyMealPlans([]));
   }, [selectedPropertyId]);
 
-  // Auto-fill meal plan price when plan type is selected (only if price not already set)
+  // Auto-fill meal plan prices when plan type is selected (only if price not already set)
   useEffect(() => {
     if (!selectedMealPlan) return;
     const plan = propertyMealPlans.find(p => p.mealPlanType === selectedMealPlan);
-    if (plan && !mealPlanPrice) {
-      setMealPlanPrice(plan.pricePerNight.toString());
+    if (plan) {
+      if (!mealPlanPrice) setMealPlanPrice(plan.pricePerNight.toString());
+      if (!mealPlanChildrenPrice) setMealPlanChildrenPrice((plan.childrenPricePerNight ?? 0).toString());
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMealPlan, propertyMealPlans]);
@@ -330,7 +334,8 @@ export default function BookingForm({
       if (!selectedUnitId) throw new Error('Unit is required.');
       if (!finalGuestId) throw new Error('Please select or create a guest.');
       const today = new Date().toISOString().split('T')[0];
-      if (!checkIn || !checkOut || new Date(checkIn) < new Date(today)) throw new Error('Check-in date cannot be in the past.');
+      if (!checkIn || !checkOut) throw new Error('Check-in and check-out dates are required.');
+      if (!isEditMode && new Date(checkIn) < new Date(today)) throw new Error('Check-in date cannot be in the past.');
       if (new Date(checkOut) <= new Date(checkIn)) throw new Error('Valid dates required.');
 
       // Resolve travel agent for payload
@@ -359,7 +364,11 @@ export default function BookingForm({
       const computedTotalPrice = nightlyRate * nights;
 
       const mealPlanPayload = mealPlanOpen && selectedMealPlan
-        ? { mealPlanType: selectedMealPlan, mealPlanPricePerNight: mealPlanPrice ? Number(mealPlanPrice) : undefined }
+        ? {
+            mealPlanType: selectedMealPlan,
+            mealPlanPricePerNight: mealPlanPrice ? Number(mealPlanPrice) : undefined,
+            mealPlanChildrenPricePerNight: mealPlanChildrenPrice ? Number(mealPlanChildrenPrice) : undefined,
+          }
         : isEditMode ? { clearMealPlan: true } : {};
 
       const payload = {
@@ -650,6 +659,7 @@ export default function BookingForm({
               setMealPlanOpen(false);
               setSelectedMealPlan(null);
               setMealPlanPrice('');
+              setMealPlanChildrenPrice('');
             }} className="text-xs font-medium text-slate-400 hover:text-rose-500">
               Remove
             </button>
@@ -678,6 +688,7 @@ export default function BookingForm({
                         checked={selectedMealPlan === type}
                         onChange={() => {
                           setMealPlanPrice('');
+                          setMealPlanChildrenPrice('');
                           setSelectedMealPlan(type);
                         }}
                         className="h-4 w-4 border-slate-300 text-emerald-600 focus:ring-emerald-500"
@@ -686,7 +697,7 @@ export default function BookingForm({
                     </div>
                     {plan && (
                       <span className="pl-6 text-xs text-slate-400">
-                        Default: {plan.pricePerNight.toLocaleString()}/night
+                        ₹{plan.pricePerNight.toLocaleString()} adult · ₹{(plan.childrenPricePerNight ?? 0).toLocaleString()} child /person/night
                       </span>
                     )}
                   </label>
@@ -695,18 +706,42 @@ export default function BookingForm({
             </div>
 
             {selectedMealPlan && (
-              <label>
-                <span className={labelCls}>Price / Night <span className="font-normal text-slate-400">(editable)</span></span>
-                <input
-                  type="number"
-                  min={0}
-                  step={0.01}
-                  className={inputCls}
-                  placeholder="Enter price per night"
-                  value={mealPlanPrice}
-                  onChange={e => setMealPlanPrice(e.target.value)}
-                />
-              </label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label>
+                  <span className={labelCls}>Adult price / person / night <span className="font-normal text-slate-400">(editable)</span></span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    className={inputCls}
+                    placeholder="Adult price per person"
+                    value={mealPlanPrice}
+                    onChange={e => setMealPlanPrice(e.target.value)}
+                  />
+                </label>
+                <label>
+                  <span className={labelCls}>Child price / person / night <span className="font-normal text-slate-400">(editable)</span></span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    className={inputCls}
+                    placeholder="Children price per person"
+                    value={mealPlanChildrenPrice}
+                    onChange={e => setMealPlanChildrenPrice(e.target.value)}
+                  />
+                </label>
+              </div>
+            )}
+            {selectedMealPlan && (mealPlanPrice || mealPlanChildrenPrice) && (
+              <div className="rounded-lg bg-slate-50 border border-slate-100 px-3 py-2 text-xs text-slate-600">
+                <span className="font-medium">Adds to nightly rate: </span>
+                {adults} adult{adults !== 1 ? 's' : ''} × {currency} {Number(mealPlanPrice || 0).toLocaleString()} = {currency} {(adults * Number(mealPlanPrice || 0)).toLocaleString()}
+                {Number(mealPlanChildrenPrice || 0) > 0 && (
+                  <> &nbsp;+&nbsp; {children} child{children !== 1 ? 'ren' : ''} × {currency} {Number(mealPlanChildrenPrice).toLocaleString()} = {currency} {(children * Number(mealPlanChildrenPrice)).toLocaleString()}</>
+                )}
+                <span className="font-semibold"> = {currency} {(adults * Number(mealPlanPrice || 0) + children * Number(mealPlanChildrenPrice || 0)).toLocaleString()} / night</span>
+              </div>
             )}
           </div>
         )}
@@ -717,8 +752,8 @@ export default function BookingForm({
         <h4 className="text-sm font-bold tracking-tight text-slate-900 border-b border-slate-100 pb-2">Stay Parameters</h4>
         
         <div className="grid gap-4 sm:grid-cols-2">
-          <label><span className={labelCls}>Check-in *</span><input type="date" className={inputCls} value={checkIn} min={new Date().toISOString().split('T')[0]} onChange={e => setCheckIn(e.target.value)} /></label>
-          <label><span className={labelCls}>Check-out *</span><input type="date" className={inputCls} value={checkOut} min={new Date().toISOString().split('T')[0]} onChange={e => setCheckOut(e.target.value)} /></label>
+          <label><span className={labelCls}>Check-in *</span><input type="date" className={inputCls} value={checkIn} min={isEditMode ? undefined : new Date().toISOString().split('T')[0]} onChange={e => setCheckIn(e.target.value)} /></label>
+          <label><span className={labelCls}>Check-out *</span><input type="date" className={inputCls} value={checkOut} min={checkIn || (isEditMode ? undefined : new Date().toISOString().split('T')[0])} onChange={e => setCheckOut(e.target.value)} /></label>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-4">
@@ -743,14 +778,19 @@ export default function BookingForm({
               <span className={labelCls}>Nightly Rate</span>
               <input
                 type="number" min={0} className={inputCls}
-                value={nightlyRate + (mealPlanOpen && selectedMealPlan && mealPlanPrice ? Number(mealPlanPrice) : 0)}
+                value={(() => {
+                  const adultMeal = mealPlanOpen && selectedMealPlan && mealPlanPrice ? Number(mealPlanPrice) : 0;
+                  const childMeal = mealPlanOpen && selectedMealPlan && mealPlanChildrenPrice ? Number(mealPlanChildrenPrice) : 0;
+                  return nightlyRate + adults * adultMeal + children * childMeal;
+                })()}
                 onChange={e => {
-                  const mpPrice = mealPlanOpen && selectedMealPlan && mealPlanPrice ? Number(mealPlanPrice) : 0;
-                  setNightlyRate(Math.max(0, (Number(e.target.value) || 0) - mpPrice));
+                  const adultMeal = mealPlanOpen && selectedMealPlan && mealPlanPrice ? Number(mealPlanPrice) : 0;
+                  const childMeal = mealPlanOpen && selectedMealPlan && mealPlanChildrenPrice ? Number(mealPlanChildrenPrice) : 0;
+                  setNightlyRate(Math.max(0, (Number(e.target.value) || 0) - adults * adultMeal - children * childMeal));
                 }}
               />
             </label>
-            {(room || (mealPlanOpen && selectedMealPlan && mealPlanPrice)) && (
+            {(room || (mealPlanOpen && selectedMealPlan && (mealPlanPrice || mealPlanChildrenPrice))) && (
               <div className="mt-1.5 space-y-0.5">
                 {room && (
                   <p className="text-xs text-slate-500">
@@ -759,7 +799,12 @@ export default function BookingForm({
                 )}
                 {mealPlanOpen && selectedMealPlan && mealPlanPrice && (
                   <p className="text-xs text-slate-400">
-                    + {selectedMealPlan} {currency} {Number(mealPlanPrice).toLocaleString()}/night
+                    + {adults} adult{adults !== 1 ? 's' : ''} × {currency} {Number(mealPlanPrice).toLocaleString()} = {currency} {(adults * Number(mealPlanPrice)).toLocaleString()}
+                  </p>
+                )}
+                {mealPlanOpen && selectedMealPlan && mealPlanChildrenPrice && children > 0 && (
+                  <p className="text-xs text-slate-400">
+                    + {children} child{children !== 1 ? 'ren' : ''} × {currency} {Number(mealPlanChildrenPrice).toLocaleString()} = {currency} {(children * Number(mealPlanChildrenPrice)).toLocaleString()}
                   </p>
                 )}
               </div>
@@ -776,8 +821,10 @@ export default function BookingForm({
                   const inD = new Date(checkIn), outD = new Date(checkOut);
                   if (outD <= inD) return 0;
                   const nights = Math.round((outD.getTime() - inD.getTime()) / (1000 * 60 * 60 * 24));
-                  const mpPrice = mealPlanOpen && selectedMealPlan && mealPlanPrice ? Number(mealPlanPrice) : 0;
-                  return nightlyRate * nights + mpPrice * nights;
+                  const adultMeal = mealPlanOpen && selectedMealPlan && mealPlanPrice ? Number(mealPlanPrice) : 0;
+                  const childMeal = mealPlanOpen && selectedMealPlan && mealPlanChildrenPrice ? Number(mealPlanChildrenPrice) : 0;
+                  const effectiveMeal = adults * adultMeal + children * childMeal;
+                  return (nightlyRate + effectiveMeal) * nights;
                 })()}
                 readOnly
                 tabIndex={-1}
@@ -788,16 +835,18 @@ export default function BookingForm({
               const inD = new Date(checkIn), outD = new Date(checkOut);
               if (outD <= inD) return null;
               const nights = Math.round((outD.getTime() - inD.getTime()) / (1000 * 60 * 60 * 24));
-              const total = nightlyRate * nights;
-              const mpPrice = mealPlanOpen && selectedMealPlan && mealPlanPrice ? Number(mealPlanPrice) : null;
+              const adultMeal = mealPlanOpen && selectedMealPlan && mealPlanPrice ? Number(mealPlanPrice) : 0;
+              const childMeal = mealPlanOpen && selectedMealPlan && mealPlanChildrenPrice ? Number(mealPlanChildrenPrice) : 0;
+              const effectiveMeal = adults * adultMeal + children * childMeal;
+              const effectiveNightly = nightlyRate + effectiveMeal;
               return (
                 <div className="mt-1.5 space-y-0.5">
                   <p className="text-xs text-slate-500">
-                    {currency} {nightlyRate.toLocaleString()}/night × {nights} night{nights !== 1 ? 's' : ''} = {currency} {total.toLocaleString()}
+                    {currency} {effectiveNightly.toLocaleString()}/night × {nights} night{nights !== 1 ? 's' : ''} = {currency} {(effectiveNightly * nights).toLocaleString()}
                   </p>
-                  {mpPrice != null && (
+                  {effectiveMeal > 0 && (
                     <p className="text-xs text-slate-400">
-                      + {selectedMealPlan} {currency} {mpPrice.toLocaleString()}/night × {nights} night{nights !== 1 ? 's' : ''} = {currency} {(mpPrice * nights).toLocaleString()} meal plan
+                      (base {currency} {nightlyRate.toLocaleString()} + {selectedMealPlan} {currency} {effectiveMeal.toLocaleString()} meal)
                     </p>
                   )}
                 </div>

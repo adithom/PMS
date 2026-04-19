@@ -17,6 +17,7 @@ export interface MealPlan {
   mealPlanType: MealPlanType;
   displayName: string;
   pricePerNight: number;
+  childrenPricePerNight: number;
   active: boolean;
 }
 
@@ -79,6 +80,7 @@ export interface Booking {
   mealPlanType?: MealPlanType;
   mealPlanDisplayName?: string;
   mealPlanPricePerNight?: number;
+  mealPlanChildrenPricePerNight?: number;
 }
 
 export interface TravelAgent {

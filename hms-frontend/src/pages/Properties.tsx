@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ChevronRight, Pencil } from 'lucide-react';
 import propertyApi from '../api/propertyApi';
 import unitApi from '../api/unitApi';
 import mealPlanApi from '../api/mealPlanApi';
@@ -56,7 +57,7 @@ export default function Properties() {
 
   const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
   const [loadingMealPlans, setLoadingMealPlans] = useState(false);
-  const [editingPlan, setEditingPlan] = useState<{ type: MealPlanType; price: string } | null>(null);
+  const [editingPlan, setEditingPlan] = useState<{ type: MealPlanType; adultPrice: string; childrenPrice: string } | null>(null);
   const [savingPlan, setSavingPlan] = useState(false);
 
   /* ═══════════════════════════════════════════════════════════ */
@@ -119,15 +120,16 @@ export default function Properties() {
 
   const handleSaveMealPlan = async () => {
     if (!editingPlan || dialog?.type !== 'view_property') return;
-    const price = parseFloat(editingPlan.price);
-    if (isNaN(price) || price <= 0) return;
+    const adultPrice = parseFloat(editingPlan.adultPrice);
+    if (isNaN(adultPrice) || adultPrice <= 0) return;
+    const childrenPrice = parseFloat(editingPlan.childrenPrice) || 0;
     setSavingPlan(true);
     try {
       const existing = mealPlans.find(p => p.mealPlanType === editingPlan.type);
       if (existing) {
-        await mealPlanApi.update(dialog.property.id, existing.id, { pricePerNight: price });
+        await mealPlanApi.update(dialog.property.id, existing.id, { pricePerNight: adultPrice, childrenPricePerNight: childrenPrice });
       } else {
-        await mealPlanApi.create(dialog.property.id, { mealPlanType: editingPlan.type, pricePerNight: price });
+        await mealPlanApi.create(dialog.property.id, { mealPlanType: editingPlan.type, pricePerNight: adultPrice, childrenPricePerNight: childrenPrice });
       }
       await loadMealPlans(dialog.property.id);
       setEditingPlan(null);
@@ -270,9 +272,7 @@ export default function Properties() {
                   </p>
                 </div>
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-50 text-slate-400 transition-colors group-hover:bg-emerald-50 group-hover:text-emerald-600">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                  </svg>
+                  <ChevronRight className="h-4 w-4" />
                 </div>
               </div>
 
@@ -346,9 +346,7 @@ export default function Properties() {
                         </p>
                       </div>
                       <div className="text-slate-300 group-hover:text-slate-600">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                          <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                        </svg>
+                        <Pencil className="h-4 w-4" />
                       </div>
                     </button>
                   ))
@@ -375,45 +373,69 @@ export default function Properties() {
                           <p className="text-[11px] font-medium text-slate-400">{PLAN_LABELS[planType]}</p>
                         </div>
                         {isEditing ? (
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              className="w-28 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 shadow-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
-                              value={editingPlan!.price}
-                              onChange={e => setEditingPlan({ type: planType, price: e.target.value })}
-                              disabled={savingPlan}
-                              autoFocus
-                              onKeyDown={e => { if (e.key === 'Enter') void handleSaveMealPlan(); if (e.key === 'Escape') setEditingPlan(null); }}
-                            />
-                            <button
-                              type="button"
-                              className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 disabled:opacity-50"
-                              onClick={() => void handleSaveMealPlan()}
-                              disabled={savingPlan}
-                            >
-                              {savingPlan ? 'Saving…' : 'Save'}
-                            </button>
-                            <button
-                              type="button"
-                              className="text-xs font-medium text-slate-400 hover:text-slate-600"
-                              onClick={() => setEditingPlan(null)}
-                              disabled={savingPlan}
-                            >
-                              Cancel
-                            </button>
+                          <div className="flex flex-col gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-slate-500 w-20 shrink-0">Adult/person</span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                className="w-24 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 shadow-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+                                value={editingPlan!.adultPrice}
+                                onChange={e => setEditingPlan({ ...editingPlan!, adultPrice: e.target.value })}
+                                disabled={savingPlan}
+                                autoFocus
+                                onKeyDown={e => { if (e.key === 'Enter') void handleSaveMealPlan(); if (e.key === 'Escape') setEditingPlan(null); }}
+                              />
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-slate-500 w-20 shrink-0">Child/person</span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                className="w-24 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 shadow-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+                                value={editingPlan!.childrenPrice}
+                                onChange={e => setEditingPlan({ ...editingPlan!, childrenPrice: e.target.value })}
+                                disabled={savingPlan}
+                                onKeyDown={e => { if (e.key === 'Enter') void handleSaveMealPlan(); if (e.key === 'Escape') setEditingPlan(null); }}
+                              />
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 disabled:opacity-50"
+                                onClick={() => void handleSaveMealPlan()}
+                                disabled={savingPlan}
+                              >
+                                {savingPlan ? 'Saving…' : 'Save'}
+                              </button>
+                              <button
+                                type="button"
+                                className="text-xs font-medium text-slate-400 hover:text-slate-600"
+                                onClick={() => setEditingPlan(null)}
+                                disabled={savingPlan}
+                              >
+                                Cancel
+                              </button>
+                            </div>
                           </div>
                         ) : plan ? (
                           <div className="flex items-center gap-3">
-                            <span className="text-sm font-semibold text-slate-900">
-                              ₹{plan.pricePerNight.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              <span className="ml-1 text-[11px] font-medium text-slate-400">/night</span>
-                            </span>
+                            <div className="text-right">
+                              <p className="text-sm font-semibold text-slate-900">
+                                ₹{plan.pricePerNight.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                <span className="ml-1 text-[11px] font-medium text-slate-400">adult/night</span>
+                              </p>
+                              <p className="text-xs text-slate-400">
+                                ₹{(plan.childrenPricePerNight ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                <span className="ml-1 text-[11px]">child/night</span>
+                              </p>
+                            </div>
                             <button
                               type="button"
                               className="text-xs font-bold text-emerald-600 hover:text-emerald-700"
-                              onClick={() => setEditingPlan({ type: planType, price: String(plan.pricePerNight) })}
+                              onClick={() => setEditingPlan({ type: planType, adultPrice: String(plan.pricePerNight), childrenPrice: String(plan.childrenPricePerNight ?? 0) })}
                             >
                               Edit
                             </button>
@@ -422,7 +444,7 @@ export default function Properties() {
                           <button
                             type="button"
                             className="text-xs font-bold text-slate-400 hover:text-emerald-600"
-                            onClick={() => setEditingPlan({ type: planType, price: '' })}
+                            onClick={() => setEditingPlan({ type: planType, adultPrice: '', childrenPrice: '' })}
                           >
                             Set price
                           </button>
