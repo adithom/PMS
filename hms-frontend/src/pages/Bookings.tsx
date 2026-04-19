@@ -378,9 +378,10 @@ export default function Bookings() {
       try {
         const bks = await bookingApi.getByDate(selectedPropId, ds, true);
         setDayBookings(bks || []);
-        setInCount(bks.filter(b => dateStr(b.checkIn) === ds && b.status === 'CONFIRMED').length);
-        setHouseCount(bks.filter(b => b.status === 'CHECKED_IN' && ds >= dateStr(b.checkIn) && ds < dateStr(b.checkOut)).length);
-        setOutCount(bks.filter(b => dateStr(b.checkOut) === ds && (b.status === 'CHECKED_IN' || b.status === 'CHECKED_OUT')).length);
+        const active = (b: { status: string }) => !['CANCELLED', 'NO_SHOW'].includes(b.status);
+        setInCount(bks.filter(b => dateStr(b.checkIn) === ds && active(b)).length);
+        setHouseCount(bks.filter(b => active(b) && b.status !== 'CHECKED_OUT' && ds >= dateStr(b.checkIn) && ds < dateStr(b.checkOut)).length);
+        setOutCount(bks.filter(b => dateStr(b.checkOut) === ds && active(b)).length);
       } catch { setDayBookings([]); setInCount(0); setHouseCount(0); setOutCount(0); }
     })();
   }, [selectedPropId, selectedDate]);
@@ -579,7 +580,7 @@ export default function Bookings() {
                     return (
                       <div key={ds} style={{ width: CELL_W, minWidth: CELL_W }}
                         className={cn('flex flex-col items-center justify-end border-b border-r border-slate-200 px-1 pb-1 pt-2 cursor-pointer transition-colors',
-                          isT && 'bg-blue-50/80', isSel && !isT && 'bg-emerald-50/60', !isT && !isSel && 'bg-slate-50')}
+                          isT && 'bg-blue-100', isSel && !isT && 'bg-blue-100 shadow-[inset_2px_0_0_0_#93c5fd,inset_-2px_0_0_0_#93c5fd]', !isT && !isSel && 'bg-slate-50')}
                         onClick={() => setSelectedDate(d)}>
                         <span className={cn('text-[10px] font-semibold', isT ? 'text-blue-600' : 'text-slate-400')}>{dayLabel(d)}</span>
                         <span className={cn('text-sm font-bold', isT ? 'text-blue-700' : 'text-slate-700')}>{d.getDate()}</span>
@@ -625,10 +626,13 @@ export default function Bookings() {
                             {dateCols.map((d, ci) => {
                               const ds = toDS(d);
                               const isT = ds === todayStr;
+                              const isSel = ds === toDS(selectedDate);
                               return (
                                 <div key={ds}
                                   className={cn('border-b border-r border-slate-100 transition-colors',
-                                    isT && 'bg-blue-50/30', !isT && 'hover:bg-slate-50/80')}
+                                    isT && 'bg-blue-50/30',
+                                    isSel && !isT && 'bg-blue-50/70 shadow-[inset_2px_0_0_0_#93c5fd,inset_-2px_0_0_0_#93c5fd]',
+                                    !isT && !isSel && 'hover:bg-slate-50/80')}
                                   style={{ width: CELL_W, minWidth: CELL_W, height: CELL_H }}
                                   onMouseDown={e => {
                                     e.preventDefault();
