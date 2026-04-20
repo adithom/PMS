@@ -11,6 +11,7 @@ import EarlyCheckoutModal from '../components/Booking/EarlyCheckoutModal';
 import RoomShiftModal from '../components/Booking/RoomShiftModal';
 import TaskListModal from '../components/Booking/TaskListModal';
 import BookingFoliosModal from '../components/Booking/BookingFoliosModal';
+import BookingDetailModal from '../components/Booking/BookingDetailModal';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ModalShell from '../components/ModalShell';
 import ConfirmModal from '../components/ConfirmModal';
@@ -40,7 +41,7 @@ type PendingAction = {
 /* Context Menu                                                  */
 /* ────────────────────────────────────────────────────────────── */
 
-function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout, onEditBooking, onShiftRoom, onShowFolio }: {
+function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout, onEditBooking, onShiftRoom, onShowFolio, onViewBooking }: {
   state: { x: number; y: number; booking: Booking } | null;
   propertyId: string;
   onClose: () => void;
@@ -49,6 +50,7 @@ function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout, onEdit
   onEditBooking: (booking: Booking) => void;
   onShiftRoom: (booking: Booking) => void;
   onShowFolio: (bookingId: string, guestName: string) => void;
+  onViewBooking: (booking: Booking) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
@@ -72,6 +74,8 @@ function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout, onEdit
   const acts: Act[] = [];
   
   if (booking.id) {
+    acts.push({ label: '◉ View Details', doFn: async () => { onViewBooking(booking); onClose(); } });
+
     const editableStatuses: Booking['status'][] = ['PENDING', 'CONFIRMED', 'CHECKED_IN'];
     if (editableStatuses.includes(booking.status)) {
       acts.push({ label: '✎ Edit Booking', doFn: async () => { onEditBooking(booking); onClose(); } });
@@ -254,6 +258,7 @@ export default function Bookings() {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [ctx, setCtx] = useState<{ x: number; y: number; booking: Booking } | null>(null);
   
+  const [viewBooking, setViewBooking] = useState<Booking | null>(null);
   const [editBooking, setEditBooking] = useState<Booking | null>(null);
   const [shiftRoomBooking, setShiftRoomBooking] = useState<Booking | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -847,13 +852,24 @@ export default function Bookings() {
       )}
       {showList && selectedPropId && (
         <BookingsList bookings={getFiltered()} propertyId={selectedPropId} listType={listType}
-          onClose={() => setShowList(false)} onUpdate={refresh} />
+          onClose={() => setShowList(false)} onUpdate={refresh}
+          onViewBooking={(b) => { setShowList(false); setViewBooking(b); }} />
       )}
       {selectedPropId && (
         <CtxMenu state={ctx} propertyId={selectedPropId} onClose={() => setCtx(null)}
           onAction={refresh} onEarlyCheckout={setEarlyCheckoutBookingId}
           onEditBooking={setEditBooking} onShiftRoom={setShiftRoomBooking}
-          onShowFolio={(id, name) => setViewFolioBooking({ id, guestName: name })} />
+          onShowFolio={(id, name) => setViewFolioBooking({ id, guestName: name })}
+          onViewBooking={setViewBooking} />
+      )}
+      {viewBooking && selectedPropId && (
+        <BookingDetailModal
+          booking={viewBooking}
+          propertyId={selectedPropId}
+          onClose={() => setViewBooking(null)}
+          onEditBooking={(b) => { setViewBooking(null); setEditBooking(b); }}
+          onOpenFolio={(id, name) => { setViewBooking(null); setViewFolioBooking({ id, guestName: name }); }}
+        />
       )}
     </div>
   );

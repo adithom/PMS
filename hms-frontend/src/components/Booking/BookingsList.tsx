@@ -18,6 +18,7 @@ interface BookingsListProps {
   listType: StatType;
   onClose: () => void;
   onUpdate: () => void;
+  onViewBooking?: (booking: Booking) => void;
 }
 
 function cn(...classes: Array<string | false | null | undefined>) {
@@ -53,7 +54,7 @@ const getTodayStr = () =>
 /* Component                                                    */
 /* ────────────────────────────────────────────────────────────── */
 
-export default function BookingsList({ bookings, propertyId, listType, onClose, onUpdate }: BookingsListProps) {
+export default function BookingsList({ bookings, propertyId, listType, onClose, onUpdate, onViewBooking }: BookingsListProps) {
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
@@ -201,6 +202,9 @@ export default function BookingsList({ bookings, propertyId, listType, onClose, 
                   )}
                   {booking.status !== 'CANCELLED' && booking.status !== 'CHECKED_OUT' && (
                     <button onClick={() => { setSelectedBooking(booking); setShowEditForm(true); }} className={btnSecondary}>Edit</button>
+                  )}
+                  {onViewBooking && (
+                    <button onClick={() => { onClose(); onViewBooking(booking); }} className={btnSecondary}>View</button>
                   )}
                 </div>
 
