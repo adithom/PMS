@@ -1,5 +1,6 @@
 package com.adith.os.HMS.booking.dto;
 
+import com.adith.os.HMS.billing.folio.ChargeCode;
 import com.adith.os.HMS.booking.BookingStatus;
 import com.adith.os.HMS.property.mealplan.MealPlanType;
 import com.adith.os.HMS.travelagent.dto.TravelAgentCreationDto;
@@ -63,7 +64,15 @@ public record BookingCreationDto(
         BigDecimal mealPlanPricePerNight,  // Optional — overrides property default adult price per person
 
         @PositiveOrZero(message = "Children meal plan price cannot be negative")
-        BigDecimal mealPlanChildrenPricePerNight  // Optional — overrides property default children price per person
+        BigDecimal mealPlanChildrenPricePerNight,  // Optional — overrides property default children price per person
+
+        @PositiveOrZero(message = "Extra beds cannot be negative")
+        Integer extraBeds,
+
+        @PositiveOrZero(message = "Extra bed rate cannot be negative")
+        BigDecimal extraBedRatePerNight,
+
+        ChargeCode extraBedChargeCode  // ROOM_RENT or MISC; null defaults to MISC in night audit
 
 ) {
     public BookingCreationDto {

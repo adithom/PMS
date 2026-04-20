@@ -41,6 +41,12 @@ public class NightAuditLog {
     @Column(nullable = false)
     private int mealPlanChargesSkipped;
 
+    @Column(nullable = false)
+    private int extraBedChargesPosted;
+
+    @Column(nullable = false)
+    private int extraBedChargesSkipped;
+
     @Column(length = 1000)
     private String errorSummary;
 
@@ -57,6 +63,7 @@ public class NightAuditLog {
                          int totalAssignments, int chargesPosted,
                          int chargesSkipped, int errors,
                          int mealPlanChargesPosted, int mealPlanChargesSkipped,
+                         int extraBedChargesPosted, int extraBedChargesSkipped,
                          String errorSummary) {
         this.auditDate = auditDate;
         this.runType = runType;
@@ -66,6 +73,8 @@ public class NightAuditLog {
         this.errors = errors;
         this.mealPlanChargesPosted = mealPlanChargesPosted;
         this.mealPlanChargesSkipped = mealPlanChargesSkipped;
+        this.extraBedChargesPosted = extraBedChargesPosted;
+        this.extraBedChargesSkipped = extraBedChargesSkipped;
         this.errorSummary = errorSummary;
     }
 
@@ -79,5 +88,7 @@ public class NightAuditLog {
     public int getErrors() { return errors; }
     public int getMealPlanChargesPosted() { return mealPlanChargesPosted; }
     public int getMealPlanChargesSkipped() { return mealPlanChargesSkipped; }
+    public int getExtraBedChargesPosted() { return extraBedChargesPosted; }
+    public int getExtraBedChargesSkipped() { return extraBedChargesSkipped; }
     public String getErrorSummary() { return errorSummary; }
 }

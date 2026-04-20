@@ -776,6 +776,17 @@ public class BookingService {
                 }
             }
 
+            // Extra bed partial update
+            if (dto.extraBeds() != null) {
+                booking.setExtraBeds(dto.extraBeds());
+            }
+            if (dto.extraBedRatePerNight() != null) {
+                booking.setExtraBedRatePerNight(dto.extraBedRatePerNight());
+            }
+            if (dto.extraBedChargeCode() != null) {
+                booking.setExtraBedChargeCode(dto.extraBedChargeCode());
+            }
+
             if (datesChanged) {
                 roomAssignmentService.syncDatesForBookingUpdate(bookingId, newCheckIn, newCheckOut);
             }

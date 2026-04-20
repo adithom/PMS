@@ -32,6 +32,10 @@ export interface BookingCreationDto {
   newTravelAgent?: NewTravelAgentDto;
   mealPlanType?: string;
   mealPlanPricePerNight?: number;
+  mealPlanChildrenPricePerNight?: number;
+  extraBeds?: number;
+  extraBedRatePerNight?: number;
+  extraBedChargeCode?: 'ROOM_RENT' | 'MISC';
 }
 
 export interface BookingUpdatePayload extends Omit<BookingCreationDto, 'nightlyRate'> {

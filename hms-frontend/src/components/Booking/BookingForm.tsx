@@ -133,6 +133,12 @@ export default function BookingForm({
   );
   const [propertyMealPlans, setPropertyMealPlans] = useState<MealPlan[]>([]);
 
+  // ── Extra Bed State ──
+  const [extraBedOpen, setExtraBedOpen] = useState<boolean>(!!(booking?.extraBeds && booking.extraBeds > 0));
+  const [extraBeds, setExtraBeds] = useState<number>(booking?.extraBeds ?? 0);
+  const [extraBedRate, setExtraBedRate] = useState<string>(booking?.extraBedRatePerNight?.toString() ?? '');
+  const [extraBedChargeCode, setExtraBedChargeCode] = useState<'ROOM_RENT' | 'MISC'>(booking?.extraBedChargeCode ?? 'MISC');
+
   // ── UI State ──
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -246,6 +252,17 @@ export default function BookingForm({
     if (isEditMode) return;
     if (room) setNightlyRate(room.baseRate);
   }, [room, isEditMode]);
+
+  // Auto-fill extra bed rate from property default when section opens (create mode only)
+  useEffect(() => {
+    if (isEditMode || !extraBedOpen || !selectedPropertyId) return;
+    if (extraBedRate) return;
+    const prop = properties.find(p => p.id === selectedPropertyId);
+    if (prop?.extraBedRatePerNight != null) {
+      setExtraBedRate(prop.extraBedRatePerNight.toString());
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [extraBedOpen, selectedPropertyId, properties, isEditMode]);
 
   // Guest Search Effect
   useEffect(() => {
@@ -361,7 +378,10 @@ export default function BookingForm({
       const nights = checkIn && checkOut && outD > inD
         ? Math.round((outD.getTime() - inD.getTime()) / (1000 * 60 * 60 * 24))
         : 0;
-      const computedTotalPrice = nightlyRate * nights;
+      const xBedNightly = extraBedOpen && extraBeds > 0 && extraBedRate ? extraBeds * Number(extraBedRate) : 0;
+      const adultMealNightly = mealPlanOpen && selectedMealPlan && mealPlanPrice ? adults * Number(mealPlanPrice) : 0;
+      const childMealNightly = mealPlanOpen && selectedMealPlan && mealPlanChildrenPrice ? children * Number(mealPlanChildrenPrice) : 0;
+      const computedTotalPrice = (nightlyRate + adultMealNightly + childMealNightly + xBedNightly) * nights;
 
       const mealPlanPayload = mealPlanOpen && selectedMealPlan
         ? {
@@ -370,6 +390,14 @@ export default function BookingForm({
             mealPlanChildrenPricePerNight: mealPlanChildrenPrice ? Number(mealPlanChildrenPrice) : undefined,
           }
         : isEditMode ? { clearMealPlan: true } : {};
+
+      const extraBedPayload = extraBedOpen && extraBeds > 0
+        ? {
+            extraBeds,
+            extraBedRatePerNight: extraBedRate ? Number(extraBedRate) : undefined,
+            extraBedChargeCode,
+          }
+        : { extraBeds: 0, extraBedRatePerNight: undefined, extraBedChargeCode: undefined };
 
       const payload = {
         roomId: getRoomId(room) ?? undefined,
@@ -381,7 +409,8 @@ export default function BookingForm({
         referenceNumber: referenceNumber || undefined,
         ...(isEditMode ? { totalPrice: computedTotalPrice } : { nightlyRate }),
         ...travelAgentPayload,
-        ...mealPlanPayload
+        ...mealPlanPayload,
+        ...extraBedPayload
       };
 
       const result = (isEditMode && booking?.id)
@@ -747,6 +776,106 @@ export default function BookingForm({
         )}
       </div>
 
+      {/* ── Extra Bed ── */}
+      <div className="space-y-4 rounded-xl border border-slate-100 bg-white p-5 shadow-sm">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+          <div>
+            <h4 className="text-sm font-bold tracking-tight text-slate-900">Extra Bed</h4>
+            {!extraBedOpen && <p className="text-xs text-slate-400 mt-0.5">Optional — billed nightly by night audit</p>}
+          </div>
+          {!extraBedOpen ? (
+            <button type="button" onClick={() => {
+              setExtraBedOpen(true);
+              setExtraBeds(1);
+              if (!extraBedRate) {
+                const prop = properties.find(p => p.id === selectedPropertyId);
+                if (prop?.extraBedRatePerNight != null) setExtraBedRate(prop.extraBedRatePerNight.toString());
+              }
+            }} className="text-xs font-bold text-emerald-600 hover:text-emerald-700">
+              + Add Extra Bed
+            </button>
+          ) : (
+            <button type="button" onClick={() => {
+              setExtraBedOpen(false);
+              setExtraBeds(0);
+              setExtraBedRate('');
+              setExtraBedChargeCode('MISC');
+            }} className="text-xs font-medium text-slate-400 hover:text-rose-500">
+              Remove
+            </button>
+          )}
+        </div>
+
+        {extraBedOpen && (
+          <div className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label>
+                <span className={labelCls}>Number of Extra Beds</span>
+                <input
+                  type="number"
+                  min={1}
+                  className={inputCls}
+                  value={extraBeds}
+                  onChange={e => setExtraBeds(Math.max(1, Number(e.target.value) || 1))}
+                />
+              </label>
+              <label>
+                <span className={labelCls}>
+                  Rate / bed / night (₹)
+                  {(() => {
+                    const prop = properties.find(p => p.id === selectedPropertyId);
+                    return prop?.extraBedRatePerNight != null ? (
+                      <span className="ml-1 font-normal text-slate-400">
+                        — property default: ₹{prop.extraBedRatePerNight.toLocaleString()}
+                      </span>
+                    ) : null;
+                  })()}
+                </span>
+                <input
+                  type="number"
+                  min={0}
+                  step={50}
+                  className={inputCls}
+                  placeholder="Enter rate per bed per night"
+                  value={extraBedRate}
+                  onChange={e => setExtraBedRate(e.target.value)}
+                />
+              </label>
+            </div>
+
+            <div>
+              <span className={labelCls}>Bill as</span>
+              <div className="flex gap-3 mt-1">
+                {(['ROOM_RENT', 'MISC'] as const).map(code => (
+                  <label key={code} className={cn(
+                    'flex cursor-pointer items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-all',
+                    extraBedChargeCode === code
+                      ? 'border-emerald-400 bg-emerald-50/50 text-emerald-800 ring-1 ring-emerald-300'
+                      : 'border-slate-200 text-slate-700 hover:border-slate-300'
+                  )}>
+                    <input
+                      type="radio"
+                      name="extraBedChargeCode"
+                      value={code}
+                      checked={extraBedChargeCode === code}
+                      onChange={() => setExtraBedChargeCode(code)}
+                      className="h-4 w-4 border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    {code === 'ROOM_RENT' ? 'Room Rent' : 'Miscellaneous'}
+                  </label>
+                ))}
+              </div>
+              <p className="mt-1.5 text-xs text-slate-400">
+                {extraBedChargeCode === 'ROOM_RENT'
+                  ? 'Charge will appear on the room rent bill'
+                  : 'Charge will appear on the ancillary / miscellaneous bill'}
+              </p>
+            </div>
+
+          </div>
+        )}
+      </div>
+
       {/* ── Booking Specifics ── */}
       <div className="space-y-4 rounded-xl border border-slate-100 bg-white p-5 shadow-sm">
         <h4 className="text-sm font-bold tracking-tight text-slate-900 border-b border-slate-100 pb-2">Stay Parameters</h4>
@@ -781,16 +910,18 @@ export default function BookingForm({
                 value={(() => {
                   const adultMeal = mealPlanOpen && selectedMealPlan && mealPlanPrice ? Number(mealPlanPrice) : 0;
                   const childMeal = mealPlanOpen && selectedMealPlan && mealPlanChildrenPrice ? Number(mealPlanChildrenPrice) : 0;
-                  return nightlyRate + adults * adultMeal + children * childMeal;
+                  const xBed = extraBedOpen && extraBeds > 0 && extraBedRate ? extraBeds * Number(extraBedRate) : 0;
+                  return nightlyRate + adults * adultMeal + children * childMeal + xBed;
                 })()}
                 onChange={e => {
                   const adultMeal = mealPlanOpen && selectedMealPlan && mealPlanPrice ? Number(mealPlanPrice) : 0;
                   const childMeal = mealPlanOpen && selectedMealPlan && mealPlanChildrenPrice ? Number(mealPlanChildrenPrice) : 0;
-                  setNightlyRate(Math.max(0, (Number(e.target.value) || 0) - adults * adultMeal - children * childMeal));
+                  const xBed = extraBedOpen && extraBeds > 0 && extraBedRate ? extraBeds * Number(extraBedRate) : 0;
+                  setNightlyRate(Math.max(0, (Number(e.target.value) || 0) - adults * adultMeal - children * childMeal - xBed));
                 }}
               />
             </label>
-            {(room || (mealPlanOpen && selectedMealPlan && (mealPlanPrice || mealPlanChildrenPrice))) && (
+            {(room || (mealPlanOpen && selectedMealPlan && (mealPlanPrice || mealPlanChildrenPrice)) || (extraBedOpen && extraBeds > 0 && extraBedRate)) && (
               <div className="mt-1.5 space-y-0.5">
                 {room && (
                   <p className="text-xs text-slate-500">
@@ -805,6 +936,11 @@ export default function BookingForm({
                 {mealPlanOpen && selectedMealPlan && mealPlanChildrenPrice && children > 0 && (
                   <p className="text-xs text-slate-400">
                     + {children} child{children !== 1 ? 'ren' : ''} × {currency} {Number(mealPlanChildrenPrice).toLocaleString()} = {currency} {(children * Number(mealPlanChildrenPrice)).toLocaleString()}
+                  </p>
+                )}
+                {extraBedOpen && extraBeds > 0 && extraBedRate && Number(extraBedRate) > 0 && (
+                  <p className="text-xs text-slate-400">
+                    + {extraBeds} extra bed{extraBeds !== 1 ? 's' : ''} × {currency} {Number(extraBedRate).toLocaleString()} = {currency} {(extraBeds * Number(extraBedRate)).toLocaleString()}
                   </p>
                 )}
               </div>
@@ -824,7 +960,8 @@ export default function BookingForm({
                   const adultMeal = mealPlanOpen && selectedMealPlan && mealPlanPrice ? Number(mealPlanPrice) : 0;
                   const childMeal = mealPlanOpen && selectedMealPlan && mealPlanChildrenPrice ? Number(mealPlanChildrenPrice) : 0;
                   const effectiveMeal = adults * adultMeal + children * childMeal;
-                  return (nightlyRate + effectiveMeal) * nights;
+                  const xBed = extraBedOpen && extraBeds > 0 && extraBedRate ? extraBeds * Number(extraBedRate) : 0;
+                  return (nightlyRate + effectiveMeal + xBed) * nights;
                 })()}
                 readOnly
                 tabIndex={-1}
@@ -838,15 +975,19 @@ export default function BookingForm({
               const adultMeal = mealPlanOpen && selectedMealPlan && mealPlanPrice ? Number(mealPlanPrice) : 0;
               const childMeal = mealPlanOpen && selectedMealPlan && mealPlanChildrenPrice ? Number(mealPlanChildrenPrice) : 0;
               const effectiveMeal = adults * adultMeal + children * childMeal;
-              const effectiveNightly = nightlyRate + effectiveMeal;
+              const xBed = extraBedOpen && extraBeds > 0 && extraBedRate ? extraBeds * Number(extraBedRate) : 0;
+              const effectiveNightly = nightlyRate + effectiveMeal + xBed;
+              const parts: string[] = [];
+              if (effectiveMeal > 0) parts.push(`${selectedMealPlan} ${currency} ${effectiveMeal.toLocaleString()} meal`);
+              if (xBed > 0) parts.push(`extra bed ${currency} ${xBed.toLocaleString()}`);
               return (
                 <div className="mt-1.5 space-y-0.5">
                   <p className="text-xs text-slate-500">
                     {currency} {effectiveNightly.toLocaleString()}/night × {nights} night{nights !== 1 ? 's' : ''} = {currency} {(effectiveNightly * nights).toLocaleString()}
                   </p>
-                  {effectiveMeal > 0 && (
+                  {parts.length > 0 && (
                     <p className="text-xs text-slate-400">
-                      (base {currency} {nightlyRate.toLocaleString()} + {selectedMealPlan} {currency} {effectiveMeal.toLocaleString()} meal)
+                      (base {currency} {nightlyRate.toLocaleString()} + {parts.join(' + ')})
                     </p>
                   )}
                 </div>

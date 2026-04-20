@@ -18,6 +18,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -124,6 +125,7 @@ public class NightAuditService {
                     result.skippedAlreadyPosted() + result.skippedFolioNotOpen() + result.skippedNoFolio(),
                     result.errors(),
                     result.mealPlanChargesPosted(), result.mealPlanChargesSkipped(),
+                    result.extraBedChargesPosted(), result.extraBedChargesSkipped(),
                     errorSummary
             ));
         } catch (Exception e) {
@@ -146,6 +148,8 @@ public class NightAuditService {
         int errors = 0;
         int mealPlanChargesPosted = 0;
         int mealPlanChargesSkipped = 0;
+        int extraBedChargesPosted = 0;
+        int extraBedChargesSkipped = 0;
 
         for (RoomAssignment assignment : assignments) {
             try {
@@ -250,6 +254,48 @@ public class NightAuditService {
                     }
                 }
 
+                // Post extra bed charge if applicable
+                Integer extraBeds = booking.getExtraBeds();
+                if (extraBeds != null && extraBeds > 0) {
+                    boolean extraBedChargeExists = folioChargeRepository
+                            .existsByFolioIdAndReferenceTypeAndChargeDateAndIsVoidedFalse(
+                                    masterFolio.getId(), "EXTRA_BED", chargeDate);
+
+                    if (!extraBedChargeExists) {
+                        BigDecimal effectiveRate = booking.getExtraBedRatePerNight() != null
+                                ? booking.getExtraBedRatePerNight()
+                                : (booking.getProperty().getExtraBedRatePerNight() != null
+                                        ? booking.getProperty().getExtraBedRatePerNight()
+                                        : BigDecimal.ZERO);
+
+                        if (effectiveRate.compareTo(BigDecimal.ZERO) > 0) {
+                            ChargeCode extraBedCode = booking.getExtraBedChargeCode() != null
+                                    ? booking.getExtraBedChargeCode()
+                                    : ChargeCode.MISC;
+
+                            ChargeCreationDto extraBedCharge = new ChargeCreationDto(
+                                    chargeDate,
+                                    extraBedCode,
+                                    "Extra Bed (" + extraBeds + ") - Nightly Charge",
+                                    effectiveRate,
+                                    BigDecimal.ONE,
+                                    null,
+                                    BigDecimal.ZERO,
+                                    "EXTRA_BED",
+                                    booking.getId(),
+                                    manualRun ? "Night Audit - Manual run for " + chargeDate : "Night Audit - Auto-posted",
+                                    "NIGHT_AUDIT"
+                            );
+                            folioService.addCharge(booking.getProperty().getId(), masterFolio.getId(), extraBedCharge);
+                            extraBedChargesPosted++;
+                            log.info("Night Audit{}: Posted extra bed charge ({} beds, {}) for booking {} on {}",
+                                    manualRun ? " (Manual)" : "", extraBeds, extraBedCode, booking.getId(), chargeDate);
+                        }
+                    } else {
+                        extraBedChargesSkipped++;
+                    }
+                }
+
             } catch (Exception e) {
                 errors++;
                 firstError.compareAndSet(null, e.getMessage());
@@ -261,7 +307,8 @@ public class NightAuditService {
 
         return new NightAuditResultDto(chargeDate, assignments.size(), chargesPosted,
                 skippedAlreadyPosted, skippedFolioNotOpen, skippedNoFolio,
-                errors, mealPlanChargesPosted, mealPlanChargesSkipped);
+                errors, mealPlanChargesPosted, mealPlanChargesSkipped,
+                extraBedChargesPosted, extraBedChargesSkipped);
     }
 
     @Scheduled(cron = "${hms.night-audit.catchup-cron:0 0 3 * * *}")
@@ -297,7 +344,8 @@ public class NightAuditService {
         }
     }
 
-    private void performInventoryRollover(LocalDate businessDate) {
+    @Transactional
+    public void performInventoryRollover(LocalDate businessDate) {
         log.info("Night Audit: Running inventory rollover for transition to {}", businessDate);
 
         List<RoomAssignment> endingAssignments = roomAssignmentRepository.findAssignmentsEndingOnOrBefore(
@@ -346,6 +394,8 @@ public class NightAuditService {
             int skippedNoFolio,
             int errors,
             int mealPlanChargesPosted,
-            int mealPlanChargesSkipped
+            int mealPlanChargesSkipped,
+            int extraBedChargesPosted,
+            int extraBedChargesSkipped
     ) {}
 }

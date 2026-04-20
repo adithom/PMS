@@ -184,6 +184,9 @@ export default function Rooms() {
   const [editingPlan, setEditingPlan] = useState<{ type: MealPlanType; adultPrice: string; childrenPrice: string } | null>(null);
   const [savingPlan, setSavingPlan] = useState(false);
 
+  const [editingExtraBedRate, setEditingExtraBedRate] = useState<string | null>(null);
+  const [savingExtraBedRate, setSavingExtraBedRate] = useState(false);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -382,6 +385,7 @@ export default function Rooms() {
   const handleManageProperty = (property: Property) => {
     setDialog({ type: 'view_property', property });
     setEditingPlan(null);
+    setEditingExtraBedRate(null);
     void loadUnitsForManage(property.id);
     void loadMealPlans(property.id);
   };
@@ -405,6 +409,24 @@ export default function Rooms() {
       alert(`Failed to save meal plan: ${err.message}`);
     } finally {
       setSavingPlan(false);
+    }
+  };
+
+  const handleSaveExtraBedRate = async () => {
+    if (editingExtraBedRate === null || dialog?.type !== 'view_property') return;
+    const rate = editingExtraBedRate.trim() === '' ? null : parseFloat(editingExtraBedRate);
+    if (rate !== null && (isNaN(rate) || rate < 0)) return;
+    setSavingExtraBedRate(true);
+    try {
+      const updated = await propertyApi.partialUpdate(dialog.property.id, { extraBedRatePerNight: rate ?? undefined } as any);
+      // Update dialog property in place so the displayed value refreshes
+      setDialog({ type: 'view_property', property: { ...dialog.property, extraBedRatePerNight: updated.extraBedRatePerNight } });
+      setEditingExtraBedRate(null);
+      await loadData();
+    } catch (err: any) {
+      alert(`Failed to save extra bed rate: ${err.message}`);
+    } finally {
+      setSavingExtraBedRate(false);
     }
   };
 
@@ -877,6 +899,75 @@ export default function Rooms() {
                     );
                   })
                 )}
+              </div>
+            </div>
+
+            {/* Extra Bed Section */}
+            <div>
+              <div className="border-b border-slate-100 pb-2">
+                <h3 className="text-sm font-bold tracking-tight text-slate-900">Extra Bed</h3>
+              </div>
+              <div className="mt-3">
+                <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-white px-3 py-2.5">
+                  <div>
+                    <p className="text-sm font-bold text-slate-900">Default Rate</p>
+                    <p className="text-[11px] font-medium text-slate-400">Per bed per night</p>
+                  </div>
+                  {editingExtraBedRate !== null ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="0"
+                        step="50"
+                        className="w-28 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 shadow-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+                        value={editingExtraBedRate}
+                        onChange={e => setEditingExtraBedRate(e.target.value)}
+                        disabled={savingExtraBedRate}
+                        autoFocus
+                        placeholder="e.g. 500"
+                        onKeyDown={e => { if (e.key === 'Enter') void handleSaveExtraBedRate(); if (e.key === 'Escape') setEditingExtraBedRate(null); }}
+                      />
+                      <button
+                        type="button"
+                        className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 disabled:opacity-50"
+                        onClick={() => void handleSaveExtraBedRate()}
+                        disabled={savingExtraBedRate}
+                      >
+                        {savingExtraBedRate ? 'Saving…' : 'Save'}
+                      </button>
+                      <button
+                        type="button"
+                        className="text-xs font-medium text-slate-400 hover:text-slate-600"
+                        onClick={() => setEditingExtraBedRate(null)}
+                        disabled={savingExtraBedRate}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : managedProperty.extraBedRatePerNight != null ? (
+                    <div className="flex items-center gap-3">
+                      <p className="text-sm font-semibold text-slate-900">
+                        ₹{managedProperty.extraBedRatePerNight.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        <span className="ml-1 text-[11px] font-medium text-slate-400">per bed/night</span>
+                      </p>
+                      <button
+                        type="button"
+                        className="text-xs font-bold text-emerald-600 hover:text-emerald-700"
+                        onClick={() => setEditingExtraBedRate(String(managedProperty.extraBedRatePerNight))}
+                      >
+                        Edit
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="text-xs font-bold text-slate-400 hover:text-emerald-600"
+                      onClick={() => setEditingExtraBedRate('')}
+                    >
+                      Set rate
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 

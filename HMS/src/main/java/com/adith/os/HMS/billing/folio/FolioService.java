@@ -11,7 +11,7 @@ import com.adith.os.HMS.guest.Guest;
 import com.adith.os.HMS.guest.GuestRepository;
 import com.adith.os.HMS.property.Property;
 import com.adith.os.HMS.property.PropertyRepository;
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;

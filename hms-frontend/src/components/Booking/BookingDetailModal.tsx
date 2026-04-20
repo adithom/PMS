@@ -180,6 +180,24 @@ export default function BookingDetailModal({ booking, propertyId, onClose, onEdi
                   <p className="mt-0.5 italic text-slate-400 text-sm">None</p>
                 </div>
               )}
+              {booking.extraBeds != null && booking.extraBeds > 0 && (
+                <>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Extra Beds</p>
+                    <p className="mt-0.5 font-semibold text-slate-800">{booking.extraBeds}</p>
+                  </div>
+                  {booking.extraBedRatePerNight != null && (
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Extra Bed Rate / Night</p>
+                      <p className="mt-0.5 font-semibold text-slate-800">{booking.currency} {booking.extraBedRatePerNight.toFixed(2)}</p>
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Billed As</p>
+                    <p className="mt-0.5 font-semibold text-slate-800">{booking.extraBedChargeCode === 'ROOM_RENT' ? 'Room Rent' : 'Miscellaneous'}</p>
+                  </div>
+                </>
+              )}
             </div>
           </section>
 

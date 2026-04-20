@@ -1,5 +1,6 @@
 package com.adith.os.HMS.booking;
 
+import com.adith.os.HMS.billing.folio.ChargeCode;
 import com.adith.os.HMS.billing.folio.Folio;
 import com.adith.os.HMS.billing.folio.FolioType;
 import com.adith.os.HMS.guest.Guest;
@@ -131,6 +132,16 @@ public class Booking {
 
     @Column(name = "meal_plan_children_price_per_night", precision = 10, scale = 2)
     private BigDecimal mealPlanChildrenPricePerNight;
+
+    @Column(name = "extra_beds", nullable = false, columnDefinition = "integer default 0")
+    private Integer extraBeds = 0;
+
+    @Column(name = "extra_bed_rate_per_night", precision = 10, scale = 2)
+    private BigDecimal extraBedRatePerNight;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "extra_bed_charge_code")
+    private ChargeCode extraBedChargeCode;
 
     @PrePersist
     protected void onCreate() {
@@ -325,6 +336,15 @@ public class Booking {
 
     public BigDecimal getMealPlanChildrenPricePerNight() { return mealPlanChildrenPricePerNight; }
     public void setMealPlanChildrenPricePerNight(BigDecimal mealPlanChildrenPricePerNight) { this.mealPlanChildrenPricePerNight = mealPlanChildrenPricePerNight; }
+
+    public Integer getExtraBeds() { return extraBeds; }
+    public void setExtraBeds(Integer extraBeds) { this.extraBeds = extraBeds; }
+
+    public BigDecimal getExtraBedRatePerNight() { return extraBedRatePerNight; }
+    public void setExtraBedRatePerNight(BigDecimal extraBedRatePerNight) { this.extraBedRatePerNight = extraBedRatePerNight; }
+
+    public ChargeCode getExtraBedChargeCode() { return extraBedChargeCode; }
+    public void setExtraBedChargeCode(ChargeCode extraBedChargeCode) { this.extraBedChargeCode = extraBedChargeCode; }
 
     // Calculated fields - these compute values dynamically
 

@@ -61,6 +61,9 @@ public class BookingMapper {
         booking.setMealPlanType(bookingCreationDto.mealPlanType());
         booking.setMealPlanPricePerNight(bookingCreationDto.mealPlanPricePerNight());
         booking.setMealPlanChildrenPricePerNight(bookingCreationDto.mealPlanChildrenPricePerNight());
+        if (bookingCreationDto.extraBeds() != null) booking.setExtraBeds(bookingCreationDto.extraBeds());
+        booking.setExtraBedRatePerNight(bookingCreationDto.extraBedRatePerNight());
+        booking.setExtraBedChargeCode(bookingCreationDto.extraBedChargeCode());
         return booking;
     }
 
@@ -100,7 +103,10 @@ public class BookingMapper {
                 booking.getMealPlanType(),
                 booking.getMealPlanType() != null ? booking.getMealPlanType().getDisplayName() : null,
                 resolveMealPlanPrice(booking),
-                resolveMealPlanChildrenPrice(booking)
+                resolveMealPlanChildrenPrice(booking),
+                booking.getExtraBeds(),
+                booking.getExtraBedRatePerNight(),
+                booking.getExtraBedChargeCode()
         );
     }
 

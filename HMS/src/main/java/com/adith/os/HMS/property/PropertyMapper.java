@@ -43,7 +43,8 @@ public class PropertyMapper {
                 property.getAddress(),
                 property.getCountry(),
                 property.getTotalRooms(),
-                property.getGstNumber()
+                property.getGstNumber(),
+                property.getExtraBedRatePerNight()
         );
     }
 
