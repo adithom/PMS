@@ -156,7 +156,7 @@ public interface RoomAssignmentRepository extends JpaRepository<RoomAssignment, 
      * Logic: startDate <= date AND endDate > date (the date is an occupied night)
      * NOTE: Left strictly as > to ensure checkout days are not billed.
      */
-    @Query("SELECT ra FROM RoomAssignment ra " +
+    @Query("SELECT DISTINCT ra FROM RoomAssignment ra " +
             "JOIN FETCH ra.booking b " +
             "JOIN FETCH b.property " +
             "LEFT JOIN FETCH b.folios " +
