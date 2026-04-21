@@ -1,7 +1,7 @@
 package com.adith.os.HMS.billing.bills;
 
+import com.adith.os.HMS.billing.bills.dto.BillBatchPageDto;
 import com.adith.os.HMS.billing.bills.dto.BillDto;
-import com.adith.os.HMS.billing.bills.dto.BillLedgerPageDto;
 import com.adith.os.HMS.billing.bills.dto.MultiBillDto;
 import com.adith.os.HMS.security.UserPrincipal;
 import jakarta.servlet.http.HttpServletResponse;
@@ -70,7 +70,7 @@ public class BillController {
 
     @GetMapping("/ledger")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
-    public ResponseEntity<BillLedgerPageDto> getBillLedger(
+    public ResponseEntity<BillBatchPageDto> getBillLedger(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to,
             @RequestParam(defaultValue = "false") boolean includeVoided) {

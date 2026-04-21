@@ -222,8 +222,7 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
                           <tr>
                             <th className="px-4 py-2.5">Date</th>
                             <th className="px-4 py-2.5">Description</th>
-                            <th className="px-4 py-2.5 text-right">Charge</th>
-                            <th className="px-4 py-2.5 text-right">Credit</th>
+                            <th className="px-4 py-2.5 text-right">Amount</th>
                             {!readOnly && <th className="px-4 py-2.5 text-center">Action</th>}
                           </tr>
                         </thead>
@@ -246,10 +245,7 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
                                   )}
                                 </td>
                                 <td className="px-4 py-3 text-right font-medium text-slate-900">
-                                  {!charge.isVoided ? `${folio.currency} ${(charge.totalAmount ?? 0).toFixed(2)}` : '—'}
-                                </td>
-                                <td className="px-4 py-3 text-right font-medium text-rose-500">
-                                  {charge.isVoided ? `${folio.currency} ${(charge.totalAmount ?? 0).toFixed(2)}` : '—'}
+                                  {`${folio.currency} ${charge.isVoided ? '0.00' : (charge.totalAmount ?? 0).toFixed(2)}`}
                                 </td>
                                 {!readOnly && (
                                   <td className="px-4 py-3 text-center">

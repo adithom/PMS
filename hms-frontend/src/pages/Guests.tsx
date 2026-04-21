@@ -153,7 +153,7 @@ export default function Guests() {
       g.fullName.toLowerCase().includes(query) ||
       (g.email || '').toLowerCase().includes(query) ||
       (g.phone || '').includes(query) ||
-      (g.docId || '').toLowerCase().includes(query)
+      (g.idNumber || '').toLowerCase().includes(query)
     );
   }, [guests, searchQuery]);
 
@@ -267,7 +267,7 @@ export default function Guests() {
                 <div className="mt-3 space-y-1.5 text-[11px] font-medium text-slate-500">
                   {guest.email && <p><span className="font-bold text-slate-400">Email:</span> {guest.email}</p>}
                   {guest.phone && <p><span className="font-bold text-slate-400">Phone:</span> {guest.phone}</p>}
-                  {guest.docId && <p><span className="font-bold text-slate-400">Doc ID:</span> {guest.docId}</p>}
+                  {guest.idNumber && <p><span className="font-bold text-slate-400">Doc ID:</span> {guest.idNumber}</p>}
                 </div>
               </div>
 

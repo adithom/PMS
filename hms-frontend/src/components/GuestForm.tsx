@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { GuestIdType, GUEST_ID_TYPE_LABELS } from '../types';
 import type { Guest } from '../types';
 
 /* ────────────────────────────────────────────────────────────── */
@@ -21,7 +22,8 @@ export default function GuestForm({ guest, onSave, onCancel }: GuestFormProps) {
     lastName: '',
     email: '',
     phone: '',
-    docId: '',
+    idNumber: '',
+    guestIdType: '' as GuestIdType | '',
     dateOfBirth: '',
     preferences: ''
   });
@@ -35,11 +37,18 @@ export default function GuestForm({ guest, onSave, onCancel }: GuestFormProps) {
         lastName: guest.lastName,
         email: guest.email || '',
         phone: guest.phone || '',
-        docId: guest.docId || '',
+        idNumber: guest.idNumber || '',
+        guestIdType: guest.guestIdType || '',
+        dateOfBirth: '',
         preferences: guest.preferences || ''
       });
     }
   }, [guest]);
+
+  const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -77,7 +86,8 @@ export default function GuestForm({ guest, onSave, onCancel }: GuestFormProps) {
 
       if (formData.email.trim()) payload.email = formData.email.trim();
       if (formData.phone.trim()) payload.phone = formData.phone.trim();
-      if (formData.docId.trim()) payload.docId = formData.docId.trim();
+      if (formData.idNumber.trim()) payload.idNumber = formData.idNumber.trim();
+      if (formData.guestIdType) payload.guestIdType = formData.guestIdType;
       if (formData.preferences.trim()) payload.preferences = formData.preferences.trim();
 
       await onSave(payload);
@@ -123,11 +133,21 @@ export default function GuestForm({ guest, onSave, onCancel }: GuestFormProps) {
         </label>
       </div>
 
-      <label>
-        <span className={labelCls}>Document ID</span>
-        <input type="text" name="docId" value={formData.docId} onChange={handleChange} disabled={submitting} placeholder="e.g. DL123456" className={inputCls} />
-        <p className="mt-1 text-[10px] text-slate-400">Driver's License, Passport, or National ID</p>
-      </label>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <label>
+          <span className={labelCls}>Document ID</span>
+          <input type="text" name="idNumber" value={formData.idNumber} onChange={handleChange} disabled={submitting} placeholder="e.g. A1234567" className={inputCls} />
+        </label>
+        <label>
+          <span className={labelCls}>ID Type</span>
+          <select name="guestIdType" value={formData.guestIdType} onChange={handleSelectChange} disabled={submitting} className={inputCls}>
+            <option value="">— Select type —</option>
+            {Object.values(GuestIdType).map(t => (
+              <option key={t} value={t}>{GUEST_ID_TYPE_LABELS[t]}</option>
+            ))}
+          </select>
+        </label>
+      </div>
 
       <label>
         <span className={labelCls}>Preferences</span>

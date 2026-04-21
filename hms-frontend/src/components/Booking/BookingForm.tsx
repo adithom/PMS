@@ -6,6 +6,7 @@ import travelAgentApi from '../../api/travelAgentApi';
 import mealPlanApi from '../../api/mealPlanApi';
 import roomApi from '../../api/roomApi';
 import availabilityApi from '../../api/availabilityApi';
+import { GuestIdType, GUEST_ID_TYPE_LABELS } from '../../types';
 import type { Property, Room, UnitDto, Booking, TravelAgent, MealPlan, MealPlanType } from '../../types';
 
 /* ────────────────────────────────────────────────────────────── */
@@ -104,7 +105,8 @@ export default function BookingForm({
   const [newGuestLastName, setNewGuestLastName] = useState<string>('');
   const [newGuestEmail, setNewGuestEmail] = useState<string>('');
   const [newGuestPhone, setNewGuestPhone] = useState<string>('');
-  const [newGuestDocId, setNewGuestDocId] = useState<string>('');
+  const [newGuestIdNumber, setNewGuestIdNumber] = useState<string>('');
+  const [newGuestIdType, setNewGuestIdType] = useState<GuestIdType | ''>('');
 
   // ── Travel Agent State ──
   const [agentSectionOpen, setAgentSectionOpen] = useState<boolean>(
@@ -319,7 +321,14 @@ export default function BookingForm({
   const createGuestThenSelect = async (): Promise<string> => {
     setLoading(true); setError(null);
     try {
-      const payload = { firstName: newGuestFirstName, lastName: newGuestLastName, email: newGuestEmail, phone: newGuestPhone, docId: newGuestDocId };
+      const payload: Parameters<typeof guestApi.create>[0] = {
+        firstName: newGuestFirstName,
+        lastName: newGuestLastName,
+        ...(newGuestEmail && { email: newGuestEmail }),
+        ...(newGuestPhone && { phone: newGuestPhone }),
+        ...(newGuestIdNumber && { idNumber: newGuestIdNumber }),
+        ...(newGuestIdType && { guestIdType: newGuestIdType }),
+      };
       const created = await guestApi.create(payload) as any;
       const idStr = String(created.id ?? created.uuid ?? created.guestId ?? created._id);
       
@@ -511,8 +520,17 @@ export default function BookingForm({
             <label><span className={labelCls}>Email</span><input className={inputCls} value={newGuestEmail} onChange={e => setNewGuestEmail(e.target.value)} /></label>
             <div className="grid gap-4 sm:grid-cols-2">
               <label><span className={labelCls}>Phone</span><input className={inputCls} value={newGuestPhone} onChange={e => setNewGuestPhone(e.target.value)} /></label>
-              <label><span className={labelCls}>Doc ID</span><input className={inputCls} value={newGuestDocId} onChange={e => setNewGuestDocId(e.target.value)} /></label>
+              <label><span className={labelCls}>Document ID</span><input className={inputCls} value={newGuestIdNumber} onChange={e => setNewGuestIdNumber(e.target.value)} placeholder="e.g. A1234567" /></label>
             </div>
+            <label>
+              <span className={labelCls}>ID Type</span>
+              <select className={inputCls} value={newGuestIdType} onChange={e => setNewGuestIdType(e.target.value as GuestIdType | '')}>
+                <option value="">— Select type —</option>
+                {Object.values(GuestIdType).map(t => (
+                  <option key={t} value={t}>{GUEST_ID_TYPE_LABELS[t]}</option>
+                ))}
+              </select>
+            </label>
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={() => setCreatingGuest(false)} className={btnSecondary}>
                 Cancel

@@ -1,8 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Download } from 'lucide-react';
 import billingApi from '../../api/billingApi';
-import type { BillDto, BillLedgerPageDto } from '../../api/billingApi';
-import { triggerPresignedDownload } from '../../utils/downloadUtils';
+import type { BillBatchRowDto, BillBatchPageDto } from '../../api/billingApi';
 
 const ZIP_LIMIT = 150;
 
@@ -30,14 +29,13 @@ export default function BillLedgerTab() {
   });
   const [toDate, setToDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [includeVoided, setIncludeVoided] = useState(false);
-  const [ledger, setLedger] = useState<BillLedgerPageDto | null>(null);
+  const [ledger, setLedger] = useState<BillBatchPageDto | null>(null);
   const [loading, setLoading] = useState(false);
   const [zipping, setZipping] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
   const [propertyFilter, setPropertyFilter] = useState<string>('ALL');
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [downloadingBatchId, setDownloadingBatchId] = useState<string | null>(null);
 
   const loadLedger = async () => {
     setLoading(true);
@@ -58,39 +56,39 @@ export default function BillLedgerTab() {
 
   const propertyNames = useMemo<string[]>(() => {
     if (!ledger) return [];
-    return [...new Set(ledger.bills.map(b => b.PropertyName ?? '').filter(Boolean))].sort();
+    return [...new Set(ledger.batches.map(b => b.propertyName ?? '').filter(Boolean))].sort();
   }, [ledger]);
 
-  const filteredBills = useMemo<BillDto[]>(() => {
+  const filteredBatches = useMemo<BillBatchRowDto[]>(() => {
     if (!ledger) return [];
-    return ledger.bills.filter(b => {
-      if (propertyFilter !== 'ALL' && b.PropertyName !== propertyFilter) return false;
-      if (categoryFilter !== 'ALL' && b.category !== categoryFilter) return false;
+    return ledger.batches.filter(b => {
+      if (propertyFilter !== 'ALL' && b.propertyName !== propertyFilter) return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         return (
-          b.invoiceNumber?.toLowerCase().includes(q) ||
+          b.mainInvoiceNumber?.toLowerCase().includes(q) ||
           b.guestName?.toLowerCase().includes(q) ||
-          b.PropertyName?.toLowerCase().includes(q)
+          b.propertyName?.toLowerCase().includes(q)
         );
       }
       return true;
     });
-  }, [ledger, propertyFilter, categoryFilter, searchQuery]);
+  }, [ledger, propertyFilter, searchQuery]);
 
   const filteredTotal = useMemo(
-    () => filteredBills.reduce((sum, b) => sum + (b.grandTotal ?? 0), 0),
-    [filteredBills],
+    () => filteredBatches.reduce((sum, b) => sum + (b.grandTotal ?? 0), 0),
+    [filteredBatches],
   );
 
   const handleDownloadZip = async () => {
-    if (filteredBills.length > ZIP_LIMIT) {
-      alert(`Too many bills (${filteredBills.length}). Narrow the date range or search to ≤${ZIP_LIMIT} bills before downloading.`);
+    const allBillIds = filteredBatches.flatMap(b => b.billIds);
+    if (allBillIds.length > ZIP_LIMIT) {
+      alert(`Too many bills (${allBillIds.length}). Narrow the date range or search to fewer invoices before downloading.`);
       return;
     }
     setZipping(true);
     try {
-      await billingApi.downloadLedgerZip(filteredBills.map(b => b.id));
+      await billingApi.downloadLedgerZip(allBillIds);
     } catch (err: any) {
       alert(err.message || 'Failed to download ZIP');
     } finally {
@@ -99,13 +97,12 @@ export default function BillLedgerTab() {
   };
 
   const handleExportCsv = () => {
-    const headers = ['Invoice #', 'Date', 'Property', 'Guest', 'Category', 'Grand Total'];
-    const rows = filteredBills.map(b => [
-      b.invoiceNumber ?? '',
-      b.invoiceDate ?? '',
-      b.PropertyName ?? '',
+    const headers = ['Invoice #', 'Date', 'Property', 'Guest', 'Grand Total'];
+    const rows = filteredBatches.map(b => [
+      b.mainInvoiceNumber ?? '',
+      b.billDate ?? '',
+      b.propertyName ?? '',
       b.guestName ?? '',
-      b.category ?? '',
       b.grandTotal?.toFixed(2) ?? '0.00',
     ]);
     const csv = [headers, ...rows]
@@ -123,15 +120,14 @@ export default function BillLedgerTab() {
     URL.revokeObjectURL(url);
   };
 
-  const handleDownloadOne = async (billId: string) => {
-    setDownloadingId(billId);
+  const handleDownloadBatch = async (batch: BillBatchRowDto) => {
+    setDownloadingBatchId(batch.batchId);
     try {
-      const url = await billingApi.getDownloadUrl(billId);
-      triggerPresignedDownload(url);
+      await billingApi.downloadLedgerZip(batch.billIds);
     } catch (err: any) {
-      alert(err.message || 'Failed to get download link.');
+      alert(err.message || 'Failed to download bills.');
     } finally {
-      setDownloadingId(null);
+      setDownloadingBatchId(null);
     }
   };
 
@@ -170,25 +166,11 @@ export default function BillLedgerTab() {
           </button>
           <input
             type="text"
-            placeholder="Search invoice, guest, room…"
+            placeholder="Search invoice, guest, property…"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             className={`${inputCls} flex-1 min-w-[130px]`}
           />
-          <select
-            value={categoryFilter}
-            onChange={e => setCategoryFilter(e.target.value)}
-            className={inputCls}
-          >
-            <option value="ALL">All Types</option>
-            <option value="ROOM_RENT">Room & Meal Plan</option>
-            <option value="RESTAURANT">Restaurant</option>
-            <option value="SPA">Spa</option>
-            <option value="LAUNDRY">Laundry</option>
-            <option value="TRAVEL_DESK">Travel Desk</option>
-            <option value="SHOP">Gift Shop</option>
-            <option value="MISC">Miscellaneous</option>
-          </select>
           <select
             value={propertyFilter}
             onChange={e => setPropertyFilter(e.target.value)}
@@ -206,7 +188,7 @@ export default function BillLedgerTab() {
       {ledger && !loading && (
         <div className="px-4 py-2 border-b border-slate-100 flex items-center gap-3 flex-shrink-0 bg-slate-50/60">
           <span className="text-xs text-slate-500">
-            <span className="font-semibold text-slate-800">{filteredBills.length}</span> bills
+            <span className="font-semibold text-slate-800">{filteredBatches.length}</span> invoices
             {' · '}
             <span className="font-semibold text-slate-800">
               ₹{filteredTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -215,15 +197,15 @@ export default function BillLedgerTab() {
           <div className="flex items-center gap-2 ml-auto">
             <button
               onClick={handleDownloadZip}
-              disabled={zipping || filteredBills.length === 0}
-              title={filteredBills.length > ZIP_LIMIT ? `Narrow filter to ≤${ZIP_LIMIT} bills first` : 'Download all displayed bills as ZIP'}
+              disabled={zipping || filteredBatches.length === 0}
+              title="Download all displayed invoices as ZIP"
               className={btnSecondary}
             >
               {zipping ? 'Packaging…' : 'Download ZIP'}
             </button>
             <button
               onClick={handleExportCsv}
-              disabled={filteredBills.length === 0}
+              disabled={filteredBatches.length === 0}
               className={btnSecondary}
             >
               Export CSV
@@ -243,9 +225,9 @@ export default function BillLedgerTab() {
           <div className="flex items-center justify-center h-full">
             <p className="text-xs text-slate-400 animate-pulse">Loading…</p>
           </div>
-        ) : !ledger || filteredBills.length === 0 ? (
+        ) : !ledger || filteredBatches.length === 0 ? (
           <div className="flex items-center justify-center h-full">
-            <p className="text-xs font-medium text-slate-400">No bills found for this period.</p>
+            <p className="text-xs font-medium text-slate-400">No invoices found for this period.</p>
           </div>
         ) : (
           <table className="w-full text-left">
@@ -255,23 +237,22 @@ export default function BillLedgerTab() {
                 <th className="px-3 py-2 font-medium">Date</th>
                 <th className="px-3 py-2 font-medium">Guest</th>
                 <th className="px-3 py-2 font-medium">Property</th>
-                <th className="px-3 py-2 font-medium">Type</th>
-                <th className="px-3 py-2 font-medium text-right">Amount</th>
-                <th className="px-4 py-2 font-medium text-center">PDF</th>
+                <th className="px-3 py-2 font-medium text-right">Total</th>
+                <th className="px-4 py-2 font-medium text-center">Download</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredBills.map(bill => (
+              {filteredBatches.map(batch => (
                 <tr
-                  key={bill.id}
-                  className={`transition-colors hover:bg-slate-50/60 ${bill.isVoided ? 'opacity-50' : ''}`}
+                  key={batch.batchId}
+                  className={`transition-colors hover:bg-slate-50/60 ${batch.isVoided ? 'opacity-50' : ''}`}
                 >
                   <td className="px-4 py-2">
                     <div className="flex items-center gap-1.5">
                       <span className="font-mono text-[11px] font-semibold text-slate-800">
-                        {bill.invoiceNumber}
+                        {batch.mainInvoiceNumber}
                       </span>
-                      {bill.isVoided && (
+                      {batch.isVoided && (
                         <span className="rounded-md bg-rose-100 px-1 py-0.5 text-[9px] font-bold uppercase text-rose-600">
                           Voided
                         </span>
@@ -279,31 +260,22 @@ export default function BillLedgerTab() {
                     </div>
                   </td>
                   <td className="px-3 py-2 text-[11px] text-slate-500 whitespace-nowrap">
-                    {formatDate(bill.invoiceDate)}
+                    {formatDate(batch.billDate)}
                   </td>
                   <td className="px-3 py-2 text-xs text-slate-700 max-w-[110px] truncate">
-                    {bill.guestName ?? '—'}
+                    {batch.guestName ?? '—'}
                   </td>
                   <td className="px-3 py-2 text-xs text-slate-500 max-w-[100px] truncate">
-                    {bill.PropertyName ?? '—'}
-                  </td>
-                  <td className="px-3 py-2">
-                    <span className={`inline-block rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${
-                      bill.category === 'ROOM_RENT'
-                        ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
-                        : 'bg-teal-50 text-teal-700 border-teal-200'
-                    }`}>
-                      {({ ROOM_RENT: 'Room', RESTAURANT: 'Restaurant', SPA: 'Spa', LAUNDRY: 'Laundry', TRAVEL_DESK: 'Travel', SHOP: 'Shop', MISC: 'Misc' } as Record<string, string>)[bill.category ?? ''] ?? bill.category ?? '—'}
-                    </span>
+                    {batch.propertyName ?? '—'}
                   </td>
                   <td className="px-3 py-2 text-right text-xs font-semibold text-slate-800 whitespace-nowrap">
-                    ₹{(bill.grandTotal ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    ₹{(batch.grandTotal ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
                   <td className="px-4 py-2 text-center">
                     <button
-                      onClick={() => handleDownloadOne(bill.id)}
-                      disabled={downloadingId === bill.id}
-                      title="Download PDF"
+                      onClick={() => handleDownloadBatch(batch)}
+                      disabled={downloadingBatchId === batch.batchId}
+                      title={`Download ${batch.billIds.length > 1 ? `${batch.billIds.length} PDFs as ZIP` : 'PDF'}`}
                       className="flex h-6 w-6 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600 disabled:opacity-40 mx-auto"
                     >
                       <Download className="h-3.5 w-3.5" />

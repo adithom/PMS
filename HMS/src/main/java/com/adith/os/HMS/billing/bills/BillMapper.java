@@ -3,6 +3,7 @@ package com.adith.os.HMS.billing.bills;
 import com.adith.os.HMS.billing.folio.ChargeCategory;
 import com.adith.os.HMS.billing.folio.Folio;
 import com.adith.os.HMS.billing.folio.dto.ChargeDto;
+import com.adith.os.HMS.billing.bills.dto.BillBatchRowDto;
 import com.adith.os.HMS.billing.bills.dto.BillDto;
 import com.adith.os.HMS.booking.Booking;
 import com.adith.os.HMS.guest.Guest;
@@ -14,6 +15,7 @@ import com.adith.os.HMS.travelagent.TravelAgent;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.Comparator;
 import java.util.List;
 
 public class BillMapper {
@@ -35,9 +37,15 @@ public class BillMapper {
             String pdfDownloadUrl
     ) {
 
-        // 1. Filter out voided charges
+        // 1. Include voided charges with zeroed amounts and [VOID] label
         List<ChargeDto> validCharges = charges.stream()
-                .filter(c -> !c.isVoided())
+                .map(c -> c.isVoided()
+                        ? new ChargeDto(c.id(), c.chargeDate(), c.postingDate(), c.chargeCode(),
+                                c.description() + " [VOID]", c.quantity(), c.unitPrice(),
+                                BigDecimal.ZERO, c.taxRate(), BigDecimal.ZERO,
+                                BigDecimal.ZERO, BigDecimal.ZERO,
+                                true, c.voidReason(), c.notes())
+                        : c)
                 .toList();
 
         var totals = BillTotalCalculator.calculate(validCharges);
@@ -143,6 +151,44 @@ public class BillMapper {
 
                 agent != null ? agent.getId() : null,
                 agent != null ? agent.getName() : null
+        );
+    }
+
+    /**
+     * Groups a batch of bills (same generationBatchId) into a single ledger row.
+     * The "main" invoice is the one whose number sorts first (base number, no suffix letter).
+     */
+    public static BillBatchRowDto toBatchRowDto(List<Bill> batchBills) {
+        Bill main = batchBills.stream()
+                .min(Comparator.comparing(Bill::getInvoiceNumber))
+                .orElseThrow();
+
+        Folio folio = main.getFolio();
+        Guest guest = folio.getGuest();
+        Property property = folio.getProperty();
+
+        LocalDate billDate = main.getBillDate() != null
+                ? main.getBillDate()
+                : LocalDate.now(ZoneId.of("Asia/Kolkata"));
+
+        BigDecimal grandTotal = batchBills.stream()
+                .filter(b -> !b.isVoided())
+                .map(Bill::getTotalAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        boolean allVoided = batchBills.stream().allMatch(Bill::isVoided);
+
+        List<java.util.UUID> billIds = batchBills.stream().map(Bill::getId).toList();
+
+        return new BillBatchRowDto(
+                main.getGenerationBatchId() != null ? main.getGenerationBatchId() : main.getId(),
+                main.getInvoiceNumber(),
+                billDate,
+                property.getName(),
+                guest.getFullName(),
+                grandTotal,
+                allVoided,
+                billIds
         );
     }
 

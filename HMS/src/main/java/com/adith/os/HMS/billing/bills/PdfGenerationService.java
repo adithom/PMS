@@ -88,7 +88,7 @@ public class PdfGenerationService {
 
             // Invoice info block: right-flush at x=455, top aligned with logo top
             drawText(contentStream, "TAX INVOICE",                                     455, 788, fontBold, 12);
-            drawText(contentStream, "Invoice #: " + billDto.invoiceNumber(),           455, 767, fontRegular, 10);
+            drawText(contentStream, billDto.invoiceNumber(),                            455, 767, fontRegular, 10);
             drawText(contentStream, "Date: " + billDto.invoiceDate().format(DATE_FMT), 455, 747, fontRegular, 10);
 
             // --- 3. BILL TO (left col x=50 | right col x=455 under invoice block) ---
@@ -117,8 +117,32 @@ public class PdfGenerationService {
             float yPosition = 555f;
             float rowHeight = 20f;
             float margin    = 50f;
+            float titleRowHeight = 30f;
 
             float[] cols = {50, 80, 145, 305, 340, 405, 465, 545};
+
+            // Bill type title (above the table; vertical lines do NOT extend into this row)
+            String billTitle = "Invoice";
+            try { billTitle = BillType.valueOf(billDto.category()).getDisplayLabel() + " Bill"; } catch (Exception ignored) {}
+            contentStream.setNonStrokingColor(new Color(240, 244, 248));
+            contentStream.addRect(cols[0], yPosition - titleRowHeight, cols[7] - cols[0], titleRowHeight);
+            contentStream.fill();
+            contentStream.setNonStrokingColor(new Color(33, 58, 90));
+            drawText(contentStream, billTitle, cols[0] + 10, yPosition - 20, fontBold, 12);
+            contentStream.setNonStrokingColor(Color.BLACK);
+            contentStream.setLineWidth(0.5f);
+            contentStream.moveTo(cols[0], yPosition);
+            contentStream.lineTo(cols[0], yPosition - titleRowHeight);
+            contentStream.stroke();
+            contentStream.moveTo(cols[7], yPosition);
+            contentStream.lineTo(cols[7], yPosition - titleRowHeight);
+            contentStream.stroke();
+            contentStream.moveTo(cols[0], yPosition - titleRowHeight);
+            contentStream.lineTo(cols[7], yPosition - titleRowHeight);
+            contentStream.stroke();
+            yPosition -= titleRowHeight;
+
+            // tableTopY is set after the title row so vertical lines only span the data table
             float tableTopY = yPosition;
 
             // Header background
@@ -204,9 +228,9 @@ public class PdfGenerationService {
                 drawText(contentStream, charge.chargeDate() != null ? charge.chargeDate().format(DATE_FMT) : " ", cols[1] + 5, textY, fontRegular, 9);
                 drawText(contentStream, desc, cols[2] + 5, textY, fontRegular, 9);
 
-                drawTextRight(contentStream, charge.quantity()   != null ? charge.quantity().stripTrailingZeros().toPlainString()       : "0",    cols[4] - 5, textY, fontRegular, 9);
-                drawTextRight(contentStream, charge.unitPrice()  != null ? charge.unitPrice().setScale(2, RoundingMode.HALF_UP).toString()  : "0.00", cols[5] - 5, textY, fontRegular, 9);
-                drawTextRight(contentStream, charge.taxAmount()  != null ? charge.taxAmount().setScale(2, RoundingMode.HALF_UP).toString()  : "0.00", cols[6] - 5, textY, fontRegular, 9);
+                drawTextRight(contentStream, charge.quantity()    != null ? charge.quantity().stripTrailingZeros().toPlainString()        : "0",    cols[4] - 5, textY, fontRegular, 9);
+                drawTextRight(contentStream, charge.unitPrice()   != null ? charge.unitPrice().setScale(2, RoundingMode.HALF_UP).toString()   : "0.00", cols[5] - 5, textY, fontRegular, 9);
+                drawTextRight(contentStream, charge.taxAmount()   != null ? charge.taxAmount().setScale(2, RoundingMode.HALF_UP).toString()   : "0.00", cols[6] - 5, textY, fontRegular, 9);
                 drawTextRight(contentStream, charge.totalAmount() != null ? charge.totalAmount().setScale(2, RoundingMode.HALF_UP).toString() : "0.00", cols[7] - 5, textY, fontRegular, 9);
 
                 yPosition -= rowHeight;

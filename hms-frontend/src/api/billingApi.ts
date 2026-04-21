@@ -4,6 +4,24 @@ import apiClient from './fetchClient';
 /* Types & DTOs                                                   */
 /* ────────────────────────────────────────────────────────────── */
 
+export interface BillBatchRowDto {
+  batchId: string;
+  mainInvoiceNumber: string;
+  billDate: string;
+  propertyName: string;
+  guestName: string;
+  grandTotal: number;
+  isVoided: boolean;
+  billIds: string[];
+}
+
+export interface BillBatchPageDto {
+  batches: BillBatchRowDto[];
+  totalCount: number;
+  grandTotalSum: number;
+}
+
+/** @deprecated Use BillBatchPageDto — kept for reference by FolioDetailModal and similar views */
 export interface BillLedgerPageDto {
   bills: BillDto[];
   totalCount: number;
@@ -136,8 +154,8 @@ const billingApi = {
     return apiClient.get(`/properties/${propertyId}/group-bookings/${parentBookingId}/bills/${groupBillId}/download-url`);
   },
 
-  // Global bill ledger — all bills across all folios in a date range
-  getLedger: async (from: string, to: string, includeVoided = false): Promise<BillLedgerPageDto> => {
+  // Global bill ledger — returns one row per generation batch
+  getLedger: async (from: string, to: string, includeVoided = false): Promise<BillBatchPageDto> => {
     return apiClient.get('/bills/ledger', { from, to, includeVoided });
   },
 

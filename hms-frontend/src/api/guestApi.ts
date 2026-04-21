@@ -1,13 +1,14 @@
 // src/api/guestApi.ts
 import api from './fetchClient';
-import type { Guest } from '../types';
+import type { Guest, GuestIdType } from '../types';
 
 export interface GuestCreationDto {
   firstName: string;
   lastName: string;
   email?: string;
   phone?: string;
-  docId?: string;
+  idNumber?: string;
+  guestIdType?: GuestIdType;
   dateOfBirth?: string;
 }
 
