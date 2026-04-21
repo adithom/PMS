@@ -17,6 +17,7 @@ public class MealPlanMapper {
                 plan.getMealPlanType(),
                 plan.getMealPlanType().getDisplayName(),
                 plan.getPricePerNight(),
+                plan.getChildrenPricePerNight(),
                 plan.isActive()
         );
     }

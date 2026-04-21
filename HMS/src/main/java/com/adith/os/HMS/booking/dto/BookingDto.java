@@ -1,5 +1,6 @@
 package com.adith.os.HMS.booking.dto;
 
+import com.adith.os.HMS.billing.folio.ChargeCode;
 import com.adith.os.HMS.booking.BookingStatus;
 import com.adith.os.HMS.property.mealplan.MealPlanType;
 import com.fasterxml.jackson.annotation.JsonFormat;
@@ -87,7 +88,12 @@ public record BookingDto(
 
         MealPlanType mealPlanType,
         String mealPlanDisplayName,
-        BigDecimal mealPlanPricePerNight
+        BigDecimal mealPlanPricePerNight,
+        BigDecimal mealPlanChildrenPricePerNight,
+
+        Integer extraBeds,
+        BigDecimal extraBedRatePerNight,
+        ChargeCode extraBedChargeCode
 ) {
     // Compact constructor for validation and defaults
     public BookingDto {

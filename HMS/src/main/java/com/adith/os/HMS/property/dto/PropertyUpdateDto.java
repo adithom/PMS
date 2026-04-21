@@ -1,5 +1,6 @@
 package com.adith.os.HMS.property.dto;
 
+import java.math.BigDecimal;
 import java.sql.Time;
 
 public record PropertyUpdateDto(
@@ -12,5 +13,6 @@ public record PropertyUpdateDto(
         String phone,
         String gstNumber,
         Time checkInTime,
-        Time checkOutTime
+        Time checkOutTime,
+        BigDecimal extraBedRatePerNight
 ) {}

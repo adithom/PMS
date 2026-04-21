@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { X, Building2 } from 'lucide-react';
 import groupBookingApi from '../../api/groupBookingApi';
 import type { GroupBookingCreationDto, GroupRoomRequestDto } from '../../api/groupBookingApi';
 import guestApi from '../../api/guestApi';
@@ -367,9 +368,7 @@ export default function GroupBookingModal({ propertyId, onClose, onSuccess }: Gr
                           onClick={() => removeRoomRequest(index)}
                           className="absolute -right-2 -top-2 rounded-full bg-white p-1.5 text-slate-400 shadow-sm ring-1 ring-slate-200 transition-all hover:bg-rose-50 hover:text-rose-600"
                         >
-                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                          </svg>
+                          <X className="h-4 w-4" />
                         </button>
                       )}
                     </div>
@@ -381,9 +380,7 @@ export default function GroupBookingModal({ propertyId, onClose, onSuccess }: Gr
               {step === 3 && (
                 <div className="flex h-full flex-col items-center justify-center text-center animate-in zoom-in-95 fade-in duration-300">
                   <div className="flex h-20 w-20 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 mb-6">
-                    <svg className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1v1H9V7zm5 0h1v1h-1V7zm-5 4h1v1H9v-1zm5 0h1v1h-1v-1zm-5 4h1v1H9v-1zm5 0h1v1h-1v-1z" />
-                    </svg>
+                    <Building2 className="h-10 w-10" />
                   </div>
                   <h2 className="text-2xl font-extrabold text-slate-900">Ready to build the block?</h2>
                   <p className="mt-2 max-w-md text-sm text-slate-500">

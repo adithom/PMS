@@ -749,6 +749,8 @@ public class BookingService {
             // Meal plan partial update
             if (Boolean.TRUE.equals(dto.clearMealPlan())) {
                 booking.setMealPlanType(null);
+                booking.setMealPlanPricePerNight(null);
+                booking.setMealPlanChildrenPricePerNight(null);
             } else if (dto.mealPlanType() != null) {
                 PropertyMealPlan plan = mealPlanRepository
                         .findByPropertyIdAndMealPlanType(propertyId, dto.mealPlanType())
@@ -759,6 +761,30 @@ public class BookingService {
                             "Meal plan " + dto.mealPlanType() + " is not active");
                 }
                 booking.setMealPlanType(dto.mealPlanType());
+                if (dto.mealPlanPricePerNight() != null) {
+                    booking.setMealPlanPricePerNight(dto.mealPlanPricePerNight());
+                }
+                if (dto.mealPlanChildrenPricePerNight() != null) {
+                    booking.setMealPlanChildrenPricePerNight(dto.mealPlanChildrenPricePerNight());
+                }
+            } else {
+                if (dto.mealPlanPricePerNight() != null) {
+                    booking.setMealPlanPricePerNight(dto.mealPlanPricePerNight());
+                }
+                if (dto.mealPlanChildrenPricePerNight() != null) {
+                    booking.setMealPlanChildrenPricePerNight(dto.mealPlanChildrenPricePerNight());
+                }
+            }
+
+            // Extra bed partial update
+            if (dto.extraBeds() != null) {
+                booking.setExtraBeds(dto.extraBeds());
+            }
+            if (dto.extraBedRatePerNight() != null) {
+                booking.setExtraBedRatePerNight(dto.extraBedRatePerNight());
+            }
+            if (dto.extraBedChargeCode() != null) {
+                booking.setExtraBedChargeCode(dto.extraBedChargeCode());
             }
 
             if (datesChanged) {

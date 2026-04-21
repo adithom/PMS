@@ -10,12 +10,14 @@ export interface BillLedgerPageDto {
   grandTotalSum: number;
 }
 
+export type BillCategory = 'ROOM_RENT' | 'RESTAURANT' | 'SPA' | 'LAUNDRY' | 'TRAVEL_DESK' | 'SHOP' | 'MISC';
+
 export interface BillDto {
   id: string;
   folioId?: string;
   generationBatchId?: string;
   propertyId?: string;
-  category?: 'ROOM_RENT' | 'ANCILLARY';
+  category?: BillCategory;
   PropertyName?: string;
   PropertyAddress?: string;
   gstNumber?: string;
@@ -46,15 +48,14 @@ export interface BillDto {
   travelAgentName?: string;
 }
 
-export interface DoubleBillDto {
-  roomRentBill?: BillDto;
-  ancillaryBill?: BillDto;
+export interface MultiBillDto {
+  bills: BillDto[];
 }
 
 export interface GroupBill {
   id: string;
   invoiceNumber?: string;
-  category?: 'ROOM_RENT' | 'ANCILLARY';
+  category?: BillCategory;
   guestGstNumber?: string;
   subtotal?: number;
   taxAmount?: number;
@@ -73,9 +74,8 @@ export interface GroupBill {
 
 // GroupBillSectionDto & GroupDoubleBillDto are structurally massive in the JSON, 
 // using 'any' fallback here for complex nested objects unless strict typing is required.
-export interface GroupDoubleBillDto {
-  roomRentBill?: any;
-  ancillaryBill?: any;
+export interface GroupMultiBillDto {
+  bills: any[];
 }
 
 /* ────────────────────────────────────────────────────────────── */
@@ -84,7 +84,7 @@ export interface GroupDoubleBillDto {
 
 const billingApi = {
   // Standard Guest/Folio Bills
-  generateBills: async (folioId: string, guestGstNumber?: string): Promise<DoubleBillDto> => {
+  generateBills: async (folioId: string, guestGstNumber?: string): Promise<MultiBillDto> => {
     const params = new URLSearchParams();
     if (guestGstNumber) params.append('guestGstNumber', guestGstNumber);
     return apiClient.post(`/bills/generate/${folioId}?${params.toString()}`);
@@ -105,7 +105,7 @@ const billingApi = {
     return apiClient.get(`/properties/${propertyId}/group-bookings/${parentBookingId}/bills`);
   },
 
-  generateGroupBills: async (propertyId: string, parentBookingId: string, guestGstNumber?: string): Promise<GroupDoubleBillDto> => {
+  generateGroupBills: async (propertyId: string, parentBookingId: string, guestGstNumber?: string): Promise<GroupMultiBillDto> => {
     const params = new URLSearchParams();
     if (guestGstNumber) params.append('guestGstNumber', guestGstNumber);
     return apiClient.post(`/properties/${propertyId}/group-bookings/${parentBookingId}/bills/generate?${params.toString()}`);

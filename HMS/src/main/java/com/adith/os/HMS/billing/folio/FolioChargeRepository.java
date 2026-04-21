@@ -31,4 +31,7 @@ public interface FolioChargeRepository extends JpaRepository<FolioCharge, UUID> 
 
     boolean existsByFolioIdAndChargeCodeAndChargeDateAndIsVoidedFalse(
             UUID folioId, ChargeCode chargeCode, LocalDate chargeDate);
+
+    boolean existsByFolioIdAndReferenceTypeAndChargeDateAndIsVoidedFalse(
+            UUID folioId, String referenceType, LocalDate chargeDate);
 }

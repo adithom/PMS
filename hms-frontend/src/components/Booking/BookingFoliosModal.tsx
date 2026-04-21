@@ -39,7 +39,6 @@ export default function BookingFoliosModal({ propertyId, bookingId, guestName, o
         propertyId={propertyId}
         folioId={selectedFolioId}
         onClose={folios.length === 1 ? onClose : () => setSelectedFolioId(null)}
-        readOnly
       />
     );
   }

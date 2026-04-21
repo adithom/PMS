@@ -11,16 +11,16 @@ import EarlyCheckoutModal from '../components/Booking/EarlyCheckoutModal';
 import RoomShiftModal from '../components/Booking/RoomShiftModal';
 import TaskListModal from '../components/Booking/TaskListModal';
 import BookingFoliosModal from '../components/Booking/BookingFoliosModal';
+import BookingDetailModal from '../components/Booking/BookingDetailModal';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ModalShell from '../components/ModalShell';
 import ConfirmModal from '../components/ConfirmModal';
+import { PlaneLanding, FileText, List, Users, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { Property, Room, Booking, RoomAssignmentDto } from '../types';
 import { toDS, addDays, diffDays, shortDate, dayLabel, dateStr, fmtDate } from '../utils/dateHelpers';
 import { getRoomId } from '../utils/roomHelpers';
 import {
   CELL_W, CELL_H, LABEL_W, MIN_CHART_ROWS,
-  BUFFER_BEFORE, BUFFER_AFTER, REFETCH_THRESHOLD,
-  NAV_DEBOUNCE_MS, SCROLL_EDGE_PX, SCROLL_COOLDOWN_MS, SCROLL_STEP_DAYS,
   STATUS_COLORS, cn, btnPrimary, btnSecondary,
 } from '../components/Booking/TapeChartConstants';
 
@@ -41,7 +41,7 @@ type PendingAction = {
 /* Context Menu                                                  */
 /* ────────────────────────────────────────────────────────────── */
 
-function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout, onEditBooking, onShiftRoom, onShowFolio }: {
+function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout, onEditBooking, onShiftRoom, onShowFolio, onViewBooking }: {
   state: { x: number; y: number; booking: Booking } | null;
   propertyId: string;
   onClose: () => void;
@@ -50,6 +50,7 @@ function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout, onEdit
   onEditBooking: (booking: Booking) => void;
   onShiftRoom: (booking: Booking) => void;
   onShowFolio: (bookingId: string, guestName: string) => void;
+  onViewBooking: (booking: Booking) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
@@ -73,6 +74,8 @@ function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout, onEdit
   const acts: Act[] = [];
   
   if (booking.id) {
+    acts.push({ label: '◉ View Details', doFn: async () => { onViewBooking(booking); onClose(); } });
+
     const editableStatuses: Booking['status'][] = ['PENDING', 'CONFIRMED', 'CHECKED_IN'];
     if (editableStatuses.includes(booking.status)) {
       acts.push({ label: '✎ Edit Booking', doFn: async () => { onEditBooking(booking); onClose(); } });
@@ -206,12 +209,12 @@ function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout, onEdit
 /* Drag Overlay                                                  */
 /* ────────────────────────────────────────────────────────────── */
 
-function DragOverlay({ drag }: { drag: { rid: string; startCol: number; endCol: number; rowTop: number } | null }) {
+function DragOverlay({ drag, cellW }: { drag: { rid: string; startCol: number; endCol: number; rowTop: number } | null; cellW: number }) {
   if (!drag) return null;
   const from = Math.min(drag.startCol, drag.endCol);
   const to = Math.max(drag.startCol, drag.endCol);
-  const left = LABEL_W + from * CELL_W;
-  const width = (to - from + 1) * CELL_W;
+  const left = LABEL_W + from * cellW;
+  const width = (to - from + 1) * cellW;
   return (
     <div className="pointer-events-none absolute z-[15] rounded border-2 border-blue-400 bg-blue-100/40"
       style={{ left, top: drag.rowTop, width, height: CELL_H }} />
@@ -228,7 +231,7 @@ export default function Bookings() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [totalRooms, setTotalRooms] = useState(0);
 
-  const [numDays, setNumDays] = useState(14);
+  const [numDays, setNumDays] = useState(7);
   const [winStart, setWinStart] = useState<Date>(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; });
   const dateCols = useMemo(() => Array.from({ length: numDays }, (_, i) => addDays(winStart, i)), [winStart, numDays]);
   const winStartStr = useMemo(() => toDS(winStart), [winStart]);
@@ -238,6 +241,7 @@ export default function Bookings() {
   const [bookingBuffer, setBookingBuffer] = useState<Booking[]>([]);
   const [bufferRange, setBufferRange] = useState<{ from: string; to: string } | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const selectedDateStr = useMemo(() => toDS(selectedDate), [selectedDate]);
   const [dayBookings, setDayBookings] = useState<Booking[]>([]);
 
   const rangeBookings = useMemo(() => {
@@ -254,6 +258,7 @@ export default function Bookings() {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [ctx, setCtx] = useState<{ x: number; y: number; booking: Booking } | null>(null);
   
+  const [viewBooking, setViewBooking] = useState<Booking | null>(null);
   const [editBooking, setEditBooking] = useState<Booking | null>(null);
   const [shiftRoomBooking, setShiftRoomBooking] = useState<Booking | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -269,11 +274,23 @@ export default function Bookings() {
   const [drag, setDrag] = useState<{ rid: string; startCol: number; endCol: number; rowTop: number } | null>(null);
   const dragRef = useRef<{ rid: string; startCol: number; endCol: number; rowTop: number } | null>(null);
   const dragging = useRef(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const roRef = useRef<ResizeObserver | null>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const cellW = containerWidth > 0 ? Math.max(CELL_W / 2, Math.floor((containerWidth - LABEL_W) / numDays)) : CELL_W;
+
+  const attachScrollRef = useCallback((el: HTMLDivElement | null) => {
+    scrollRef.current = el;
+    roRef.current?.disconnect();
+    roRef.current = null;
+    if (!el) return;
+    setContainerWidth(el.getBoundingClientRect().width);
+    roRef.current = new ResizeObserver(([e]) => setContainerWidth(e.contentRect.width));
+    roRef.current.observe(el);
+  }, []);
 
   const prefillCheckIn = useRef('');
   const prefillCheckOut = useRef('');
-  const fetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fetchIdRef = useRef(0);
   const assignmentCacheRef = useRef<Map<string, RoomAssignmentDto[]>>(new Map());
   const [assignmentMap, setAssignmentMap] = useState<Map<string, RoomAssignmentDto[]>>(new Map());
@@ -301,74 +318,54 @@ export default function Bookings() {
     })();
   }, [selectedPropId, properties]);
 
-  const fetchBuffer = useCallback(async (propId: string, visStart: string, visEnd: string, immediate = false) => {
-    const bufFrom = toDS(addDays(new Date(visStart + 'T00:00:00'), -BUFFER_BEFORE));
-    const bufTo = toDS(addDays(new Date(visEnd + 'T00:00:00'), BUFFER_AFTER));
+  const fetchBuffer = useCallback(async (propId: string, visStart: string, visEnd: string) => {
+    const id = ++fetchIdRef.current;
+    setLoading(true);
+    try {
+      const [bks, daily] = await Promise.all([
+        bookingApi.getRange(propId, visStart, visEnd),
+        availabilityApi.getDailyAvailability(propId, visStart, visEnd).catch(() => []),
+      ]);
+      if (id !== fetchIdRef.current) return;
+      setBookingBuffer(bks);
+      setBufferRange({ from: visStart, to: visEnd });
 
-    if (fetchTimerRef.current) clearTimeout(fetchTimerRef.current);
-
-    const doFetch = async () => {
-      const id = ++fetchIdRef.current;
-      setLoading(true);
-      try {
-        const [bks, daily] = await Promise.all([
-          bookingApi.getRange(propId, bufFrom, bufTo),
-          availabilityApi.getDailyAvailability(propId, bufFrom, bufTo).catch(() => []),
-        ]);
+      const cache = assignmentCacheRef.current;
+      const newIds = (bks || []).map(b => b.id!).filter(Boolean);
+      for (const k of cache.keys()) { if (!newIds.includes(k)) cache.delete(k); }
+      const uncached = newIds.filter(bid => !cache.has(bid));
+      if (uncached.length > 0) {
+        const results = await Promise.allSettled(
+          uncached.map(bid =>
+            bookingApi.getRoomAssignments(propId, bid).then(a => ({ bid, assignments: a || [] }))
+          )
+        );
         if (id !== fetchIdRef.current) return;
-        setBookingBuffer(bks);
-        setBufferRange({ from: bufFrom, to: bufTo });
-
-        // ── Room assignment fetch ──────────────────────────────────────
-        const cache = assignmentCacheRef.current;
-        const newIds = (bks || []).map(b => b.id!).filter(Boolean);
-        // Evict cache entries for bookings no longer in the buffer
-        for (const k of cache.keys()) { if (!newIds.includes(k)) cache.delete(k); }
-        // Only fetch uncached IDs
-        const uncached = newIds.filter(bid => !cache.has(bid));
-        if (uncached.length > 0) {
-          const results = await Promise.allSettled(
-            uncached.map(bid =>
-              bookingApi.getRoomAssignments(propId, bid).then(a => ({ bid, assignments: a || [] }))
-            )
-          );
-          if (id !== fetchIdRef.current) return;
-          for (const r of results) {
-            if (r.status === 'fulfilled') cache.set(r.value.bid, r.value.assignments);
-          }
+        for (const r of results) {
+          if (r.status === 'fulfilled') cache.set(r.value.bid, r.value.assignments);
         }
-        setAssignmentMap(new Map(cache));
-
-        const m: Record<string, number> = {};
-        daily.forEach(d => { m[d.date] = d.occupancyRate; });
-        setOccMap(m);
-      } catch {
-        if (id !== fetchIdRef.current) return;
-        setBookingBuffer([]);
-        setBufferRange({ from: bufFrom, to: bufTo });
-        setOccMap({});
-      } finally {
-        if (id === fetchIdRef.current) setLoading(false);
       }
-    };
+      setAssignmentMap(new Map(cache));
 
-    if (immediate) { await doFetch(); }
-    else { fetchTimerRef.current = setTimeout(doFetch, NAV_DEBOUNCE_MS); }
+      const m: Record<string, number> = {};
+      daily.forEach(d => { m[d.date] = d.occupancyRate; });
+      setOccMap(m);
+    } catch {
+      if (id !== fetchIdRef.current) return;
+      setBookingBuffer([]);
+      setBufferRange({ from: visStart, to: visEnd });
+      setOccMap({});
+    } finally {
+      if (id === fetchIdRef.current) setLoading(false);
+    }
   }, []);
-
-  useEffect(() => () => { if (fetchTimerRef.current) clearTimeout(fetchTimerRef.current); }, []);
 
   useEffect(() => {
     if (!selectedPropId) return;
-    if (!bufferRange) { fetchBuffer(selectedPropId, winStartStr, winEndStr, true); return; }
-    const dL = diffDays(bufferRange.from, winStartStr);
-    const dR = diffDays(winEndStr, bufferRange.to);
-    if (dL < REFETCH_THRESHOLD || dR < REFETCH_THRESHOLD) {
-      fetchBuffer(selectedPropId, winStartStr, winEndStr);
-    }
-  }, [selectedPropId, winStartStr, winEndStr, bufferRange, fetchBuffer]);
+    fetchBuffer(selectedPropId, winStartStr, winEndStr);
+  }, [selectedPropId, winStartStr, winEndStr, fetchBuffer]);
 
-  useEffect(() => { setBufferRange(null); }, [selectedPropId]);
+  useEffect(() => { setBufferRange(null); setBookingBuffer([]); }, [selectedPropId]);
   useEffect(() => { assignmentCacheRef.current.clear(); setAssignmentMap(new Map()); }, [selectedPropId]);
 
   useEffect(() => {
@@ -378,9 +375,10 @@ export default function Bookings() {
       try {
         const bks = await bookingApi.getByDate(selectedPropId, ds, true);
         setDayBookings(bks || []);
-        setInCount(bks.filter(b => dateStr(b.checkIn) === ds && b.status === 'CONFIRMED').length);
-        setHouseCount(bks.filter(b => b.status === 'CHECKED_IN' && ds >= dateStr(b.checkIn) && ds < dateStr(b.checkOut)).length);
-        setOutCount(bks.filter(b => dateStr(b.checkOut) === ds && (b.status === 'CHECKED_IN' || b.status === 'CHECKED_OUT')).length);
+        const active = (b: Booking) => b.status !== 'CANCELLED' && b.status !== 'NO_SHOW';
+        setInCount(bks.filter(b => dateStr(b.checkIn) === ds && active(b)).length);
+        setHouseCount(bks.filter(b => active(b) && b.status !== 'CHECKED_OUT' && ds >= dateStr(b.checkIn) && ds < dateStr(b.checkOut)).length);
+        setOutCount(bks.filter(b => dateStr(b.checkOut) === ds && active(b)).length);
       } catch { setDayBookings([]); setInCount(0); setHouseCount(0); setOutCount(0); }
     })();
   }, [selectedPropId, selectedDate]);
@@ -432,7 +430,7 @@ export default function Bookings() {
   const refresh = useCallback(async () => {
     if (!selectedPropId) return;
     assignmentCacheRef.current.clear();
-    await fetchBuffer(selectedPropId, winStartStr, winEndStr, true);
+    await fetchBuffer(selectedPropId, winStartStr, winEndStr);
   }, [selectedPropId, winStartStr, winEndStr, fetchBuffer]);
   const statClick = useCallback((t: StatType) => { setListType(t); setShowList(true); }, []);
 
@@ -464,21 +462,6 @@ export default function Bookings() {
     if (room && to > from) setTimeout(() => openForm(room, toDS(dateCols[from]), toDS(dateCols[to])), 0);
   }, [rooms, dateCols, openForm]);
 
-  const scrollCooldownRef = useRef(false);
-  const handleScroll = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el || scrollCooldownRef.current) return;
-    const { scrollLeft, scrollWidth, clientWidth } = el;
-    let step = 0;
-    if (scrollWidth - scrollLeft - clientWidth < SCROLL_EDGE_PX) step = SCROLL_STEP_DAYS;
-    else if (scrollLeft < SCROLL_EDGE_PX) step = -SCROLL_STEP_DAYS;
-    if (step !== 0) {
-      scrollCooldownRef.current = true;
-      navigate(step);
-      setTimeout(() => { scrollCooldownRef.current = false; }, SCROLL_COOLDOWN_MS);
-    }
-  }, [navigate]);
-
   const getFiltered = useCallback((): Booking[] => {
     const ds = toDS(selectedDate);
     switch (listType) {
@@ -501,7 +484,7 @@ export default function Bookings() {
     return <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-slate-50"><LoadingSpinner text="Loading tape chart…" /></div>;
   }
 
-  const gridW = LABEL_W + numDays * CELL_W;
+  const gridW = LABEL_W + numDays * cellW;
   const chartMinH = Math.max(visibleRoomCount, MIN_CHART_ROWS) * CELL_H + 70;
 
   return (
@@ -521,15 +504,11 @@ export default function Bookings() {
               </select>
             </div>
             <button type="button" className={btnSecondary} onClick={() => setShowTasksModal(true)}>
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-emerald-500" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
-              </svg>
+              <List className="h-4 w-4 text-emerald-500" />
               Daily Tasks
             </button>
             <button type="button" className={btnSecondary} onClick={() => setShowGroupModal(true)}>
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-indigo-500" viewBox="0 0 20 20" fill="currentColor">
-                <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
-              </svg>
+              <Users className="h-4 w-4 text-indigo-500" />
               New Group Block
             </button>
             <button type="button" className={btnPrimary} onClick={() => openForm(null, '', '')}>
@@ -538,32 +517,48 @@ export default function Bookings() {
           </div>
         </div>
 
-        <div className="mt-6 flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1">
-            <button type="button" className={btnSecondary} onClick={() => navigate(-numDays)}>
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-              Prev
-            </button>
-            <button type="button" className={btnSecondary} onClick={goToday}>Today</button>
-            <button type="button" className={btnSecondary} onClick={() => navigate(numDays)}>
-              Next
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>
-            </button>
+        <div className="mt-6 flex gap-6">
+          <div className="flex-1 flex items-center gap-3">
+            <div className="flex items-center gap-1">
+              <button type="button" className={btnSecondary} onClick={() => navigate(-numDays)}>
+                <ChevronLeft className="h-4 w-4" />
+                Prev
+              </button>
+              <button type="button" className={btnSecondary} onClick={goToday}>Today</button>
+              <button type="button" className={btnSecondary} onClick={() => navigate(numDays)}>
+                Next
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+            <span className="text-sm font-semibold text-slate-600">{shortDate(winStart)} — {shortDate(addDays(winStart, numDays - 1))}</span>
+            {loading && <span className="text-xs text-slate-400 animate-pulse">Refreshing…</span>}
+            <div className="ml-auto flex items-center gap-0.5 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+              <button type="button"
+                className={cn('rounded-lg px-4 py-1.5 text-xs font-bold transition-all',
+                  numDays === 7 ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100')}
+                onClick={() => setNumDays(7)}>
+                7d
+              </button>
+              <button type="button"
+                className={cn('rounded-lg px-4 py-1.5 text-xs font-bold transition-all',
+                  numDays === 14 ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100')}
+                onClick={() => setNumDays(14)}>
+                14d
+              </button>
+            </div>
           </div>
-          <span className="text-sm font-semibold text-slate-600">{shortDate(winStart)} — {shortDate(addDays(winStart, numDays - 1))}</span>
-          {loading && <span className="text-xs text-slate-400 animate-pulse">Refreshing…</span>}
+          <div className="hidden lg:block w-72 shrink-0" />
         </div>
 
         <div className="mt-6 flex gap-6">
           <div className="flex-1 flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div ref={scrollRef}
-              className="relative flex-1 overflow-auto"
+            <div ref={attachScrollRef}
+              className="relative flex-1 overflow-y-auto"
               style={{ minHeight: chartMinH, maxHeight: 'calc(100vh - 300px)' }}
               onMouseUp={handleDragEnd}
-              onMouseLeave={() => { if (dragging.current) handleDragEnd(); }}
-              onScroll={handleScroll}>
+              onMouseLeave={() => { if (dragging.current) handleDragEnd(); }}>
 
-              <DragOverlay drag={drag} />
+              <DragOverlay drag={drag} cellW={cellW} />
 
               <div style={{ minWidth: gridW, minHeight: chartMinH }}>
                 <div className="sticky top-0 z-20 flex" style={{ minWidth: gridW }}>
@@ -574,12 +569,12 @@ export default function Bookings() {
                   {dateCols.map(d => {
                     const ds = toDS(d);
                     const isT = ds === todayStr;
-                    const isSel = ds === toDS(selectedDate);
+                    const isSel = ds === selectedDateStr;
                     const occ = occMap[ds];
                     return (
-                      <div key={ds} style={{ width: CELL_W, minWidth: CELL_W }}
+                      <div key={ds} style={{ width: cellW, minWidth: cellW }}
                         className={cn('flex flex-col items-center justify-end border-b border-r border-slate-200 px-1 pb-1 pt-2 cursor-pointer transition-colors',
-                          isT && 'bg-blue-50/80', isSel && !isT && 'bg-emerald-50/60', !isT && !isSel && 'bg-slate-50')}
+                          isT && 'bg-blue-100', isSel && !isT && 'bg-blue-100 shadow-[inset_2px_0_0_0_#93c5fd,inset_-2px_0_0_0_#93c5fd]', !isT && !isSel && 'bg-slate-50')}
                         onClick={() => setSelectedDate(d)}>
                         <span className={cn('text-[10px] font-semibold', isT ? 'text-blue-600' : 'text-slate-400')}>{dayLabel(d)}</span>
                         <span className={cn('text-sm font-bold', isT ? 'text-blue-700' : 'text-slate-700')}>{d.getDate()}</span>
@@ -602,10 +597,7 @@ export default function Bookings() {
                     <div key={g.type}>
                       <div className="sticky left-0 z-10 flex items-center gap-2 border-b border-slate-200 bg-slate-100/80 px-4 py-2 cursor-pointer select-none"
                         style={{ minWidth: gridW }} onClick={() => toggle(g.type)}>
-                        <svg xmlns="http://www.w3.org/2000/svg" className={cn('h-3.5 w-3.5 text-slate-400 transition-transform', !isC && 'rotate-90')}
-                          viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                        </svg>
+                        <ChevronRight className={cn('h-3.5 w-3.5 text-slate-400 transition-transform', !isC && 'rotate-90')} />
                         <span className="text-xs font-bold uppercase tracking-wider text-slate-500">{g.type}</span>
                         <span className="rounded-md bg-slate-200 px-1.5 py-0.5 text-[10px] font-bold text-slate-500">{g.rooms.length}</span>
                       </div>
@@ -625,11 +617,14 @@ export default function Bookings() {
                             {dateCols.map((d, ci) => {
                               const ds = toDS(d);
                               const isT = ds === todayStr;
+                              const isSel = ds === selectedDateStr;
                               return (
                                 <div key={ds}
                                   className={cn('border-b border-r border-slate-100 transition-colors',
-                                    isT && 'bg-blue-50/30', !isT && 'hover:bg-slate-50/80')}
-                                  style={{ width: CELL_W, minWidth: CELL_W, height: CELL_H }}
+                                    isT && 'bg-blue-50/30',
+                                    isSel && !isT && 'bg-blue-50/70 shadow-[inset_2px_0_0_0_#93c5fd,inset_-2px_0_0_0_#93c5fd]',
+                                    !isT && !isSel && 'hover:bg-slate-50/80')}
+                                  style={{ width: cellW, minWidth: cellW, height: CELL_H }}
                                   onMouseDown={e => {
                                     e.preventDefault();
                                     const rect = e.currentTarget.getBoundingClientRect();
@@ -651,8 +646,6 @@ export default function Bookings() {
                               const ci = dateStr(assignment.startDate);
                               const co = dateStr(assignment.endDate);
                               const isNoShow = bk.status === 'NO_SHOW';
-                              const isCancelled = bk.status === 'CANCELLED';
-                              const hasMaintenance = !isNoShow && !isCancelled;
                               const allAssignments = assignmentMap.get(bk.id!) || [];
                               const isShifted = allAssignments.filter(a => a.status !== 'CANCELLED').length > 1;
                               const isCompleted = assignment.status === 'COMPLETED';
@@ -661,8 +654,7 @@ export default function Bookings() {
                               const unClampedStartOff = diffDays(winStartStr, ci);
                               const unClampedEndOff = diffDays(winStartStr, co);
                               
-                              // Total occupied width in days (including the 1-day maintenance buffer if applicable)
-                              const unClampedTotalEndOff = hasMaintenance ? unClampedEndOff + 1 : unClampedEndOff;
+                              const unClampedTotalEndOff = unClampedEndOff + 1;
 
                               // Visual start/end constrained to the visible 0..numDays window
                               const visStartOff = Math.max(0, unClampedStartOff);
@@ -672,19 +664,13 @@ export default function Bookings() {
 
                               if (visEndOff <= 0 || visStartOff >= numDays) return null;
 
-                              const leftPx = LABEL_W + visStartOff * CELL_W + 2;
-                              const widthPx = (visEndOff - visStartOff) * CELL_W - 4;
+                              const leftPx = LABEL_W + visStartOff * cellW + 2;
+                              const widthPx = (visEndOff - visStartOff) * cellW - 4;
                               if (widthPx <= 0) return null;
 
                               const bleedsLeft = unClampedStartOff < 0;
                               const bleedsRight = isNoShow ? false : (unClampedTotalEndOff > numDays);
-                              const bookingBleedsRight = hasMaintenance ? (unClampedEndOff + 0.5) > numDays : unClampedEndOff > numDays;
-
-                              // The exact pixel line where the guest stay ends and maintenance stripes begin
-                              // We use +0.5 to push the booking color halfway into the checkout day.
-                              const boundaryPx = hasMaintenance 
-                                ? (unClampedEndOff + 0.5 - visStartOff) * CELL_W 
-                                : (unClampedEndOff - visStartOff) * CELL_W;
+                              const bookingBleedsRight = unClampedEndOff + 1 > numDays;
 
                               const sc = STATUS_COLORS[bk.status] ?? STATUS_COLORS.PENDING;
                               const guestName = bk.guestName || 'Guest';
@@ -735,31 +721,25 @@ export default function Bookings() {
                                     </div>
                                   )}
 
-                                  {/* Standard Guest Stay Part */}
-                                  {!isNoShow && boundaryPx > 0 && (
-                                    <div style={{ width: Math.min(boundaryPx, widthPx) }}
-                                         className={cn("h-full flex items-center px-2 relative shrink-0",
-                                          hasMaintenance && boundaryPx < widthPx ? 'border-r border-white/20' : '', sc.bar, sc.text)}>
-                                      {bleedsLeft && <span className="mr-1 text-[10px] opacity-70">◂</span>}
+                                  {/* Guest Stay */}
+                                  {!isNoShow && (
+                                    <div style={{ width: widthPx }}
+                                         className={cn("h-full flex items-center px-2 gap-0.5 relative shrink-0", sc.bar, sc.text)}>
+                                      {bleedsLeft
+                                        ? <span className="text-[10px] opacity-70 shrink-0">◂</span>
+                                        : <PlaneLanding className="w-[11px] h-[11px] shrink-0 opacity-80" title="Arrival" />
+                                      }
                                       {isShiftedIn && !bleedsLeft && (
-                                        <span className="mr-1 text-[10px] opacity-75" title="Moved from another room">↩</span>
+                                        <span className="text-[10px] opacity-75 shrink-0" title="Moved from another room">↩</span>
                                       )}
-                                      <span className="text-[11px] font-bold truncate">{guestName}</span>
-                                      {bookingBleedsRight && <span className="ml-auto pl-1 text-[10px] opacity-70">▸</span>}
+                                      <span className="text-[11px] font-bold truncate flex-1 min-w-0">{guestName}</span>
+                                      {bk.specialRequests && (
+                                        <FileText className="w-[10px] h-[10px] shrink-0 opacity-75" title={bk.specialRequests} />
+                                      )}
+                                      {bookingBleedsRight && <span className="text-[10px] opacity-70 shrink-0">▸</span>}
                                       {isShifted && isCompleted && !bookingBleedsRight && (
-                                        <span className="ml-auto pl-1 text-[10px] opacity-75" title="Continued in another room">▶</span>
+                                        <span className="text-[10px] opacity-75 shrink-0" title="Continued in another room">▶</span>
                                       )}
-                                    </div>
-                                  )}
-
-                                  {/* Post-Checkout Maintenance Block Part */}
-                                  {!isNoShow && hasMaintenance && boundaryPx < widthPx && (
-                                    <div style={{ 
-                                          width: widthPx - Math.max(0, boundaryPx), 
-                                          background: 'repeating-linear-gradient(45deg, #f8fafc, #f8fafc 8px, #e2e8f0 8px, #e2e8f0 16px)' 
-                                        }}
-                                        className="h-full flex items-center justify-center shrink-0 border-l border-black/5">
-                                      <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest hidden sm:block">Maint</span>
                                     </div>
                                   )}
                                 </div>
@@ -774,42 +754,12 @@ export default function Bookings() {
               </div>
             </div>
 
-            <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50/90 backdrop-blur-sm px-5 py-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">View</span>
-                <div className="flex rounded-lg border border-slate-200 bg-white p-0.5">
-                  <button type="button"
-                    className={cn('rounded-md px-3 py-1.5 text-xs font-bold transition-all',
-                      numDays === 7 ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700')}
-                    onClick={() => setNumDays(7)}>
-                    7 Days
-                  </button>
-                  <button type="button"
-                    className={cn('rounded-md px-3 py-1.5 text-xs font-bold transition-all',
-                      numDays === 14 ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700')}
-                    onClick={() => setNumDays(14)}>
-                    14 Days
-                  </button>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button type="button" className={btnSecondary + ' !py-1.5 !text-xs'} onClick={() => navigate(-numDays)}>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                  Prev {numDays}d
-                </button>
-                <button type="button" className={btnSecondary + ' !py-1.5 !text-xs'} onClick={goToday}>Today</button>
-                <button type="button" className={btnSecondary + ' !py-1.5 !text-xs'} onClick={() => navigate(numDays)}>
-                  Next {numDays}d
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>
-                </button>
-              </div>
-            </div>
           </div>
 
           <div className="hidden lg:block w-72 shrink-0 space-y-4">
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                {toDS(selectedDate) === todayStr ? 'Today' : 'Selected Date'}
+                {selectedDateStr === todayStr ? 'Today' : 'Selected Date'}
               </p>
               <p className="mt-1 text-lg font-bold text-slate-900">
                 {selectedDate.toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata', weekday: 'long', day: 'numeric', month: 'long' })}
@@ -902,13 +852,24 @@ export default function Bookings() {
       )}
       {showList && selectedPropId && (
         <BookingsList bookings={getFiltered()} propertyId={selectedPropId} listType={listType}
-          onClose={() => setShowList(false)} onUpdate={refresh} />
+          onClose={() => setShowList(false)} onUpdate={refresh}
+          onViewBooking={(b) => { setShowList(false); setViewBooking(b); }} />
       )}
       {selectedPropId && (
         <CtxMenu state={ctx} propertyId={selectedPropId} onClose={() => setCtx(null)}
           onAction={refresh} onEarlyCheckout={setEarlyCheckoutBookingId}
           onEditBooking={setEditBooking} onShiftRoom={setShiftRoomBooking}
-          onShowFolio={(id, name) => setViewFolioBooking({ id, guestName: name })} />
+          onShowFolio={(id, name) => setViewFolioBooking({ id, guestName: name })}
+          onViewBooking={setViewBooking} />
+      )}
+      {viewBooking && selectedPropId && (
+        <BookingDetailModal
+          booking={viewBooking}
+          propertyId={selectedPropId}
+          onClose={() => setViewBooking(null)}
+          onEditBooking={(b) => { setViewBooking(null); setEditBooking(b); }}
+          onOpenFolio={(id, name) => { setViewBooking(null); setViewFolioBooking({ id, guestName: name }); }}
+        />
       )}
     </div>
   );

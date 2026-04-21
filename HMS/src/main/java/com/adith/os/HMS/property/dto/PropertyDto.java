@@ -1,5 +1,6 @@
 package com.adith.os.HMS.property.dto;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 public record PropertyDto(
@@ -9,6 +10,7 @@ public record PropertyDto(
         String address,
         String country,
         Integer totalRooms,
-        String gstNumber
+        String gstNumber,
+        BigDecimal extraBedRatePerNight
 ) {}
 

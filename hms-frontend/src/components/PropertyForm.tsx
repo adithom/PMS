@@ -35,7 +35,7 @@ export default function PropertyForm({ property, onSave, onCancel }: PropertyFor
         name: property.name,
         code: property.code,
         address: property.address || '',
-        region: '', // Not in your DTO, but in backend
+        region: '',
         country: property.country,
         postalCode: '',
         phone: '',

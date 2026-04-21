@@ -37,7 +37,7 @@ public class AvailabilityService {
 
         // Booking statuses that consume unit capacity before a room is assigned
         private static final List<BookingStatus> CAPACITY_HOLD_BOOKING_STATUSES =
-                List.of(BookingStatus.CONFIRMED, BookingStatus.CHECKED_IN);
+                List.of(BookingStatus.PENDING, BookingStatus.CONFIRMED, BookingStatus.CHECKED_IN);
 
         public AvailabilityService(
                         PropertyRepository propertyRepository,

@@ -11,5 +11,6 @@ public record MealPlanDto(
         MealPlanType mealPlanType,
         String displayName,
         BigDecimal pricePerNight,
+        BigDecimal childrenPricePerNight,
         boolean active
 ) {}

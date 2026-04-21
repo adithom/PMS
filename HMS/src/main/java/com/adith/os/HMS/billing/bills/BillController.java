@@ -2,7 +2,7 @@ package com.adith.os.HMS.billing.bills;
 
 import com.adith.os.HMS.billing.bills.dto.BillDto;
 import com.adith.os.HMS.billing.bills.dto.BillLedgerPageDto;
-import com.adith.os.HMS.billing.bills.dto.DoubleBillDto;
+import com.adith.os.HMS.billing.bills.dto.MultiBillDto;
 import com.adith.os.HMS.security.UserPrincipal;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.ConstraintViolationException;
@@ -32,15 +32,13 @@ public class BillController {
         this.billService = billService;
     }
 
-    // Generates Room and Ancillary bills for a given Folio.
     @PostMapping("/generate/{folioId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
-    public ResponseEntity<DoubleBillDto> generateBills(
+    public ResponseEntity<MultiBillDto> generateBills(
             @PathVariable UUID folioId,
             @RequestParam(required = false) String guestGstNumber
     ) {
-        DoubleBillDto generatedBills = billService.generateDoubleBill(folioId, guestGstNumber);
-        return ResponseEntity.ok(generatedBills);
+        return ResponseEntity.ok(billService.generateMultiBill(folioId, guestGstNumber));
     }
 
     @PostMapping("/{billId}/void")

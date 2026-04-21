@@ -59,6 +59,11 @@ public class BookingMapper {
         );
         booking.setReferenceNumber(bookingCreationDto.referenceNumber());
         booking.setMealPlanType(bookingCreationDto.mealPlanType());
+        booking.setMealPlanPricePerNight(bookingCreationDto.mealPlanPricePerNight());
+        booking.setMealPlanChildrenPricePerNight(bookingCreationDto.mealPlanChildrenPricePerNight());
+        if (bookingCreationDto.extraBeds() != null) booking.setExtraBeds(bookingCreationDto.extraBeds());
+        booking.setExtraBedRatePerNight(bookingCreationDto.extraBedRatePerNight());
+        booking.setExtraBedChargeCode(bookingCreationDto.extraBedChargeCode());
         return booking;
     }
 
@@ -97,15 +102,29 @@ public class BookingMapper {
                 booking.getCommissionRate(),
                 booking.getMealPlanType(),
                 booking.getMealPlanType() != null ? booking.getMealPlanType().getDisplayName() : null,
-                resolveMealPlanPrice(booking)
+                resolveMealPlanPrice(booking),
+                resolveMealPlanChildrenPrice(booking),
+                booking.getExtraBeds(),
+                booking.getExtraBedRatePerNight(),
+                booking.getExtraBedChargeCode()
         );
     }
 
     private BigDecimal resolveMealPlanPrice(Booking booking) {
         if (booking.getMealPlanType() == null || booking.getProperty() == null) return null;
+        if (booking.getMealPlanPricePerNight() != null) return booking.getMealPlanPricePerNight();
         return mealPlanRepository
                 .findByPropertyIdAndMealPlanType(booking.getProperty().getId(), booking.getMealPlanType())
                 .map(PropertyMealPlan::getPricePerNight)
+                .orElse(null);
+    }
+
+    private BigDecimal resolveMealPlanChildrenPrice(Booking booking) {
+        if (booking.getMealPlanType() == null || booking.getProperty() == null) return null;
+        if (booking.getMealPlanChildrenPricePerNight() != null) return booking.getMealPlanChildrenPricePerNight();
+        return mealPlanRepository
+                .findByPropertyIdAndMealPlanType(booking.getProperty().getId(), booking.getMealPlanType())
+                .map(PropertyMealPlan::getChildrenPricePerNight)
                 .orElse(null);
     }
 

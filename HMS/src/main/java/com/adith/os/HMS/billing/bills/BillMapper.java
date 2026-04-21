@@ -1,5 +1,6 @@
 package com.adith.os.HMS.billing.bills;
 
+import com.adith.os.HMS.billing.folio.ChargeCategory;
 import com.adith.os.HMS.billing.folio.Folio;
 import com.adith.os.HMS.billing.folio.dto.ChargeDto;
 import com.adith.os.HMS.billing.bills.dto.BillDto;
@@ -60,17 +61,31 @@ public class BillMapper {
         String safeGstNumber = (guestGstNumber != null) ? guestGstNumber : "";
 
         // --- 3. DYNAMIC PAYMENT & BALANCE CALCULATIONS ---
-        // Sum up all payments that are either general folio deposits (null) OR specifically targeted to this bill's category
+        // Map legacy ChargeCategory routing onto the new BillType:
+        //   null target      → applies to every bill
+        //   ROOM_RENT/MEAL_PLAN → applies only to the ROOM_RENT bill
+        //   ANCILLARY        → applies to all non-room-rent bills
         BigDecimal categoryAmountPaid = folio.getPayments().stream()
                 .filter(p -> p.getPaymentStatus() == PaymentStatus.COMPLETED || p.getPaymentStatus() == PaymentStatus.REFUNDED)
-                .filter(p -> p.getTargetCategory() == null || p.getTargetCategory() == bill.getCategory())
+                .filter(p -> {
+                    ChargeCategory t = p.getTargetCategory();
+                    if (t == null) return true;
+                    if (bill.getBillType() == BillType.ROOM_RENT)
+                        return t == ChargeCategory.ROOM_RENT || t == ChargeCategory.MEAL_PLAN;
+                    return t == ChargeCategory.ANCILLARY;
+                })
                 .map(Payment::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // Subtract any refunds that happened on those specific payments
         BigDecimal categoryRefunds = folio.getPayments().stream()
                 .filter(p -> p.getPaymentStatus() == PaymentStatus.COMPLETED || p.getPaymentStatus() == PaymentStatus.REFUNDED)
-                .filter(p -> p.getTargetCategory() == null || p.getTargetCategory() == bill.getCategory())
+                .filter(p -> {
+                    ChargeCategory t = p.getTargetCategory();
+                    if (t == null) return true;
+                    if (bill.getBillType() == BillType.ROOM_RENT)
+                        return t == ChargeCategory.ROOM_RENT || t == ChargeCategory.MEAL_PLAN;
+                    return t == ChargeCategory.ANCILLARY;
+                })
                 .map(p -> p.getRefundedAmount() != null ? p.getRefundedAmount() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
@@ -87,7 +102,7 @@ public class BillMapper {
                 folio.getId(),
                 bill.getGenerationBatchId(),
                 property.getId(),
-                bill.getCategory().name(),
+                bill.getBillType().name(),
 
                 property.getName(),
                 property.getAddress(),
@@ -157,7 +172,7 @@ public class BillMapper {
                 folio.getId(),
                 bill.getGenerationBatchId(),
                 property.getId(),
-                bill.getCategory().name(),
+                bill.getBillType().name(),
 
                 property.getName(),
                 property.getAddress(),

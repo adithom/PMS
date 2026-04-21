@@ -7,6 +7,7 @@ export interface Property {
   address: string;
   country: string;
   totalRooms: number;
+  extraBedRatePerNight?: number;
 }
 
 export type MealPlanType = 'CP' | 'MAP' | 'AP';
@@ -17,6 +18,7 @@ export interface MealPlan {
   mealPlanType: MealPlanType;
   displayName: string;
   pricePerNight: number;
+  childrenPricePerNight: number;
   active: boolean;
 }
 
@@ -79,6 +81,10 @@ export interface Booking {
   mealPlanType?: MealPlanType;
   mealPlanDisplayName?: string;
   mealPlanPricePerNight?: number;
+  mealPlanChildrenPricePerNight?: number;
+  extraBeds?: number;
+  extraBedRatePerNight?: number;
+  extraBedChargeCode?: 'ROOM_RENT' | 'MISC';
 }
 
 export interface TravelAgent {

@@ -6,6 +6,7 @@ import com.adith.os.HMS.unit.Unit;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 
+import java.math.BigDecimal;
 import java.sql.Time;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -52,6 +53,9 @@ public class Property {
 
     @Column(name = "checkout_time", columnDefinition = "time default '14:00:00'")
     private Time checkOutTime;
+
+    @Column(name = "extra_bed_rate_per_night", precision = 10, scale = 2)
+    private BigDecimal extraBedRatePerNight;
 
     @OneToMany(mappedBy = "property", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Unit> units;
@@ -180,6 +184,14 @@ public class Property {
 
     public void setCheckOutTime(Time checkOutTime) {
         this.checkOutTime = checkOutTime;
+    }
+
+    public BigDecimal getExtraBedRatePerNight() {
+        return extraBedRatePerNight;
+    }
+
+    public void setExtraBedRatePerNight(BigDecimal extraBedRatePerNight) {
+        this.extraBedRatePerNight = extraBedRatePerNight;
     }
 
     public List<Unit> getUnits() {

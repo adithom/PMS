@@ -28,6 +28,10 @@ public class PropertyMealPlan {
     @Column(name = "price_per_night", precision = 10, scale = 2, nullable = false)
     private BigDecimal pricePerNight;
 
+    @Column(name = "children_price_per_night", precision = 10, scale = 2,
+            columnDefinition = "numeric(10,2) default 0")
+    private BigDecimal childrenPricePerNight = BigDecimal.ZERO;
+
     @Column(nullable = false, columnDefinition = "boolean default true")
     private boolean active = true;
 
@@ -54,6 +58,9 @@ public class PropertyMealPlan {
 
     public BigDecimal getPricePerNight() { return pricePerNight; }
     public void setPricePerNight(BigDecimal pricePerNight) { this.pricePerNight = pricePerNight; }
+
+    public BigDecimal getChildrenPricePerNight() { return childrenPricePerNight; }
+    public void setChildrenPricePerNight(BigDecimal childrenPricePerNight) { this.childrenPricePerNight = childrenPricePerNight; }
 
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }

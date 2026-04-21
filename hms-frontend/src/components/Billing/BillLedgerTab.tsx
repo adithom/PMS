@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { Download } from 'lucide-react';
 import billingApi from '../../api/billingApi';
 import type { BillDto, BillLedgerPageDto } from '../../api/billingApi';
 import { triggerPresignedDownload } from '../../utils/downloadUtils';
@@ -34,7 +35,7 @@ export default function BillLedgerTab() {
   const [zipping, setZipping] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState<'ALL' | 'ROOM_RENT' | 'ANCILLARY'>('ALL');
+  const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
   const [propertyFilter, setPropertyFilter] = useState<string>('ALL');
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
@@ -176,12 +177,17 @@ export default function BillLedgerTab() {
           />
           <select
             value={categoryFilter}
-            onChange={e => setCategoryFilter(e.target.value as 'ALL' | 'ROOM_RENT' | 'ANCILLARY')}
+            onChange={e => setCategoryFilter(e.target.value)}
             className={inputCls}
           >
             <option value="ALL">All Types</option>
-            <option value="ROOM_RENT">Room Rent</option>
-            <option value="ANCILLARY">Ancillary</option>
+            <option value="ROOM_RENT">Room & Meal Plan</option>
+            <option value="RESTAURANT">Restaurant</option>
+            <option value="SPA">Spa</option>
+            <option value="LAUNDRY">Laundry</option>
+            <option value="TRAVEL_DESK">Travel Desk</option>
+            <option value="SHOP">Gift Shop</option>
+            <option value="MISC">Miscellaneous</option>
           </select>
           <select
             value={propertyFilter}
@@ -287,7 +293,7 @@ export default function BillLedgerTab() {
                         ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
                         : 'bg-teal-50 text-teal-700 border-teal-200'
                     }`}>
-                      {bill.category === 'ROOM_RENT' ? 'Room' : 'Ancillary'}
+                      {({ ROOM_RENT: 'Room', RESTAURANT: 'Restaurant', SPA: 'Spa', LAUNDRY: 'Laundry', TRAVEL_DESK: 'Travel', SHOP: 'Shop', MISC: 'Misc' } as Record<string, string>)[bill.category ?? ''] ?? bill.category ?? '—'}
                     </span>
                   </td>
                   <td className="px-3 py-2 text-right text-xs font-semibold text-slate-800 whitespace-nowrap">
@@ -300,9 +306,7 @@ export default function BillLedgerTab() {
                       title="Download PDF"
                       className="flex h-6 w-6 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600 disabled:opacity-40 mx-auto"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
-                      </svg>
+                      <Download className="h-3.5 w-3.5" />
                     </button>
                   </td>
                 </tr>

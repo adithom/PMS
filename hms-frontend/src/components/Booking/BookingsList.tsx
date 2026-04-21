@@ -18,6 +18,7 @@ interface BookingsListProps {
   listType: StatType;
   onClose: () => void;
   onUpdate: () => void;
+  onViewBooking?: (booking: Booking) => void;
 }
 
 function cn(...classes: Array<string | false | null | undefined>) {
@@ -53,7 +54,7 @@ const getTodayStr = () =>
 /* Component                                                    */
 /* ────────────────────────────────────────────────────────────── */
 
-export default function BookingsList({ bookings, propertyId, listType, onClose, onUpdate }: BookingsListProps) {
+export default function BookingsList({ bookings, propertyId, listType, onClose, onUpdate, onViewBooking }: BookingsListProps) {
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
@@ -180,6 +181,16 @@ export default function BookingsList({ bookings, propertyId, listType, onClose, 
                     <p><span className="font-bold text-slate-400">Guests:</span> {booking.adults}A, {booking.children}C</p>
                   </div>
 
+                  {(booking.extraBeds != null && booking.extraBeds > 0) && (
+                    <div className="mt-2 flex items-center gap-1.5">
+                      <span className="rounded-md border border-indigo-100 bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700">
+                        +{booking.extraBeds} Extra Bed{booking.extraBeds !== 1 ? 's' : ''}
+                      </span>
+                      {booking.extraBedChargeCode && (
+                        <span className="text-[10px] text-slate-400">{booking.extraBedChargeCode === 'ROOM_RENT' ? 'Room Rent' : 'Misc'}</span>
+                      )}
+                    </div>
+                  )}
                   {booking.specialRequests && (
                     <div className="mt-3 rounded-lg border border-amber-100 bg-amber-50/50 p-2.5 text-[11px] text-amber-800">
                       <strong className="block text-[10px] uppercase tracking-wider text-amber-600/70 mb-0.5">Special Requests</strong>
@@ -201,6 +212,9 @@ export default function BookingsList({ bookings, propertyId, listType, onClose, 
                   )}
                   {booking.status !== 'CANCELLED' && booking.status !== 'CHECKED_OUT' && (
                     <button onClick={() => { setSelectedBooking(booking); setShowEditForm(true); }} className={btnSecondary}>Edit</button>
+                  )}
+                  {onViewBooking && (
+                    <button onClick={() => { onClose(); onViewBooking(booking); }} className={btnSecondary}>View</button>
                   )}
                 </div>
 

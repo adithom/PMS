@@ -1,6 +1,6 @@
 package com.adith.os.HMS.billing.bills;
 
-import com.adith.os.HMS.billing.bills.dto.GroupDoubleBillDto;
+import com.adith.os.HMS.billing.bills.dto.GroupMultiBillDto;
 import com.adith.os.HMS.security.UserPrincipal;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -30,21 +30,15 @@ public class GroupBillController {
         this.groupBillGenerationService = groupBillGenerationService;
     }
 
-    /**
-     * Generate room rent + ancillary bills for a group booking.
-     * Fails with 409 if active bills already exist — void them first.
-     *
-     * POST /api/properties/{propertyId}/group-bookings/{parentBookingId}/bills/generate
-     */
     @PostMapping("/generate")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
-    public ResponseEntity<GroupDoubleBillDto> generateGroupBills(
+    public ResponseEntity<GroupMultiBillDto> generateGroupBills(
             @PathVariable UUID propertyId,
             @PathVariable UUID parentBookingId,
             @RequestParam(required = false) String guestGstNumber) {
 
-        GroupDoubleBillDto result = groupBillGenerationService
-                .generateGroupDoubleBill(propertyId, parentBookingId, guestGstNumber);
+        GroupMultiBillDto result = groupBillGenerationService
+                .generateGroupMultiBill(propertyId, parentBookingId, guestGstNumber);
         return ResponseEntity.status(HttpStatus.CREATED).body(result);
     }
 

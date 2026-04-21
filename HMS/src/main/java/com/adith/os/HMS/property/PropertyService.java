@@ -176,6 +176,7 @@ public class PropertyService {
         entity.setPostalCode(dto.postalCode());
         entity.setCountry(dto.country());
         entity.setGstNumber(dto.gstNumber());
+        entity.setExtraBedRatePerNight(dto.extraBedRatePerNight());
 
         Property saved = propertyRepository.save(entity);
         return propertyMapper.toDto(saved);
@@ -237,6 +238,9 @@ public class PropertyService {
         }
         if (dto.gstNumber() != null) {
             entity.setGstNumber(dto.gstNumber());
+        }
+        if (dto.extraBedRatePerNight() != null) {
+            entity.setExtraBedRatePerNight(dto.extraBedRatePerNight());
         }
 
         Property saved = propertyRepository.save(entity);
