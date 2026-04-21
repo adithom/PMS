@@ -16,12 +16,14 @@ import com.adith.os.HMS.roomassignment.RoomAssignmentRepository;
 import com.adith.os.HMS.roomassignment.RoomAssignmentStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -36,6 +38,7 @@ public class NightAuditService {
     private static final List<RoomAssignmentStatus> COMPLETABLE_ASSIGNMENT_STATUSES =
             List.of(RoomAssignmentStatus.SCHEDULED, RoomAssignmentStatus.ACTIVE);
     private static final int CATCH_UP_LOOKBACK_DAYS = 7;
+    private static final ZoneId HOTEL_ZONE = ZoneId.of("Asia/Kolkata");
 
     private final RoomAssignmentRepository roomAssignmentRepository;
     private final FolioService folioService;
@@ -43,6 +46,7 @@ public class NightAuditService {
     private final BookingRepository bookingRepository;
     private final NightAuditLogRepository nightAuditLogRepository;
     private final PropertyMealPlanRepository mealPlanRepository;
+    private final ApplicationEventPublisher eventPublisher;
     private final AtomicBoolean isRunning = new AtomicBoolean(false);
 
     public NightAuditService(RoomAssignmentRepository roomAssignmentRepository,
@@ -50,35 +54,26 @@ public class NightAuditService {
                              FolioChargeRepository folioChargeRepository,
                              BookingRepository bookingRepository,
                              NightAuditLogRepository nightAuditLogRepository,
-                             PropertyMealPlanRepository mealPlanRepository) {
+                             PropertyMealPlanRepository mealPlanRepository,
+                             ApplicationEventPublisher eventPublisher) {
         this.roomAssignmentRepository = roomAssignmentRepository;
         this.folioService = folioService;
         this.folioChargeRepository = folioChargeRepository;
         this.bookingRepository = bookingRepository;
         this.nightAuditLogRepository = nightAuditLogRepository;
         this.mealPlanRepository = mealPlanRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     public boolean isAuditRunning() {
         return isRunning.get();
     }
 
-    /**
-     * Full nightly batch job:
-     * 1. Post charges for the previous night
-     * 2. Roll room-assignment inventory into the new business date
-     *
-     * Runs at the configured cron schedule (default: 2:00 AM daily).
-     */
-    @Scheduled(cron = "${hms.night-audit.cron:0 0 2 * * *}")
+    @Scheduled(cron = "${hms.night-audit.cron:0 0 2 * * *}", zone = "Asia/Kolkata")
     public void runFullNightAudit() {
-        runFullNightAuditForDate(LocalDate.now().minusDays(1), "AUTO");
+        runFullNightAuditForDate(LocalDate.now(HOTEL_ZONE).minusDays(1), "AUTO");
     }
 
-    /**
-     * Manually trigger the night audit for a specific date.
-     * Useful for backfilling charges or re-running after an error.
-     */
     public NightAuditResultDto runNightAuditForDate(LocalDate chargeDate) {
         log.info("Night Audit (Manual): Running for date {}", chargeDate);
         AtomicReference<String> firstError = new AtomicReference<>();
@@ -87,7 +82,7 @@ public class NightAuditService {
                 chargeDate, result.chargesPosted(),
                 result.skippedAlreadyPosted() + result.skippedFolioNotOpen() + result.skippedNoFolio(),
                 result.errors());
-        saveLog(chargeDate, "MANUAL", result, firstError.get());
+        eventPublisher.publishEvent(new NightAuditCompletedEvent(chargeDate, "MANUAL", result, firstError.get()));
         return result;
     }
 
@@ -110,26 +105,10 @@ public class NightAuditService {
                     result.skippedAlreadyPosted() + result.skippedFolioNotOpen() + result.skippedNoFolio(),
                     result.errors());
 
-            saveLog(auditDate, runType, result, firstError.get());
+            eventPublisher.publishEvent(new NightAuditCompletedEvent(auditDate, runType, result, firstError.get()));
             return result;
         } finally {
             isRunning.set(false);
-        }
-    }
-
-    private void saveLog(LocalDate auditDate, String runType, NightAuditResultDto result, String errorSummary) {
-        try {
-            nightAuditLogRepository.save(new NightAuditLog(
-                    auditDate, runType,
-                    result.totalAssignments(), result.chargesPosted(),
-                    result.skippedAlreadyPosted() + result.skippedFolioNotOpen() + result.skippedNoFolio(),
-                    result.errors(),
-                    result.mealPlanChargesPosted(), result.mealPlanChargesSkipped(),
-                    result.extraBedChargesPosted(), result.extraBedChargesSkipped(),
-                    errorSummary
-            ));
-        } catch (Exception e) {
-            log.error("Night Audit: Failed to persist audit log for {}: {}", auditDate, e.getMessage());
         }
     }
 
@@ -248,6 +227,9 @@ public class NightAuditService {
                         } else {
                             log.warn("Night Audit: Meal plan {} has no active config for property {}. Skipping meal plan charge for booking {}.",
                                     mealPlanType, booking.getProperty().getId(), booking.getId());
+                            mealPlanChargesSkipped++;
+                            firstError.compareAndSet(null, "Meal plan " + mealPlanType
+                                    + " has no active config for property " + booking.getProperty().getId());
                         }
                     } else {
                         mealPlanChargesSkipped++;
@@ -290,6 +272,10 @@ public class NightAuditService {
                             extraBedChargesPosted++;
                             log.info("Night Audit{}: Posted extra bed charge ({} beds, {}) for booking {} on {}",
                                     manualRun ? " (Manual)" : "", extraBeds, extraBedCode, booking.getId(), chargeDate);
+                        } else {
+                            log.warn("Night Audit: Extra bed rate is zero for booking {} (beds={}). Skipping extra bed charge.",
+                                    booking.getId(), extraBeds);
+                            extraBedChargesSkipped++;
                         }
                     } else {
                         extraBedChargesSkipped++;
@@ -311,14 +297,14 @@ public class NightAuditService {
                 extraBedChargesPosted, extraBedChargesSkipped);
     }
 
-    @Scheduled(cron = "${hms.night-audit.catchup-cron:0 0 3 * * *}")
+    @Scheduled(cron = "${hms.night-audit.catchup-cron:0 0 3 * * *}", zone = "Asia/Kolkata")
     public void runCatchUpAudit() {
         if (!isRunning.compareAndSet(false, true)) {
             log.warn("Catch-Up Audit: skipped — another audit run is in progress.");
             return;
         }
         try {
-            LocalDate today = LocalDate.now();
+            LocalDate today = LocalDate.now(HOTEL_ZONE);
             log.info("--- STARTING CATCH-UP NIGHT AUDIT (lookback {} days) ---", CATCH_UP_LOOKBACK_DAYS);
             int rerunCount = 0;
 
@@ -334,7 +320,7 @@ public class NightAuditService {
                                     : "previous run had " + lastLog.get().getErrors() + " errors");
                     AtomicReference<String> firstError = new AtomicReference<>();
                     NightAuditResultDto result = runNightAuditInternal(date, false, firstError);
-                    saveLog(date, "CATCH_UP", result, firstError.get());
+                    eventPublisher.publishEvent(new NightAuditCompletedEvent(date, "CATCH_UP", result, firstError.get()));
                     rerunCount++;
                 }
             }
@@ -382,9 +368,6 @@ public class NightAuditService {
                 businessDate, completedCount, activatedCount);
     }
 
-    /**
-     * Simple result record for manual night audit runs.
-     */
     public record NightAuditResultDto(
             LocalDate date,
             int totalAssignments,

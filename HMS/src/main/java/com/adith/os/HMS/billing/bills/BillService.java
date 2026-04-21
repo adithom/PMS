@@ -243,10 +243,11 @@ public class BillService {
         bill.setInvoiceNumber(invoiceNumber);
         bill.setGuestGstNumber(gstNumber);
 
-        BigDecimal subtotal = charges.stream().map(FolioCharge::getSubtotal).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal tax      = charges.stream().map(FolioCharge::getTaxAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal discount = charges.stream().map(FolioCharge::getDiscountAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal total    = charges.stream().map(FolioCharge::getTotalAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        List<FolioCharge> activeCharges = charges.stream().filter(c -> !c.isVoided()).toList();
+        BigDecimal subtotal = activeCharges.stream().map(FolioCharge::getSubtotal).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal tax      = activeCharges.stream().map(FolioCharge::getTaxAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal discount = activeCharges.stream().map(FolioCharge::getDiscountAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal total    = activeCharges.stream().map(FolioCharge::getTotalAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
 
         bill.setSubtotal(subtotal);
         bill.setTaxAmount(tax);

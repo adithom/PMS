@@ -35,16 +35,16 @@ public class NightAuditLog {
     @Column(nullable = false)
     private int errors;
 
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "integer not null default 0")
     private int mealPlanChargesPosted;
 
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "integer not null default 0")
     private int mealPlanChargesSkipped;
 
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "integer not null default 0")
     private int extraBedChargesPosted;
 
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "integer not null default 0")
     private int extraBedChargesSkipped;
 
     @Column(length = 1000)
