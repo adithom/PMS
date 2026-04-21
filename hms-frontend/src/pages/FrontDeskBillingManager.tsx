@@ -153,14 +153,13 @@ export default function FrontDeskBillingManager({ propertyId }: FrontDeskBilling
     setGeneratingFolioId(folio.id);
     try {
       const result = await billingApi.generateBills(folio.id, gstNumber || undefined);
-      if (result.roomRentBill?.pdfDownloadUrl) {
-        triggerPresignedDownload(result.roomRentBill.pdfDownloadUrl);
-      }
-      if (result.ancillaryBill?.pdfDownloadUrl) {
-        setTimeout(() => triggerPresignedDownload(result.ancillaryBill!.pdfDownloadUrl!), 300);
-      }
-      if (!result.roomRentBill?.pdfDownloadUrl && !result.ancillaryBill?.pdfDownloadUrl) {
+      const withUrl = result.bills.filter(b => b.pdfDownloadUrl);
+      if (withUrl.length === 0) {
         alert('Invoice generated. PDF upload unavailable — contact admin.');
+      } else {
+        withUrl.forEach((bill, i) => {
+          setTimeout(() => triggerPresignedDownload(bill.pdfDownloadUrl!), i * 300);
+        });
       }
       await refreshBillsForFolio(folio.id);
     } catch (err: any) {

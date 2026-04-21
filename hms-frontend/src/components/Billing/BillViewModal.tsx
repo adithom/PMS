@@ -12,8 +12,18 @@ interface BillViewModalProps {
   onBillsChanged: () => void;
 }
 
+const BILL_TYPE_LABELS: Record<string, string> = {
+  ROOM_RENT:   'Room & Meal Plan',
+  RESTAURANT:  'Restaurant',
+  SPA:         'Spa',
+  LAUNDRY:     'Laundry',
+  TRAVEL_DESK: 'Travel Desk',
+  SHOP:        'Gift Shop',
+  MISC:        'Miscellaneous',
+};
+
 function billLabel(bill: BillDto): string {
-  return bill.charges?.[0]?.chargeCode === 'ROOM_RENT' ? 'Room Rent' : 'Ancillary';
+  return BILL_TYPE_LABELS[bill.category ?? ''] ?? bill.category ?? 'Invoice';
 }
 
 export default function BillViewModal({ folio, bills, onClose, onBillsChanged }: BillViewModalProps) {

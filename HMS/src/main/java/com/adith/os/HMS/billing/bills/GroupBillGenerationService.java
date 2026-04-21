@@ -1,7 +1,6 @@
 package com.adith.os.HMS.billing.bills;
 
-import com.adith.os.HMS.billing.bills.dto.GroupDoubleBillDto;
-import com.adith.os.HMS.billing.folio.ChargeCategory;
+import com.adith.os.HMS.billing.bills.dto.GroupMultiBillDto;
 import com.adith.os.HMS.billing.folio.Folio;
 import com.adith.os.HMS.billing.folio.FolioCharge;
 import com.adith.os.HMS.billing.folio.FolioChargeRepository;
@@ -30,7 +29,9 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -44,9 +45,8 @@ public class GroupBillGenerationService {
     private final PropertyRepository propertyRepository;
     private final GroupPdfGenerationService groupPdfGenerationService;
     private final GroupBillRepository groupBillRepository;
-    private final InvoiceSequenceRepository sequenceRepository;
+    private final PropertyInvoiceSequenceRepository sequenceRepository;
     private final R2StorageService r2StorageService;
-
     private final ObjectMapper objectMapper;
 
     public GroupBillGenerationService(
@@ -56,7 +56,7 @@ public class GroupBillGenerationService {
             PropertyRepository propertyRepository,
             GroupPdfGenerationService groupPdfGenerationService,
             GroupBillRepository groupBillRepository,
-            InvoiceSequenceRepository sequenceRepository,
+            PropertyInvoiceSequenceRepository sequenceRepository,
             R2StorageService r2StorageService) {
         this.bookingRepository = bookingRepository;
         this.folioRepository = folioRepository;
@@ -74,21 +74,18 @@ public class GroupBillGenerationService {
     // =========================================================================
 
     @Transactional
-    public GroupDoubleBillDto generateGroupDoubleBill(UUID propertyId,
-                                                      UUID parentBookingId,
-                                                      String guestGstNumber) {
-        // --- Validate ---
+    public GroupMultiBillDto generateGroupMultiBill(UUID propertyId,
+                                                    UUID parentBookingId,
+                                                    String guestGstNumber) {
         if (!propertyRepository.existsById(propertyId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Property not found");
         }
 
         Booking parent = bookingRepository.findById(parentBookingId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Group booking not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Group booking not found"));
 
         if (!parent.getProperty().getId().equals(propertyId)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Booking does not belong to this property");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Booking does not belong to this property");
         }
 
         if (!parent.isGroupMaster()) {
@@ -104,132 +101,95 @@ public class GroupBillGenerationService {
 
         List<Booking> children = bookingRepository.findByParentBookingId(parentBookingId);
         if (children.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
-                    "No child bookings found for this group");
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No child bookings found for this group");
         }
 
-        // --- Collect per-room charge sections and DB ENTITIES ---
-        List<GroupDoubleBillDto.RoomChargeSection> roomRentSections  = new ArrayList<>();
-        List<GroupDoubleBillDto.RoomChargeSection> ancillarySections = new ArrayList<>();
-
-        List<FolioCharge> allRoomChargesToLink = new ArrayList<>();
-        List<FolioCharge> allAncillaryChargesToLink = new ArrayList<>();
+        // Accumulate per-BillType: charge entities to link, and per-room sections for PDF
+        Map<BillType, List<FolioCharge>>                          chargesByType  = new EnumMap<>(BillType.class);
+        Map<BillType, List<GroupMultiBillDto.RoomChargeSection>>  sectionsByType = new EnumMap<>(BillType.class);
 
         for (Booking child : children) {
             Folio folio = child.getMasterFolio();
             if (folio == null) continue;
 
-            List<FolioCharge> validCharges = folio.getCharges() == null
-                    ? List.of()
+            List<FolioCharge> validCharges = folio.getCharges() == null ? List.of()
                     : folio.getCharges().stream()
-                    .filter(c -> !c.isVoided() && c.getBill() == null && c.getGroupBill() == null)
-                    .toList();
+                           .filter(c -> !c.isVoided() && c.getBill() == null && c.getGroupBill() == null)
+                           .toList();
 
-            List<FolioCharge> roomCharges = validCharges.stream()
-                    .filter(c -> c.getChargeCode().getCategory() == ChargeCategory.ROOM_RENT
-                              || c.getChargeCode().getCategory() == ChargeCategory.MEAL_PLAN)
-                    .toList();
-
-            List<FolioCharge> ancCharges = validCharges.stream()
-                    .filter(c -> c.getChargeCode().getCategory() == ChargeCategory.ANCILLARY)
-                    .toList();
-
-            if (!roomCharges.isEmpty()) {
-                roomRentSections.add(buildRoomSection(child, folio, roomCharges));
-                allRoomChargesToLink.addAll(roomCharges);
+            // Group this child's charges by BillType
+            Map<BillType, List<FolioCharge>> byType = new EnumMap<>(BillType.class);
+            for (FolioCharge c : validCharges) {
+                byType.computeIfAbsent(BillType.forChargeCode(c.getChargeCode()), k -> new ArrayList<>()).add(c);
             }
 
-            if (!ancCharges.isEmpty()) {
-                ancillarySections.add(buildRoomSection(child, folio, ancCharges));
-                allAncillaryChargesToLink.addAll(ancCharges);
+            for (Map.Entry<BillType, List<FolioCharge>> entry : byType.entrySet()) {
+                BillType bt = entry.getKey();
+                List<FolioCharge> charges = entry.getValue();
+                chargesByType.computeIfAbsent(bt, k -> new ArrayList<>()).addAll(charges);
+                sectionsByType.computeIfAbsent(bt, k -> new ArrayList<>())
+                              .add(buildRoomSection(child, folio, charges));
             }
         }
 
-        if (allRoomChargesToLink.isEmpty() && allAncillaryChargesToLink.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No unbilled charges available to generate a group bill.");
+        if (chargesByType.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "No unbilled charges available to generate a group bill.");
         }
 
-        SectionTotals roomTotals = sumSections(roomRentSections);
-        SectionTotals ancTotals  = sumSections(ancillarySections);
         UUID batchId = UUID.randomUUID();
-
         LocalDate today = LocalDate.now(ZoneId.of("Asia/Kolkata"));
         OffsetDateTime now = OffsetDateTime.now();
         var property  = parent.getProperty();
         var organizer = parent.getGuest();
         String safeGst = guestGstNumber != null ? guestGstNumber : "";
 
-        // --- ROOM RENT ---
-        GroupDoubleBillDto.GroupBillSectionDto roomRentBillDto = null;
-        if (!roomRentSections.isEmpty()) {
-            String invoiceNumber = generateInvoiceNumber();
+        String baseInvoiceNumber = generateInvoiceNumber(property);
 
-            roomRentBillDto = new GroupDoubleBillDto.GroupBillSectionDto(
-                    invoiceNumber, today, "ROOM_RENT",
+        List<GroupMultiBillDto.GroupBillSectionDto> generatedBills = new ArrayList<>();
+        int suffixIdx = 0;
+
+        for (BillType bt : BillType.values()) {
+            List<FolioCharge> chargeEntities = chargesByType.get(bt);
+            List<GroupMultiBillDto.RoomChargeSection> sections = sectionsByType.get(bt);
+            if (chargeEntities == null || chargeEntities.isEmpty()) continue;
+
+            String invoiceNumber = suffixIdx == 0
+                    ? baseInvoiceNumber
+                    : baseInvoiceNumber + (char) ('a' + suffixIdx - 1);
+            suffixIdx++;
+
+            SectionTotals totals = sumSections(sections);
+
+            GroupMultiBillDto.GroupBillSectionDto sectionDto = new GroupMultiBillDto.GroupBillSectionDto(
+                    invoiceNumber, today, bt.name(),
                     property.getName(), property.getAddress(), property.getGstNumber(),
                     parent.getId(), parent.getGroupReference(),
                     organizer.getFullName(), organizer.getPhone(), organizer.getEmail(), safeGst,
                     parent.getCheckIn(), parent.getCheckOut(), parent.getCurrency(), now,
-                    roomRentSections,
-                    roomTotals.subtotal(), roomTotals.tax(),
-                    roomTotals.discount(), roomTotals.total(),
-                    BigDecimal.ZERO, roomTotals.total(),
+                    sections,
+                    totals.subtotal(), totals.tax(), totals.discount(), totals.total(),
+                    BigDecimal.ZERO, totals.total(),
                     false, null, null, null, null);
 
-            GroupBill roomBillEntity = buildGroupBillEntity(
-                    parent, ChargeCategory.ROOM_RENT, invoiceNumber,
-                    safeGst, roomTotals, batchId, roomRentSections);
-            roomBillEntity = groupBillRepository.save(roomBillEntity);
+            GroupBill billEntity = buildGroupBillEntity(parent, bt, invoiceNumber, safeGst, totals, batchId, sections);
+            billEntity = groupBillRepository.save(billEntity);
 
-            for (FolioCharge charge : allRoomChargesToLink) {
-                charge.setGroupBill(roomBillEntity);
+            for (FolioCharge charge : chargeEntities) {
+                charge.setGroupBill(billEntity);
             }
-            folioChargeRepository.saveAll(allRoomChargesToLink);
+            folioChargeRepository.saveAll(chargeEntities);
 
-            String localPath = groupPdfGenerationService.generateGroupRoomRentPdf(roomRentBillDto);
-            String objectKey = "invoices/" + roomBillEntity.getInvoiceNumber() + ".pdf";
-            String signedUrl = uploadToR2WithFallback(localPath, objectKey, "GRP_INV_" + roomBillEntity.getInvoiceNumber() + ".pdf");
-            roomBillEntity.setPdfFilePath(objectKey);
-            groupBillRepository.save(roomBillEntity);
-            roomRentBillDto = roomRentBillDto.withPdfDownloadUrl(signedUrl);
+            String localPath = groupPdfGenerationService.generateGroupBillPdf(sectionDto);
+            String objectKey = "invoices/" + billEntity.getInvoiceNumber() + ".pdf";
+            String signedUrl = uploadToR2WithFallback(localPath, objectKey,
+                    "GRP_INV_" + billEntity.getInvoiceNumber() + ".pdf");
+            billEntity.setPdfFilePath(objectKey);
+            groupBillRepository.save(billEntity);
+            generatedBills.add(sectionDto.withPdfDownloadUrl(signedUrl));
         }
 
-        // --- ANCILLARY ---
-        GroupDoubleBillDto.GroupBillSectionDto ancillaryBillDto = null;
-        if (!ancillarySections.isEmpty()) {
-            String invoiceNumber = generateInvoiceNumber();
-
-            ancillaryBillDto = new GroupDoubleBillDto.GroupBillSectionDto(
-                    invoiceNumber, today, "ANCILLARY",
-                    property.getName(), property.getAddress(), property.getGstNumber(),
-                    parent.getId(), parent.getGroupReference(),
-                    organizer.getFullName(), organizer.getPhone(), organizer.getEmail(), safeGst,
-                    parent.getCheckIn(), parent.getCheckOut(), parent.getCurrency(), now,
-                    ancillarySections,
-                    ancTotals.subtotal(), ancTotals.tax(),
-                    ancTotals.discount(), ancTotals.total(),
-                    BigDecimal.ZERO, ancTotals.total(),
-                    false, null, null, null, null);
-
-            GroupBill ancBillEntity = buildGroupBillEntity(
-                    parent, ChargeCategory.ANCILLARY, invoiceNumber,
-                    safeGst, ancTotals, batchId, ancillarySections);
-            ancBillEntity = groupBillRepository.save(ancBillEntity);
-
-            for (FolioCharge charge : allAncillaryChargesToLink) {
-                charge.setGroupBill(ancBillEntity);
-            }
-            folioChargeRepository.saveAll(allAncillaryChargesToLink);
-
-            String localPath = groupPdfGenerationService.generateGroupAncillaryPdf(ancillaryBillDto);
-            String objectKey = "invoices/" + ancBillEntity.getInvoiceNumber() + ".pdf";
-            String signedUrl = uploadToR2WithFallback(localPath, objectKey, "GRP_INV_" + ancBillEntity.getInvoiceNumber() + ".pdf");
-            ancBillEntity.setPdfFilePath(objectKey);
-            groupBillRepository.save(ancBillEntity);
-            ancillaryBillDto = ancillaryBillDto.withPdfDownloadUrl(signedUrl);
-        }
-
-        return new GroupDoubleBillDto(roomRentBillDto, ancillaryBillDto);
+        return new GroupMultiBillDto(generatedBills);
     }
 
     // =========================================================================
@@ -239,12 +199,10 @@ public class GroupBillGenerationService {
     @Transactional
     public GroupBill voidGroupBill(UUID groupBillId, String reason, String voidedBy) {
         GroupBill bill = groupBillRepository.findById(groupBillId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Group bill not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Group bill not found"));
 
         if (bill.isVoided()) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Group bill is already voided");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Group bill is already voided");
         }
 
         bill.setVoided(true);
@@ -263,9 +221,7 @@ public class GroupBillGenerationService {
     }
 
     @Transactional
-    public List<GroupBill> voidAllActiveGroupBills(UUID parentBookingId,
-                                                   String reason,
-                                                   String voidedBy) {
+    public List<GroupBill> voidAllActiveGroupBills(UUID parentBookingId, String reason, String voidedBy) {
         List<GroupBill> active = groupBillRepository.findActiveByParentBookingId(parentBookingId);
         if (active.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND,
@@ -311,28 +267,26 @@ public class GroupBillGenerationService {
     // =========================================================================
 
     private String uploadToR2WithFallback(String localPath, String objectKey, String fileName) {
-        if (!r2StorageService.isConfigured()) {
-            return null;
-        }
+        if (!r2StorageService.isConfigured()) return null;
         try {
             r2StorageService.uploadPdf(Path.of(localPath), objectKey);
             return r2StorageService.generatePresignedDownloadUrl(objectKey, fileName);
         } catch (R2UploadException e) {
-            log.error("R2 upload failed for key={}. PDF is saved locally at {}.", objectKey, localPath, e);
+            log.error("R2 upload failed for key={}. PDF saved locally at {}.", objectKey, localPath, e);
             return null;
         }
     }
 
     private GroupBill buildGroupBillEntity(Booking parent,
-                                           ChargeCategory category,
+                                           BillType billType,
                                            String invoiceNumber,
                                            String guestGstNumber,
                                            SectionTotals totals,
                                            UUID batchId,
-                                           List<GroupDoubleBillDto.RoomChargeSection> sections) {
+                                           List<GroupMultiBillDto.RoomChargeSection> sections) {
         GroupBill entity = new GroupBill();
         entity.setParentBooking(parent);
-        entity.setCategory(category);
+        entity.setBillType(billType);
         entity.setInvoiceNumber(invoiceNumber);
         entity.setGuestGstNumber(guestGstNumber);
         entity.setGenerationBatchId(batchId);
@@ -344,17 +298,12 @@ public class GroupBillGenerationService {
         return entity;
     }
 
-    private GroupDoubleBillDto.RoomChargeSection buildRoomSection(
+    private GroupMultiBillDto.RoomChargeSection buildRoomSection(
             Booking child, Folio folio, List<FolioCharge> charges) {
 
         List<ChargeDto> dtos = charges.stream().map(this::toChargeDto).toList();
 
-        BigDecimal subtotal  = sum(charges, FolioCharge::getSubtotal);
-        BigDecimal taxAmount = sum(charges, FolioCharge::getTaxAmount);
-        BigDecimal discount  = sum(charges, FolioCharge::getDiscountAmount);
-        BigDecimal total     = sum(charges, FolioCharge::getTotalAmount);
-
-        return new GroupDoubleBillDto.RoomChargeSection(
+        return new GroupMultiBillDto.RoomChargeSection(
                 child.getId(),
                 folio.getId(),
                 folio.getFolioNumber(),
@@ -362,11 +311,14 @@ public class GroupBillGenerationService {
                 child.getRoom() != null ? child.getRoom().getNumber() : null,
                 child.getUnit() != null ? child.getUnit().getName()   : null,
                 dtos,
-                subtotal, taxAmount, discount, total
+                sum(charges, FolioCharge::getSubtotal),
+                sum(charges, FolioCharge::getTaxAmount),
+                sum(charges, FolioCharge::getDiscountAmount),
+                sum(charges, FolioCharge::getTotalAmount)
         );
     }
 
-    private SectionTotals sumSections(List<GroupDoubleBillDto.RoomChargeSection> sections) {
+    private SectionTotals sumSections(List<GroupMultiBillDto.RoomChargeSection> sections) {
         BigDecimal subtotal = BigDecimal.ZERO;
         BigDecimal tax      = BigDecimal.ZERO;
         BigDecimal discount = BigDecimal.ZERO;
@@ -380,7 +332,7 @@ public class GroupBillGenerationService {
         return new SectionTotals(subtotal, tax, discount, total);
     }
 
-    private String serializeBreakdown(List<GroupDoubleBillDto.RoomChargeSection> sections) {
+    private String serializeBreakdown(List<GroupMultiBillDto.RoomChargeSection> sections) {
         List<RoomBreakdownSnapshot> snapshots = sections.stream()
                 .map(s -> new RoomBreakdownSnapshot(
                         s.childBookingId(), s.folioNumber(), s.guestName(),
@@ -390,7 +342,7 @@ public class GroupBillGenerationService {
         try {
             return objectMapper.writeValueAsString(snapshots);
         } catch (JsonProcessingException e) {
-            log.error("Failed to serialize room breakdown for group bill: {}", e.getMessage(), e);
+            log.error("Failed to serialize room breakdown: {}", e.getMessage(), e);
             return "[]";
         }
     }
@@ -414,14 +366,16 @@ public class GroupBillGenerationService {
         );
     }
 
-    private String generateInvoiceNumber() {
+    private String generateInvoiceNumber(com.adith.os.HMS.property.Property property) {
         LocalDate today = LocalDate.now(ZoneId.of("Asia/Kolkata"));
-        InvoiceSequence seq = sequenceRepository.findByIdWithLock(today)
-                .orElse(new InvoiceSequence(today, 1));
+        PropertyInvoiceSequence seq = sequenceRepository
+                .findByPropertyAndDateWithLock(property.getId(), today)
+                .orElse(new PropertyInvoiceSequence(property, today, 1));
         int current = seq.getNextVal();
         seq.setNextVal(current + 1);
         sequenceRepository.save(seq);
-        return today.format(DateTimeFormatter.ofPattern("yyyyMMdd"))
+        return property.getCode().toUpperCase()
+                + today.format(DateTimeFormatter.ofPattern("yyyyMMdd"))
                 + String.format("%04d", current);
     }
 

@@ -1,6 +1,6 @@
 package com.adith.os.HMS.billing.bills;
 
-import com.adith.os.HMS.billing.bills.dto.GroupDoubleBillDto;
+import com.adith.os.HMS.billing.bills.dto.GroupMultiBillDto;
 import com.adith.os.HMS.billing.folio.dto.ChargeDto;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
@@ -56,19 +56,7 @@ public class GroupPdfGenerationService {
     // PUBLIC API
     // =========================================================================
 
-    public String generateGroupRoomRentPdf(GroupDoubleBillDto.GroupBillSectionDto section) {
-        return generateGroupBillPdf(section);
-    }
-
-    public String generateGroupAncillaryPdf(GroupDoubleBillDto.GroupBillSectionDto section) {
-        return generateGroupBillPdf(section);
-    }
-
-    // =========================================================================
-    // CORE PDF GENERATION
-    // =========================================================================
-
-    private String generateGroupBillPdf(GroupDoubleBillDto.GroupBillSectionDto section) {
+    public String generateGroupBillPdf(GroupMultiBillDto.GroupBillSectionDto section) {
         ensureStorageDir();
 
         String fileName = "GRP_INV_" + section.invoiceNumber() + ".pdf";
@@ -104,8 +92,13 @@ public class GroupPdfGenerationService {
             drawTextCenter(state.cs, section.propertyAddress() != null ? section.propertyAddress() : " ", 297.5f, 761, fontSerifRegular, 11);
             drawTextCenter(state.cs, "GSTIN: " + nvl(section.propertyGstNumber(), "N/A"), 297.5f, 746, fontSerifRegular, 11);
 
-            String billType = "ROOM RENT".equals(section.category()) ? "ROOM RENT INVOICE" : "ANCILLARY INVOICE";
-            drawText(state.cs, "GROUP " + billType,                                                                          455, 788, fontBold, 12);
+            String billTypeLabel;
+            try {
+                billTypeLabel = BillType.valueOf(section.category()).getDisplayLabel().toUpperCase() + " INVOICE";
+            } catch (IllegalArgumentException e) {
+                billTypeLabel = section.category() + " INVOICE";
+            }
+            drawText(state.cs, "GROUP " + billTypeLabel,                                                                          455, 788, fontBold, 12);
             drawText(state.cs, "Invoice #: " + section.invoiceNumber(),                                                     455, 767, fontRegular, 10);
             drawText(state.cs, "Date: " + (section.invoiceDate() != null ? section.invoiceDate().format(DATE_FMT) : "N/A"), 455, 747, fontRegular, 10);
 
@@ -133,13 +126,13 @@ public class GroupPdfGenerationService {
             state.y = 555f;
 
             // ---- Per-room sections ----
-            List<GroupDoubleBillDto.RoomChargeSection> rooms = section.rooms();
+            List<GroupMultiBillDto.RoomChargeSection> rooms = section.rooms();
             if (rooms == null || rooms.isEmpty()) {
                 drawText(state.cs, "No charges for this category.", 50, state.y - 20, fontOblique, 10);
             } else {
                 int[] slNoHolder = {1};
 
-                for (GroupDoubleBillDto.RoomChargeSection room : rooms) {
+                for (GroupMultiBillDto.RoomChargeSection room : rooms) {
                     if (room.charges() == null || room.charges().isEmpty()) continue;
 
                     state.ensureSpace(ROW_H * 2 + 10);
@@ -182,7 +175,7 @@ public class GroupPdfGenerationService {
     // =========================================================================
 
     private void drawRoomSectionHeader(PageState state,
-                                       GroupDoubleBillDto.RoomChargeSection room,
+                                       GroupMultiBillDto.RoomChargeSection room,
                                        PDFont fontBold, PDFont fontRegular) throws IOException {
         float y = state.y;
 
@@ -268,7 +261,7 @@ public class GroupPdfGenerationService {
     }
 
     private void drawRoomSubtotalRow(PageState state,
-                                     GroupDoubleBillDto.RoomChargeSection room,
+                                     GroupMultiBillDto.RoomChargeSection room,
                                      PDFont fontBold) throws IOException {
         float y = state.y;
 
@@ -292,7 +285,7 @@ public class GroupPdfGenerationService {
     }
 
     private void drawGroupTotals(PageState state,
-                                 GroupDoubleBillDto.GroupBillSectionDto section,
+                                 GroupMultiBillDto.GroupBillSectionDto section,
                                  PDFont fontBold, PDFont fontRegular) throws IOException {
         float y = state.y - 10; // gap before totals block
 
@@ -340,7 +333,7 @@ public class GroupPdfGenerationService {
     }
 
     private void drawFooter(PageState state,
-                            GroupDoubleBillDto.GroupBillSectionDto section,
+                            GroupMultiBillDto.GroupBillSectionDto section,
                             PDFont fontBold, PDFont fontOblique) throws IOException {
         float y = state.y - 35; // generous padding below totals
 

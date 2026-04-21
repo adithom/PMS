@@ -3,6 +3,7 @@ package com.adith.os.HMS.billing.bills;
 import com.adith.os.HMS.billing.folio.*;
 import com.adith.os.HMS.billing.folio.dto.ChargeDto;
 import com.adith.os.HMS.billing.bills.dto.*;
+import com.adith.os.HMS.property.Property;
 import com.adith.os.HMS.storage.R2StorageService;
 import com.adith.os.HMS.storage.R2UploadException;
 
@@ -22,6 +23,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.zip.ZipEntry;
@@ -35,7 +37,7 @@ public class BillService {
     private final FolioRepository folioRepository;
     private final FolioChargeRepository folioChargeRepository;
     private final BillRepository billRepository;
-    private final InvoiceSequenceRepository sequenceRepository;
+    private final PropertyInvoiceSequenceRepository sequenceRepository;
     private final ChargeMapper chargeMapper;
     private final PdfGenerationService pdfGenerationService;
     private final R2StorageService r2StorageService;
@@ -43,7 +45,7 @@ public class BillService {
     public BillService(FolioRepository folioRepository,
                        FolioChargeRepository folioChargeRepository,
                        BillRepository billRepository,
-                       InvoiceSequenceRepository sequenceRepository,
+                       PropertyInvoiceSequenceRepository sequenceRepository,
                        ChargeMapper chargeMapper,
                        PdfGenerationService pdfGenerationService,
                        R2StorageService r2StorageService) {
@@ -57,68 +59,58 @@ public class BillService {
     }
 
     @Transactional
-    public DoubleBillDto generateDoubleBill(UUID folioId, String guestGstNumber) {
+    public MultiBillDto generateMultiBill(UUID folioId, String guestGstNumber) {
 
         Folio folio = folioRepository.findById(folioId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Folio not found"));
 
-        // Prevent generating bills if active (non-voided) bills already exist
         long activeBills = billRepository.countByFolioIdAndIsVoidedFalse(folioId);
         if (activeBills > 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Active bills already exist for this folio. Void them before generating new ones.");
         }
 
-        // NEW: Generate ONE batch ID to link both bills together
         UUID batchId = UUID.randomUUID();
 
-        // 1. Segregate the actual ENTITIES, ignoring voided ones AND charges already billed
-        List<FolioCharge> unbilledValidCharges = folio.getCharges().stream()
+        List<FolioCharge> unbilledCharges = folio.getCharges().stream()
                 .filter(c -> !c.isVoided() && c.getBill() == null && c.getGroupBill() == null)
                 .toList();
 
-        if (unbilledValidCharges.isEmpty()) {
+        if (unbilledCharges.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "No unbilled charges available to generate a bill.");
         }
 
-        List<FolioCharge> roomCharges = unbilledValidCharges.stream()
-                .filter(c -> c.getChargeCode().getCategory() == ChargeCategory.ROOM_RENT
-                          || c.getChargeCode().getCategory() == ChargeCategory.MEAL_PLAN)
-                .toList();
+        Property property = folio.getProperty();
+        String baseInvoiceNumber = generateInvoiceNumber(property);
 
-        List<FolioCharge> ancillaryCharges = unbilledValidCharges.stream()
-                .filter(c -> c.getChargeCode().getCategory() == ChargeCategory.ANCILLARY)
-                .toList();
+        List<BillDto> generatedBills = new ArrayList<>();
+        int suffixIdx = 0;
 
-        // 2. Process and Save DB Entities
-        Bill roomBill = createAndSaveBill(folio, roomCharges, ChargeCategory.ROOM_RENT, guestGstNumber, batchId);
-        Bill ancillaryBill = createAndSaveBill(folio, ancillaryCharges, ChargeCategory.ANCILLARY, guestGstNumber, batchId);
+        for (BillType bt : BillType.values()) {
+            List<FolioCharge> charges = unbilledCharges.stream()
+                    .filter(c -> BillType.forChargeCode(c.getChargeCode()) == bt)
+                    .toList();
+            if (charges.isEmpty()) continue;
 
-        // 3. Map to DTOs, Generate PDFs, upload to R2
-        BillDto roomBillDto = null;
-        if (roomBill != null) {
-            BillDto dtoForPdf = BillMapper.toBillDto(roomBill, folio, chargeMapper.toDtos(roomCharges), guestGstNumber);
+            String invoiceNumber = suffixIdx == 0
+                    ? baseInvoiceNumber
+                    : baseInvoiceNumber + (char) ('a' + suffixIdx - 1);
+            suffixIdx++;
+
+            Bill bill = createAndSaveBill(folio, charges, bt, invoiceNumber, guestGstNumber, batchId);
+
+            List<ChargeDto> chargeDtos = chargeMapper.toDtos(charges);
+            BillDto dtoForPdf = BillMapper.toBillDto(bill, folio, chargeDtos, guestGstNumber);
             String localPath = pdfGenerationService.generateInvoicePdf(dtoForPdf);
-            String objectKey = "invoices/" + roomBill.getInvoiceNumber() + ".pdf";
-            String signedUrl = uploadToR2WithFallback(localPath, objectKey, "INV_" + roomBill.getInvoiceNumber() + ".pdf");
-            roomBill.setPdfFilePath(objectKey);
-            billRepository.save(roomBill);
-            roomBillDto = BillMapper.toBillDto(roomBill, folio, chargeMapper.toDtos(roomCharges), guestGstNumber, signedUrl);
+            String objectKey = "invoices/" + bill.getInvoiceNumber() + ".pdf";
+            String signedUrl = uploadToR2WithFallback(localPath, objectKey, "INV_" + bill.getInvoiceNumber() + ".pdf");
+            bill.setPdfFilePath(objectKey);
+            billRepository.save(bill);
+            generatedBills.add(BillMapper.toBillDto(bill, folio, chargeDtos, guestGstNumber, signedUrl));
         }
 
-        BillDto ancillaryBillDto = null;
-        if (ancillaryBill != null) {
-            BillDto dtoForPdf = BillMapper.toBillDto(ancillaryBill, folio, chargeMapper.toDtos(ancillaryCharges), guestGstNumber);
-            String localPath = pdfGenerationService.generateInvoicePdf(dtoForPdf);
-            String objectKey = "invoices/" + ancillaryBill.getInvoiceNumber() + ".pdf";
-            String signedUrl = uploadToR2WithFallback(localPath, objectKey, "INV_" + ancillaryBill.getInvoiceNumber() + ".pdf");
-            ancillaryBill.setPdfFilePath(objectKey);
-            billRepository.save(ancillaryBill);
-            ancillaryBillDto = BillMapper.toBillDto(ancillaryBill, folio, chargeMapper.toDtos(ancillaryCharges), guestGstNumber, signedUrl);
-        }
-
-        return new DoubleBillDto(roomBillDto, ancillaryBillDto);
+        return new MultiBillDto(generatedBills);
     }
 
     public List<BillDto> getBillsForFolio(UUID folioId) {
@@ -149,13 +141,11 @@ public class BillService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Bill is already voided");
         }
 
-        // Mark the bill as voided
         bill.setVoided(true);
         bill.setVoidReason(reason);
         bill.setVoidedAt(LocalDateTime.now());
         bill.setVoidedBy(username);
 
-        // Release the charges back to the Folio so they can be re-billed
         List<FolioCharge> charges = folioChargeRepository.findByBillId(billId);
         for (FolioCharge charge : charges) {
             charge.setBill(null);
@@ -164,25 +154,21 @@ public class BillService {
 
         Bill savedBill = billRepository.save(bill);
 
-        // Recalculate folio totals to keep balance in sync
         Folio folio = savedBill.getFolio();
         folio.recalculateTotals();
         folioRepository.save(folio);
 
-        // Map to DTO (passing empty charges since they are detached, or map the existing ones if preferred)
         return BillMapper.toBillDto(savedBill, folio, chargeMapper.toDtos(charges), savedBill.getGuestGstNumber());
     }
 
     @Transactional
     public List<BillDto> voidActiveBillsForFolio(UUID folioId, String reason, String username) {
-        // Find all active (non-voided) bills for this folio
         List<Bill> activeBills = billRepository.findByFolioIdAndIsVoidedFalse(folioId);
 
         if (activeBills.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No active bills found for this folio.");
         }
 
-        // Void them all using your existing method!
         return activeBills.stream()
                 .map(bill -> voidBill(bill.getId(), reason, username))
                 .toList();
@@ -222,21 +208,19 @@ public class BillService {
         }
     }
 
-    // Helper method updated to accept Batch ID
-    private Bill createAndSaveBill(Folio folio, List<FolioCharge> charges, ChargeCategory category, String gstNumber, UUID batchId) {
-        if (charges.isEmpty()) return null;
-
+    private Bill createAndSaveBill(Folio folio, List<FolioCharge> charges, BillType billType,
+                                   String invoiceNumber, String gstNumber, UUID batchId) {
         Bill bill = new Bill();
         bill.setFolio(folio);
-        bill.setGenerationBatchId(batchId); // STAMP BATCH ID
-        bill.setCategory(category);
-        bill.setInvoiceNumber(generateInvoiceNumber());
+        bill.setGenerationBatchId(batchId);
+        bill.setBillType(billType);
+        bill.setInvoiceNumber(invoiceNumber);
         bill.setGuestGstNumber(gstNumber);
 
         BigDecimal subtotal = charges.stream().map(FolioCharge::getSubtotal).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal tax = charges.stream().map(FolioCharge::getTaxAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal tax      = charges.stream().map(FolioCharge::getTaxAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal discount = charges.stream().map(FolioCharge::getDiscountAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal total = charges.stream().map(FolioCharge::getTotalAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal total    = charges.stream().map(FolioCharge::getTotalAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
 
         bill.setSubtotal(subtotal);
         bill.setTaxAmount(tax);
@@ -266,16 +250,18 @@ public class BillService {
         }
     }
 
-    private String generateInvoiceNumber() {
+    private String generateInvoiceNumber(Property property) {
         LocalDate today = LocalDate.now(ZoneId.of("Asia/Kolkata"));
-        InvoiceSequence sequence = sequenceRepository.findByIdWithLock(today)
-                .orElse(new InvoiceSequence(today, 1));
+        PropertyInvoiceSequence sequence = sequenceRepository
+                .findByPropertyAndDateWithLock(property.getId(), today)
+                .orElse(new PropertyInvoiceSequence(property, today, 1));
 
-        int currentSequenceNumber = sequence.getNextVal();
-        sequence.setNextVal(currentSequenceNumber + 1);
+        int current = sequence.getNextVal();
+        sequence.setNextVal(current + 1);
         sequenceRepository.save(sequence);
 
-        return String.format("%04d%02d%02d%04d",
-                today.getYear(), today.getMonthValue(), today.getDayOfMonth(), currentSequenceNumber);
+        return property.getCode().toUpperCase()
+                + today.format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd"))
+                + String.format("%04d", current);
     }
 }

@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo } from 'react';
 import { X, ArrowRightLeft, FileText, Printer } from 'lucide-react';
 import folioApi from '../../api/folioApi';
 import type { FolioDetailDto, ChargeDto } from '../../api/folioApi';
-import type { PaymentDto } from '../../api/paymentApi';
 import billingApi from '../../api/billingApi';
 import type { BillDto } from '../../api/billingApi';
 import { triggerPresignedDownload } from '../../utils/downloadUtils';
@@ -21,10 +20,15 @@ interface FolioDetailModalProps {
   readOnly?: boolean;
 }
 
-// Unified ledger item for the timeline
-type LedgerItem = 
-  | { type: 'CHARGE'; date: Date; amount: number; description: string; code: string; isVoided: boolean; raw: ChargeDto }
-  | { type: 'PAYMENT'; date: Date; amount: number; description: string; code: string; isVoided: boolean; raw: PaymentDto };
+const CHARGE_CATEGORIES = [
+  { codes: ['ROOM_RENT', 'MEAL_PLAN'], label: 'Room & Meal Plan' },
+  { codes: ['RESTAURANT'],             label: 'Restaurant' },
+  { codes: ['SPA'],                    label: 'Spa' },
+  { codes: ['LAUNDRY'],                label: 'Laundry' },
+  { codes: ['TRAVEL_DESK'],            label: 'Travel Desk' },
+  { codes: ['SHOP'],                   label: 'Gift Shop' },
+  { codes: ['MISC'],                   label: 'Miscellaneous' },
+];
 
 export default function FolioDetailModal({ propertyId, folioId, onClose, readOnly = false }: FolioDetailModalProps) {
   const [folio, setFolio] = useState<FolioDetailDto | null>(null);
@@ -77,14 +81,13 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
     setIsGeneratingBill(true);
     try {
       const result = await billingApi.generateBills(folioId, gstNumber || undefined);
-      if (result.roomRentBill?.pdfDownloadUrl) {
-        triggerPresignedDownload(result.roomRentBill.pdfDownloadUrl);
-      }
-      if (result.ancillaryBill?.pdfDownloadUrl) {
-        setTimeout(() => triggerPresignedDownload(result.ancillaryBill!.pdfDownloadUrl!), 300);
-      }
-      if (!result.roomRentBill?.pdfDownloadUrl && !result.ancillaryBill?.pdfDownloadUrl) {
+      const withUrl = result.bills.filter(b => b.pdfDownloadUrl);
+      if (withUrl.length === 0) {
         alert('Bill generated but PDF upload unavailable. Contact admin.');
+      } else {
+        withUrl.forEach((bill, i) => {
+          setTimeout(() => triggerPresignedDownload(bill.pdfDownloadUrl!), i * 300);
+        });
       }
       await loadBills();
     } catch (err: any) {
@@ -106,57 +109,31 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
     }
   };
 
-  const handleVoidOrRefund = async (item: LedgerItem) => {
-    if (item.type === 'CHARGE') {
-      const reason = window.prompt('Please enter a reason for voiding this charge:');
-      if (!reason) return; // Exit if the user cancels the prompt
-
-      setIsProcessingId(item.raw.id);
-      try {
-        await folioApi.voidCharge(propertyId, folioId, item.raw.id, reason);
-        await loadFolio(); // Refresh data to update balances and the grid
-      } catch (err: any) {
-        alert(err.message || 'Failed to void charge.');
-      } finally {
-        setIsProcessingId(null);
-      }
-    } else {
-      alert('Payment refund flow is handled in the Payment Gateway dashboard.');
+  const handleVoidCharge = async (charge: ChargeDto) => {
+    const reason = window.prompt('Please enter a reason for voiding this charge:');
+    if (!reason) return;
+    setIsProcessingId(charge.id);
+    try {
+      await folioApi.voidCharge(propertyId, folioId, charge.id, reason);
+      await loadFolio();
+    } catch (err: any) {
+      alert(err.message || 'Failed to void charge.');
+    } finally {
+      setIsProcessingId(null);
     }
   };
 
-  // Merge and sort charges & payments into a single chronological ledger
-  const ledgerItems = useMemo(() => {
-    if (!folio) return [];
-
-    const items: LedgerItem[] = [];
-
-    folio.charges?.forEach(c => {
-      items.push({
-        type: 'CHARGE',
-        date: new Date(c.postingDate || c.chargeDate),
-        amount: c.totalAmount || 0,
-        description: c.description || c.chargeCode,
-        code: c.chargeCode,
-        isVoided: !!c.isVoided,
-        raw: c
-      });
-    });
-
-    folio.payments?.forEach(p => {
-      items.push({
-        type: 'PAYMENT',
-        date: new Date(p.paymentDate || p.createdAt || new Date()),
-        amount: p.amount || 0,
-        description: `Payment - ${p.paymentMethod} ${p.cardLastFour ? `(*${p.cardLastFour})` : ''}`,
-        code: p.paymentMethod || 'PAYMENT',
-        isVoided: p.paymentStatus === 'CANCELLED' || p.paymentStatus === 'REFUNDED',
-        raw: p
-      });
-    });
-
-    // Sort chronologically
-    return items.sort((a, b) => a.date.getTime() - b.date.getTime());
+  // Group charges by category in display order; skip empty categories
+  const categorizedCharges = useMemo(() => {
+    if (!folio?.charges) return [];
+    return CHARGE_CATEGORIES
+      .map(cat => ({
+        ...cat,
+        charges: folio.charges!
+          .filter(c => cat.codes.includes(c.chargeCode))
+          .sort((a, b) => new Date(a.postingDate ?? a.chargeDate).getTime() - new Date(b.postingDate ?? b.chargeDate).getTime()),
+      }))
+      .filter(cat => cat.charges.length > 0);
   }, [folio]);
 
   if (loading && !folio) {
@@ -176,8 +153,6 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
       </ModalShell>
     );
   }
-
-  let runningBalance = 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm sm:p-6 lg:p-8">
@@ -217,72 +192,104 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
         {/* ─── Body (Split Layout) ─── */}
         <div className="flex flex-1 overflow-hidden">
           
-          {/* LEFT PANEL: The Ledger */}
+          {/* LEFT PANEL: Charge Ledger grouped by category */}
           <div className="flex-1 overflow-y-auto p-6">
-            <h3 className="mb-4 text-sm font-bold uppercase tracking-widest text-slate-400">Transaction Ledger</h3>
-            
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-              <table className="w-full text-left text-sm">
-                <thead className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                  <tr>
-                    <th className="p-4">Date</th>
-                    <th className="p-4">Description</th>
-                    <th className="p-4 text-right">Charge</th>
-                    <th className="p-4 text-right">Credit</th>
-                    <th className="p-4 text-right">Balance</th>
-                    {!readOnly && <th className="p-4 text-center">Action</th>}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {ledgerItems.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="p-8 text-center text-slate-400">No transactions recorded yet.</td>
-                    </tr>
-                  ) : (
-                    ledgerItems.map((item, idx) => {
-                      // Math logic: Charges increase balance, Payments decrease it.
-                      if (!item.isVoided) {
-                        runningBalance += item.type === 'CHARGE' ? item.amount : -item.amount;
-                      }
+            <h3 className="mb-4 text-sm font-bold uppercase tracking-widest text-slate-400">Charge Ledger</h3>
 
-                      return (
-                        <tr key={idx} className={`transition-colors hover:bg-slate-50 ${item.isVoided ? 'opacity-50 line-through' : ''}`}>
-                          <td className="p-4 text-slate-600">
-                            {item.date.toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' }).replace(/\//g, '-') + ' ' + item.date.toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' })}
-                          </td>
-                          <td className="p-4">
-                            <p className="font-semibold text-slate-900">{item.description}</p>
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{item.code.replace('_', ' ')}</p>
-                          </td>
-                          <td className="p-4 text-right font-medium text-slate-900">
-                            {item.type === 'CHARGE' ? `${folio.currency} ${item.amount.toFixed(2)}` : '—'}
-                          </td>
-                          <td className="p-4 text-right font-medium text-emerald-600">
-                            {item.type === 'PAYMENT' ? `${folio.currency} ${item.amount.toFixed(2)}` : '—'}
-                          </td>
-                          <td className="p-4 text-right font-bold text-slate-900">
-                            {item.isVoided ? '—' : `${folio.currency} ${runningBalance.toFixed(2)}`}
-                          </td>
-                          {!readOnly && (
-                            <td className="p-4 text-center">
-                              {!item.isVoided && folio.status === 'OPEN' && (
-                                <button
-                                  onClick={() => handleVoidOrRefund(item)}
-                                  disabled={isProcessingId === item.raw.id}
-                                  className="text-[10px] font-bold uppercase tracking-wider text-rose-500 hover:text-rose-700 disabled:opacity-50"
-                                >
-                                  {isProcessingId === item.raw.id ? 'Processing...' : (item.type === 'CHARGE' ? 'Void' : 'Refund')}
-                                </button>
-                              )}
-                            </td>
-                          )}
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
+            {categorizedCharges.length === 0 ? (
+              <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-slate-400 shadow-sm">
+                No charges recorded yet.
+              </div>
+            ) : (
+              <div className="space-y-5">
+                {categorizedCharges.map(category => {
+                  const active = category.charges.filter(c => !c.isVoided);
+                  const catSubtotal = active.reduce((s, c) => s + (c.subtotal ?? 0), 0);
+                  const catTax     = active.reduce((s, c) => s + (c.taxAmount ?? 0), 0);
+                  const catTotal   = active.reduce((s, c) => s + (c.totalAmount ?? 0), 0);
+
+                  return (
+                    <div key={category.label} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                      {/* Category header */}
+                      <div className="border-b border-slate-200 bg-slate-100 px-4 py-2">
+                        <span className="text-[11px] font-bold uppercase tracking-widest text-slate-600">
+                          {category.label}
+                        </span>
+                      </div>
+
+                      <table className="w-full text-left text-sm">
+                        <thead className="border-b border-slate-100 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                          <tr>
+                            <th className="px-4 py-2.5">Date</th>
+                            <th className="px-4 py-2.5">Description</th>
+                            <th className="px-4 py-2.5 text-right">Charge</th>
+                            <th className="px-4 py-2.5 text-right">Credit</th>
+                            {!readOnly && <th className="px-4 py-2.5 text-center">Action</th>}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {category.charges.map(charge => {
+                            const d = new Date(charge.postingDate ?? charge.chargeDate);
+                            const dateStr =
+                              d.toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' }).replace(/\//g, '-') +
+                              ' ' +
+                              d.toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' });
+                            return (
+                              <tr key={charge.id} className={`transition-colors hover:bg-slate-50 ${charge.isVoided ? 'opacity-50' : ''}`}>
+                                <td className="px-4 py-3 text-xs text-slate-500">{dateStr}</td>
+                                <td className="px-4 py-3">
+                                  <p className={`font-semibold text-slate-900 ${charge.isVoided ? 'line-through' : ''}`}>
+                                    {charge.description || charge.chargeCode}
+                                  </p>
+                                  {charge.isVoided && charge.voidReason && (
+                                    <p className="mt-0.5 text-[10px] text-rose-500">Voided: {charge.voidReason}</p>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 text-right font-medium text-slate-900">
+                                  {!charge.isVoided ? `${folio.currency} ${(charge.totalAmount ?? 0).toFixed(2)}` : '—'}
+                                </td>
+                                <td className="px-4 py-3 text-right font-medium text-rose-500">
+                                  {charge.isVoided ? `${folio.currency} ${(charge.totalAmount ?? 0).toFixed(2)}` : '—'}
+                                </td>
+                                {!readOnly && (
+                                  <td className="px-4 py-3 text-center">
+                                    {!charge.isVoided && folio.status === 'OPEN' && (
+                                      <button
+                                        onClick={() => handleVoidCharge(charge)}
+                                        disabled={isProcessingId === charge.id}
+                                        className="text-[10px] font-bold uppercase tracking-wider text-rose-500 hover:text-rose-700 disabled:opacity-50"
+                                      >
+                                        {isProcessingId === charge.id ? 'Processing…' : 'Void'}
+                                      </button>
+                                    )}
+                                  </td>
+                                )}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+
+                      {/* Category totals */}
+                      <div className="flex justify-end gap-8 border-t-2 border-slate-200 bg-slate-50 px-4 py-2.5">
+                        <div className="text-right">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Subtotal</p>
+                          <p className="text-sm font-semibold text-slate-700">{folio.currency} {catSubtotal.toFixed(2)}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Tax</p>
+                          <p className="text-sm font-semibold text-slate-700">{folio.currency} {catTax.toFixed(2)}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total</p>
+                          <p className="text-sm font-extrabold text-slate-900">{folio.currency} {catTotal.toFixed(2)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* RIGHT PANEL: Summary & Actions */}

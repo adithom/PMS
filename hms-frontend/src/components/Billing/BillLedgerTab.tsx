@@ -35,7 +35,7 @@ export default function BillLedgerTab() {
   const [zipping, setZipping] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState<'ALL' | 'ROOM_RENT' | 'ANCILLARY'>('ALL');
+  const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
   const [propertyFilter, setPropertyFilter] = useState<string>('ALL');
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
@@ -177,12 +177,17 @@ export default function BillLedgerTab() {
           />
           <select
             value={categoryFilter}
-            onChange={e => setCategoryFilter(e.target.value as 'ALL' | 'ROOM_RENT' | 'ANCILLARY')}
+            onChange={e => setCategoryFilter(e.target.value)}
             className={inputCls}
           >
             <option value="ALL">All Types</option>
-            <option value="ROOM_RENT">Room Rent</option>
-            <option value="ANCILLARY">Ancillary</option>
+            <option value="ROOM_RENT">Room & Meal Plan</option>
+            <option value="RESTAURANT">Restaurant</option>
+            <option value="SPA">Spa</option>
+            <option value="LAUNDRY">Laundry</option>
+            <option value="TRAVEL_DESK">Travel Desk</option>
+            <option value="SHOP">Gift Shop</option>
+            <option value="MISC">Miscellaneous</option>
           </select>
           <select
             value={propertyFilter}
@@ -288,7 +293,7 @@ export default function BillLedgerTab() {
                         ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
                         : 'bg-teal-50 text-teal-700 border-teal-200'
                     }`}>
-                      {bill.category === 'ROOM_RENT' ? 'Room' : 'Ancillary'}
+                      {({ ROOM_RENT: 'Room', RESTAURANT: 'Restaurant', SPA: 'Spa', LAUNDRY: 'Laundry', TRAVEL_DESK: 'Travel', SHOP: 'Shop', MISC: 'Misc' } as Record<string, string>)[bill.category ?? ''] ?? bill.category ?? '—'}
                     </span>
                   </td>
                   <td className="px-3 py-2 text-right text-xs font-semibold text-slate-800 whitespace-nowrap">

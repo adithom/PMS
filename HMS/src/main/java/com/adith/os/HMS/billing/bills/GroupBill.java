@@ -1,6 +1,5 @@
 package com.adith.os.HMS.billing.bills;
 
-import com.adith.os.HMS.billing.folio.ChargeCategory;
 import com.adith.os.HMS.booking.Booking;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
@@ -34,7 +33,7 @@ public class GroupBill {
     @GeneratedValue(strategy = GenerationType.AUTO)
     private UUID id;
 
-    @Column(name = "invoice_number", unique = true, nullable = false, length = 20)
+    @Column(name = "invoice_number", unique = true, nullable = false, length = 30)
     private String invoiceNumber;
 
     /**
@@ -47,8 +46,8 @@ public class GroupBill {
     private Booking parentBooking;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private ChargeCategory category;
+    @Column(name = "category", nullable = false)
+    private BillType billType;
 
     @Column(name = "guest_gst_number", length = 50)
     private String guestGstNumber;
@@ -127,8 +126,8 @@ public class GroupBill {
     public Booking getParentBooking() { return parentBooking; }
     public void setParentBooking(Booking parentBooking) { this.parentBooking = parentBooking; }
 
-    public ChargeCategory getCategory() { return category; }
-    public void setCategory(ChargeCategory category) { this.category = category; }
+    public BillType getBillType() { return billType; }
+    public void setBillType(BillType billType) { this.billType = billType; }
 
     public String getGuestGstNumber() { return guestGstNumber; }
     public void setGuestGstNumber(String guestGstNumber) { this.guestGstNumber = guestGstNumber; }
