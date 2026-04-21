@@ -24,8 +24,11 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -73,7 +76,7 @@ public class BillService {
         UUID batchId = UUID.randomUUID();
 
         List<FolioCharge> unbilledCharges = folio.getCharges().stream()
-                .filter(c -> !c.isVoided() && c.getBill() == null && c.getGroupBill() == null)
+                .filter(c -> c.getBill() == null && c.getGroupBill() == null)
                 .toList();
 
         if (unbilledCharges.isEmpty()) {
@@ -175,35 +178,58 @@ public class BillService {
     }
 
     @Transactional(readOnly = true)
-    public BillLedgerPageDto getLedger(OffsetDateTime from, OffsetDateTime to, boolean includeVoided) {
+    public BillBatchPageDto getLedger(OffsetDateTime from, OffsetDateTime to, boolean includeVoided) {
         List<Bill> bills = includeVoided
                 ? billRepository.findAllBillsInRange(from, to)
                 : billRepository.findActiveBillsInRange(from, to);
 
-        List<BillDto> dtos = bills.stream().map(BillMapper::toLedgerRowDto).toList();
+        // Group by generationBatchId; bills without a batch ID get their own singleton group
+        Map<UUID, List<Bill>> grouped = bills.stream()
+                .collect(Collectors.groupingBy(b ->
+                        b.getGenerationBatchId() != null ? b.getGenerationBatchId() : b.getId()));
 
-        BigDecimal grandTotalSum = bills.stream()
-                .map(Bill::getTotalAmount)
+        List<BillBatchRowDto> batchRows = grouped.values().stream()
+                .map(BillMapper::toBatchRowDto)
+                .sorted(Comparator.comparing(BillBatchRowDto::billDate).reversed()
+                        .thenComparing(BillBatchRowDto::mainInvoiceNumber))
+                .toList();
+
+        BigDecimal grandTotalSum = batchRows.stream()
+                .map(BillBatchRowDto::grandTotal)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        return new BillLedgerPageDto(dtos, dtos.size(), grandTotalSum);
+        return new BillBatchPageDto(batchRows, batchRows.size(), grandTotalSum);
     }
 
     public void downloadBillsAsZip(List<UUID> billIds, OutputStream out) throws IOException {
         List<Bill> bills = billRepository.findActiveByIds(billIds);
+
+        // Group bills into batches; the folder name is the lexicographically smallest invoice
+        // number in each batch (the base number without a suffix letter).
+        Map<UUID, List<Bill>> byBatch = bills.stream()
+                .collect(Collectors.groupingBy(b ->
+                        b.getGenerationBatchId() != null ? b.getGenerationBatchId() : b.getId()));
+
         try (ZipOutputStream zip = new ZipOutputStream(new BufferedOutputStream(out))) {
-            for (Bill bill : bills) {
-                if (bill.getPdfFilePath() == null || bill.getPdfFilePath().isBlank()) {
-                    log.warn("Bill {} has no pdfFilePath, skipping from ZIP", bill.getId());
-                    continue;
+            for (List<Bill> batch : byBatch.values()) {
+                String folderName = batch.stream()
+                        .map(Bill::getInvoiceNumber)
+                        .min(Comparator.naturalOrder())
+                        .orElse("UNKNOWN");
+
+                for (Bill bill : batch) {
+                    if (bill.getPdfFilePath() == null || bill.getPdfFilePath().isBlank()) {
+                        log.warn("Bill {} has no pdfFilePath, skipping from ZIP", bill.getId());
+                        continue;
+                    }
+                    byte[] pdf = r2StorageService.downloadObjectAsBytes(bill.getPdfFilePath());
+                    String entryName = folderName + "/INV_" + bill.getInvoiceNumber() + ".pdf";
+                    ZipEntry entry = new ZipEntry(entryName);
+                    entry.setSize(pdf.length);
+                    zip.putNextEntry(entry);
+                    zip.write(pdf);
+                    zip.closeEntry();
                 }
-                byte[] pdf = r2StorageService.downloadObjectAsBytes(bill.getPdfFilePath());
-                String entryName = "INV_" + bill.getInvoiceNumber() + ".pdf";
-                ZipEntry entry = new ZipEntry(entryName);
-                entry.setSize(pdf.length);
-                zip.putNextEntry(entry);
-                zip.write(pdf);
-                zip.closeEntry();
             }
         }
     }

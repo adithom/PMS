@@ -38,6 +38,24 @@ export type RoomStatus =
   | 'QUEUED_FOR_MAINTENANCE'
   | 'INACTIVE';
 
+export enum GuestIdType {
+  PASSPORT = 'PASSPORT',
+  DRIVERS_LICENSE = 'DRIVERS_LICENSE',
+  OCI_CARD = 'OCI_CARD',
+  AADHAAR_CARD = 'AADHAAR_CARD',
+  VISA = 'VISA',
+  VOTERS_ID = 'VOTERS_ID',
+}
+
+export const GUEST_ID_TYPE_LABELS: Record<GuestIdType, string> = {
+  [GuestIdType.PASSPORT]: 'Passport',
+  [GuestIdType.DRIVERS_LICENSE]: "Driver's License",
+  [GuestIdType.OCI_CARD]: 'OCI Card',
+  [GuestIdType.AADHAAR_CARD]: 'Aadhaar Card',
+  [GuestIdType.VISA]: 'Visa',
+  [GuestIdType.VOTERS_ID]: "Voter's ID",
+};
+
 export interface Guest {
   id: string;
   firstName: string;
@@ -45,7 +63,8 @@ export interface Guest {
   fullName: string;
   email?: string;
   phone?: string;
-  docId?: string;
+  idNumber?: string;
+  guestIdType?: GuestIdType;
   dateOfBirth?: string;
   createdAt?: string;
   preferences?: string;

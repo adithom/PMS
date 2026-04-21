@@ -20,7 +20,11 @@ public enum BillType {
     LAUNDRY     ("Laundry",          Set.of(ChargeCode.LAUNDRY)),
     TRAVEL_DESK ("Travel Desk",      Set.of(ChargeCode.TRAVEL_DESK)),
     SHOP        ("Gift Shop",        Set.of(ChargeCode.SHOP)),
-    MISC        ("Miscellaneous",    Set.of(ChargeCode.MISC));
+    MISC        ("Miscellaneous",    Set.of(ChargeCode.MISC)),
+
+    /** Legacy value kept for backward compatibility with pre-multi-bill DB rows. Not used for new bill generation. */
+    @Deprecated
+    ANCILLARY   ("Ancillary",        Set.of());
 
     private final String displayLabel;
     private final Set<ChargeCode> chargeCodes;

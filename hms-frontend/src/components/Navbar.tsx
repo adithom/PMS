@@ -1,5 +1,5 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Home, LogOut } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 interface NavigationProps {
@@ -29,9 +29,8 @@ export default function Navigation({ allowedRoutes }: NavigationProps) {
           
           {/* Brand Logo */}
           <Link to="/" className="flex items-center gap-3 transition-opacity hover:opacity-80">
-            {/* Off-White Home Icon */}
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-50 text-emerald-700 shadow-sm">
-              <Home className="h-5 w-5" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-xl shadow-emerald-900/70 ring-1 ring-white/20 overflow-hidden">
+              <img src="/logo.png" alt="Logo" className="h-8 w-8 object-contain" />
             </div>
             <span className="text-xl font-extrabold tracking-tight text-white">
               Spice Tree <span className="text-emerald-200 font-medium hidden sm:inline">HMS</span>

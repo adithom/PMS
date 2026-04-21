@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import ModalShell from '../ModalShell';
+import { GUEST_ID_TYPE_LABELS } from '../../types';
 import type { Booking, RoomAssignmentDto } from '../../types';
 import type { FolioDto } from '../../api/folioApi';
 import type { Guest } from '../../types';
@@ -277,10 +278,16 @@ export default function BookingDetailModal({ booking, propertyId, onClose, onEdi
                     <span className="text-slate-700">{guest.phone}</span>
                   </div>
                 )}
-                {guest.docId && (
+                {guest.idNumber && (
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 w-12 shrink-0">Doc ID</span>
-                    <span className="font-mono text-slate-700">{guest.docId}</span>
+                    <span className="font-mono text-slate-700">{guest.idNumber}</span>
+                  </div>
+                )}
+                {guest.guestIdType && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 w-12 shrink-0">ID Type</span>
+                    <span className="text-slate-700">{GUEST_ID_TYPE_LABELS[guest.guestIdType]}</span>
                   </div>
                 )}
                 {guest.dateOfBirth && (
