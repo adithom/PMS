@@ -833,8 +833,8 @@ export default function BookingForm({
                   type="number"
                   min={1}
                   className={inputCls}
-                  value={extraBeds}
-                  onChange={e => setExtraBeds(Math.max(1, Number(e.target.value) || 1))}
+                  value={extraBeds || ''}
+                  onChange={e => setExtraBeds(e.target.value === '' ? 0 : Math.max(1, Number(e.target.value)))}
                 />
               </label>
               <label>
@@ -904,8 +904,8 @@ export default function BookingForm({
         </div>
 
         <div className="grid gap-4 sm:grid-cols-4">
-          <label><span className={labelCls}>Adults</span><input type="number" min={1} className={inputCls} value={adults} onChange={e => setAdults(Number(e.target.value) || 1)} /></label>
-          <label><span className={labelCls}>Children</span><input type="number" min={0} className={inputCls} value={children} onChange={e => setChildren(Number(e.target.value) || 0)} /></label>
+          <label><span className={labelCls}>Adults</span><input type="number" min={1} className={inputCls} value={adults || ''} onChange={e => setAdults(e.target.value === '' ? 0 : Math.max(1, Number(e.target.value)))} /></label>
+          <label><span className={labelCls}>Children</span><input type="number" min={0} className={inputCls} value={children || ''} onChange={e => setChildren(e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)))} /></label>
           <label className="sm:col-span-2">
             <span className={labelCls}>Status</span>
             <select className={inputCls} value={status} onChange={e => setStatus(e.target.value)}>
@@ -929,7 +929,7 @@ export default function BookingForm({
                   const adultMeal = mealPlanOpen && selectedMealPlan && mealPlanPrice ? Number(mealPlanPrice) : 0;
                   const childMeal = mealPlanOpen && selectedMealPlan && mealPlanChildrenPrice ? Number(mealPlanChildrenPrice) : 0;
                   const xBed = extraBedOpen && extraBeds > 0 && extraBedRate ? extraBeds * Number(extraBedRate) : 0;
-                  return nightlyRate + adults * adultMeal + children * childMeal + xBed;
+                  return (nightlyRate + adults * adultMeal + children * childMeal + xBed) || '';
                 })()}
                 onChange={e => {
                   const adultMeal = mealPlanOpen && selectedMealPlan && mealPlanPrice ? Number(mealPlanPrice) : 0;
@@ -1012,7 +1012,7 @@ export default function BookingForm({
               );
             })()}
           </div>
-          <label><span className={labelCls}>Amount Paid</span><input type="number" min={0} className={inputCls} value={paidAmount} onChange={e => setPaidAmount(Number(e.target.value) || 0)} /></label>
+          <label><span className={labelCls}>Amount Paid</span><input type="number" min={0} className={inputCls} value={paidAmount || ''} onChange={e => setPaidAmount(e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)))} /></label>
         </div>
 
         {/* ---> NEW CHECKBOX FOR TWIN BED <--- */}

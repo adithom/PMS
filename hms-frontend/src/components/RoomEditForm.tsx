@@ -109,11 +109,11 @@ export default function RoomForm({ propertyId, initialRoom, units = [], onSucces
       <div className="grid gap-4 sm:grid-cols-2">
         <label>
           <span className={labelCls}>Capacity</span>
-          <input required className={inputCls} type="number" min="1" value={formData.capacity} onChange={(e) => handleChange('capacity', Number(e.target.value) || 1)} />
+          <input required className={inputCls} type="number" min="1" value={formData.capacity || ''} onChange={(e) => handleChange('capacity', e.target.value === '' ? 0 : Math.max(1, Number(e.target.value)))} />
         </label>
         <label>
           <span className={labelCls}>Base Rate (₹)</span>
-          <input required className={inputCls} type="number" min="0" step="100" value={formData.baseRate} onChange={(e) => handleChange('baseRate', Number(e.target.value) || 0)} />
+          <input required className={inputCls} type="number" min="0" step="100" value={formData.baseRate || ''} onChange={(e) => handleChange('baseRate', e.target.value === '' ? 0 : Number(e.target.value))} />
         </label>
       </div>
 

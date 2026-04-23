@@ -36,7 +36,6 @@ type RoomsDialog =
   | { type: 'view_property'; property: Property }
   | { type: 'add_property' }
   | { type: 'edit_property'; property: Property }
-  | { type: 'delete_property'; property: Property }
   | { type: 'add_unit'; property: Property }
   | { type: 'edit_unit'; property: Property; unit: UnitDto }
   | null;
@@ -444,16 +443,6 @@ export default function Rooms() {
     }
   };
 
-  const handleDeleteProperty = async () => {
-    if (dialog?.type !== 'delete_property') return;
-    try {
-      await propertyApi.delete(dialog.property.id);
-      setDialog(null);
-      await loadData();
-    } catch (err: any) {
-      alert(`Failed to delete: ${err.message}`);
-    }
-  };
 
   const handleSaveUnit = async (data: { name: string; sortOrder: number }) => {
     if (dialog?.type !== 'add_unit' && dialog?.type !== 'edit_unit') return;
@@ -971,11 +960,7 @@ export default function Rooms() {
               </div>
             </div>
 
-            <div className="flex flex-wrap justify-between gap-3 border-t border-slate-100 pt-4">
-              <button type="button" className={btnDanger}
-                onClick={() => setDialog({ type: 'delete_property', property: managedProperty })}>
-                Delete Property
-              </button>
+            <div className="flex flex-wrap justify-end gap-3 border-t border-slate-100 pt-4">
               <button type="button" className={btnPrimary}
                 onClick={() => setDialog({ type: 'edit_property', property: managedProperty })}>
                 Edit Property Info
@@ -1013,27 +998,7 @@ export default function Rooms() {
         </ModalShell>
       )}
 
-      {dialog?.type === 'delete_property' && managedProperty && (
-        <ModalShell
-          title={`Delete ${managedProperty.name}?`}
-          onClose={() => setDialog({ type: 'view_property', property: managedProperty })}
-        >
-          <div className="space-y-5">
-            <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm leading-6 text-rose-800">
-              <strong>Warning:</strong> This action cannot be undone. You are permanently removing this property and all its associations.
-            </div>
-            <div className="flex justify-end gap-3">
-              <button type="button" className={btnSecondary}
-                onClick={() => setDialog({ type: 'view_property', property: managedProperty })}>
-                Cancel
-              </button>
-              <button type="button" className={btnDanger} onClick={handleDeleteProperty}>
-                Confirm Deletion
-              </button>
-            </div>
-          </div>
-        </ModalShell>
-      )}
+
     </div>
   );
 }

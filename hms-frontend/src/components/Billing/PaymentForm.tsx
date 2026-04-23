@@ -39,7 +39,7 @@ export default function PaymentForm({ propertyId, folioId, balanceDue = 0, onSuc
     const { name, value, type } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: type === 'number' ? parseFloat(value) || 0 : value
+      [name]: type === 'number' ? (value === '' ? undefined : parseFloat(value)) : value
     }));
     setError('');
   };
