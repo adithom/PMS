@@ -1,8 +1,10 @@
 package com.adith.os.HMS.config;
 
-import com.adith.os.HMS.security.Role; 
+import com.adith.os.HMS.security.Role;
 import com.adith.os.HMS.security.User;
 import com.adith.os.HMS.security.UserRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
@@ -12,7 +14,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 @Configuration
 public class DatabaseSeeder {
 
-    // Using your name as the default, but you can override this in production via env vars
+    private static final Logger log = LoggerFactory.getLogger(DatabaseSeeder.class);
+
     @Value("${app.admin.username:adith}")
     private String myUsername;
 
@@ -20,27 +23,29 @@ public class DatabaseSeeder {
     private String myPassword;
 
     @Bean
-    public CommandLineRunner seedDatabase(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public CommandLineRunner seedDatabase(
+            UserRepository userRepository,
+            PasswordEncoder passwordEncoder,
+            RoomInventorySeeder roomInventorySeeder
+    ) {
         return args -> {
-            // Check if YOUR specific user exists by username
-            boolean userExists = userRepository.existsByUsername(myUsername);
-
-            if (!userExists) {
-                System.out.println("Specific user '" + myUsername + "' not found. Bootstrapping account...");
-                
-                User me = new User();
-                me.setUsername(myUsername);
-                
-                me.setRole(Role.ADMIN); 
-                
-                me.setPassword(passwordEncoder.encode(myPassword));
-
-                userRepository.save(me);
-                
-                System.out.println("User '" + myUsername + "' created successfully.");
-            } else {
-                System.out.println("User '" + myUsername + "' already exists. Skipping bootstrap.");
-            }
+            seedAdminUser(userRepository, passwordEncoder);
+            roomInventorySeeder.seedAll();
+            roomInventorySeeder.syncAllTotalRooms();
         };
+    }
+
+    private void seedAdminUser(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+        if (!userRepository.existsByUsername(myUsername)) {
+            log.info("[Seeder] User '{}' not found. Bootstrapping account...", myUsername);
+            User me = new User();
+            me.setUsername(myUsername);
+            me.setRole(Role.ADMIN);
+            me.setPassword(passwordEncoder.encode(myPassword));
+            userRepository.save(me);
+            log.info("[Seeder] User '{}' created successfully.", myUsername);
+        } else {
+            log.info("[Seeder] User '{}' already exists. Skipping.", myUsername);
+        }
     }
 }

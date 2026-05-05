@@ -1,5 +1,6 @@
 // src/pages/Bookings.tsx — Gantt-chart tape chart
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
 import propertyApi from '../api/propertyApi';
 import roomApi from '../api/roomApi';
 import bookingApi from '../api/bookingApi';
@@ -226,6 +227,7 @@ function DragOverlay({ drag, cellW }: { drag: { rid: string; startCol: number; e
 /* ────────────────────────────────────────────────────────────── */
 
 export default function Bookings() {
+  const { user } = useAuth();
   const [properties, setProperties] = useState<Property[]>([]);
   const [selectedPropId, setSelectedPropId] = useState<string | null>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -299,11 +301,15 @@ export default function Bookings() {
     (async () => {
       try {
         const ps = await propertyApi.getAll();
-        setProperties(ps || []);
-        if (ps?.length) setSelectedPropId(ps[0].id);
+        const all = ps || [];
+        const filtered = user?.role === 'ADMIN'
+          ? all
+          : all.filter(p => user?.properties?.some(up => up.id === p.id));
+        setProperties(filtered);
+        if (filtered.length) setSelectedPropId(filtered[0].id);
       } catch (e) { console.error(e); }
     })();
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     if (!selectedPropId) return;
