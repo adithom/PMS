@@ -17,6 +17,8 @@ public interface UnitRepository extends JpaRepository<Unit, UUID> {
 
     Optional<Unit> findByName(String cleanName);
 
+    Optional<Unit> findByNameAndPropertyId(String name, UUID propertyId);
+
     @Query("SELECT u FROM Unit u WHERE u.property.id = :propertyId ORDER BY u.sortOrder ASC, u.name ASC")
     List<Unit> findByPropertyIdOrderBySortOrder(UUID propertyId);
 

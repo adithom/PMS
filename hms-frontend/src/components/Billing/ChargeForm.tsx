@@ -34,7 +34,7 @@ export default function ChargeForm({ propertyId, folioId, onSuccess, onCancel }:
     const { name, value, type } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: type === 'number' ? parseFloat(value) || 0 : value
+      [name]: type === 'number' ? (value === '' ? undefined : parseFloat(value)) : value
     }));
     setError('');
   };
@@ -48,7 +48,7 @@ export default function ChargeForm({ propertyId, folioId, onSuccess, onCancel }:
 
     setSubmitting(true);
     try {
-      await folioApi.addCharge(propertyId, folioId, formData as ChargeCreationDto);
+      await folioApi.addCharge(propertyId, folioId, { ...formData, quantity: formData.quantity ?? 1 } as ChargeCreationDto);
       onSuccess();
     } catch (err: any) {
       setError(err.message || 'Failed to post charge');
@@ -105,7 +105,7 @@ export default function ChargeForm({ propertyId, folioId, onSuccess, onCancel }:
         </label>
         <label>
           <span className={labelCls}>Qty *</span>
-          <input type="number" name="quantity" value={formData.quantity} onChange={handleChange} disabled={submitting} min="1" step="1" className={inputCls} required />
+          <input type="number" name="quantity" value={formData.quantity ?? ''} onChange={handleChange} disabled={submitting} min="1" step="1" className={inputCls} required />
         </label>
         <label>
           <span className={labelCls}>Tax Rate (%)</span>

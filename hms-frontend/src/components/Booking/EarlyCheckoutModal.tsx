@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import bookingApi from '../../api/bookingApi';
 import type { Booking } from '../../types';
 import ModalShell from '../ModalShell';
+import { fmtDate } from '../../utils/dateHelpers';
 
 interface EarlyCheckoutModalProps {
   propertyId: string;
@@ -101,7 +102,7 @@ export default function EarlyCheckoutModal({ propertyId, bookingId, onClose, onS
           <div className="flex items-center justify-between mb-4">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Original Checkout</p>
-              <p className="font-semibold text-slate-700">{new Date(originalCheckOut + 'T00:00:00').toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' }).replace(/\//g, '-')}</p>
+              <p className="font-semibold text-slate-700">{fmtDate(originalCheckOut)}</p>
             </div>
             <div className="text-slate-300">→</div>
             <div className="text-right">

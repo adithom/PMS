@@ -10,6 +10,53 @@ import { GuestIdType, GUEST_ID_TYPE_LABELS } from '../../types';
 import type { Property, Room, UnitDto, Booking, TravelAgent, MealPlan, MealPlanType } from '../../types';
 
 /* ────────────────────────────────────────────────────────────── */
+/* Helpers                                                      */
+/* ────────────────────────────────────────────────────────────── */
+
+function computeRoomRentExTax(inclusiveRate: number): { exTax: number; taxRate: number } {
+  if (!inclusiveRate || inclusiveRate <= 0) return { exTax: 0, taxRate: 5 };
+  const at5pct = inclusiveRate / 1.05;
+  if (at5pct <= 7500) {
+    return { exTax: Math.round(at5pct * 100) / 100, taxRate: 5 };
+  }
+  return { exTax: Math.round((inclusiveRate / 1.18) * 100) / 100, taxRate: 18 };
+}
+
+function distributeRate(
+  total: number,
+  adults: number,
+  children: number,
+  mealAdultPrice: number,
+  mealChildrenPrice: number,
+  hasMealPlan: boolean,
+  extraBeds: number,
+  bedRate: number,
+  hasExtraBed: boolean,
+): { roomRent: number; mealAdultPrice: number; mealChildrenPrice: number; bedRate: number } {
+  const totalMeal = hasMealPlan ? adults * mealAdultPrice + children * mealChildrenPrice : 0;
+  const totalBed = hasExtraBed ? extraBeds * bedRate : 0;
+
+  if (total >= totalMeal + totalBed) {
+    return { roomRent: total - totalMeal - totalBed, mealAdultPrice, mealChildrenPrice, bedRate };
+  }
+  if (total >= totalBed) {
+    const factor = totalMeal > 0 ? (total - totalBed) / totalMeal : 0;
+    return {
+      roomRent: 0,
+      mealAdultPrice: Math.round(mealAdultPrice * factor * 100) / 100,
+      mealChildrenPrice: Math.round(mealChildrenPrice * factor * 100) / 100,
+      bedRate,
+    };
+  }
+  return {
+    roomRent: 0,
+    mealAdultPrice: 0,
+    mealChildrenPrice: 0,
+    bedRate: hasExtraBed && extraBeds > 0 ? Math.round((total / extraBeds) * 100) / 100 : 0,
+  };
+}
+
+/* ────────────────────────────────────────────────────────────── */
 /* Types & Tokens                                               */
 /* ────────────────────────────────────────────────────────────── */
 
@@ -80,13 +127,10 @@ export default function BookingForm({
   const [adults, setAdults] = useState<number>(booking?.adults ?? 1);
   const [children, setChildren] = useState<number>(booking?.children ?? 0);
   const [currency, setCurrency] = useState<string>(booking?.currency ?? 'INR');
-  const [nightlyRate, setNightlyRate] = useState<number>(() => {
-    if (!booking) return 0;
-    const inD = new Date(booking.checkIn), outD = new Date(booking.checkOut);
-    const nights = Math.round((outD.getTime() - inD.getTime()) / (1000 * 60 * 60 * 24));
-    return nights > 0 ? Math.round(booking.totalPrice / nights) : booking.totalPrice;
-  });
+  const [nightlyRate, setNightlyRate] = useState<number>(booking?.nightlyRate ?? 0);
+  const [nightlyRateInputStr, setNightlyRateInputStr] = useState<string>('');
   const [paidAmount, setPaidAmount] = useState<number>(booking?.paidAmount ?? 0);
+  const [advancePaymentMethod, setAdvancePaymentMethod] = useState<string>('CASH');
   const [specialRequests, setSpecialRequests] = useState<string>(booking?.specialRequests ?? '');
   const [status, setStatus] = useState<string>(booking?.status ?? 'PENDING');
   
@@ -107,6 +151,7 @@ export default function BookingForm({
   const [newGuestPhone, setNewGuestPhone] = useState<string>('');
   const [newGuestIdNumber, setNewGuestIdNumber] = useState<string>('');
   const [newGuestIdType, setNewGuestIdType] = useState<GuestIdType | ''>('');
+  const [newGuestDateOfBirth, setNewGuestDateOfBirth] = useState<string>('');
 
   // ── Travel Agent State ──
   const [agentSectionOpen, setAgentSectionOpen] = useState<boolean>(
@@ -328,6 +373,7 @@ export default function BookingForm({
         ...(newGuestPhone && { phone: newGuestPhone }),
         ...(newGuestIdNumber && { idNumber: newGuestIdNumber }),
         ...(newGuestIdType && { guestIdType: newGuestIdType }),
+        ...(newGuestDateOfBirth && { dateOfBirth: newGuestDateOfBirth }),
       };
       const created = await guestApi.create(payload) as any;
       const idStr = String(created.id ?? created.uuid ?? created.guestId ?? created._id);
@@ -391,6 +437,7 @@ export default function BookingForm({
       const adultMealNightly = mealPlanOpen && selectedMealPlan && mealPlanPrice ? adults * Number(mealPlanPrice) : 0;
       const childMealNightly = mealPlanOpen && selectedMealPlan && mealPlanChildrenPrice ? children * Number(mealPlanChildrenPrice) : 0;
       const computedTotalPrice = (nightlyRate + adultMealNightly + childMealNightly + xBedNightly) * nights;
+      const nightlyRateExTax = computeRoomRentExTax(nightlyRate).exTax;
 
       const mealPlanPayload = mealPlanOpen && selectedMealPlan
         ? {
@@ -416,7 +463,10 @@ export default function BookingForm({
         checkIn, checkOut, adults, children, currency, paidAmount, specialRequests,
         isTwinBed,
         referenceNumber: referenceNumber || undefined,
-        ...(isEditMode ? { totalPrice: computedTotalPrice } : { nightlyRate }),
+        ...(!isEditMode && paidAmount > 0 ? { advancePaymentMethod } : {}),
+        ...(isEditMode
+          ? { totalPrice: computedTotalPrice, nightlyRate, nightlyRateExTax }
+          : { nightlyRate, nightlyRateExTax }),
         ...travelAgentPayload,
         ...mealPlanPayload,
         ...extraBedPayload
@@ -530,6 +580,10 @@ export default function BookingForm({
                   <option key={t} value={t}>{GUEST_ID_TYPE_LABELS[t]}</option>
                 ))}
               </select>
+            </label>
+            <label>
+              <span className={labelCls}>Date of Birth</span>
+              <input type="date" className={inputCls} value={newGuestDateOfBirth} onChange={e => setNewGuestDateOfBirth(e.target.value)} />
             </label>
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={() => setCreatingGuest(false)} className={btnSecondary}>
@@ -831,10 +885,9 @@ export default function BookingForm({
                 <span className={labelCls}>Number of Extra Beds</span>
                 <input
                   type="number"
-                  min={1}
                   className={inputCls}
-                  value={extraBeds}
-                  onChange={e => setExtraBeds(Math.max(1, Number(e.target.value) || 1))}
+                  value={extraBeds || ''}
+                  onChange={e => setExtraBeds(e.target.value === '' ? 0 : Number(e.target.value))}
                 />
               </label>
               <label>
@@ -904,8 +957,8 @@ export default function BookingForm({
         </div>
 
         <div className="grid gap-4 sm:grid-cols-4">
-          <label><span className={labelCls}>Adults</span><input type="number" min={1} className={inputCls} value={adults} onChange={e => setAdults(Number(e.target.value) || 1)} /></label>
-          <label><span className={labelCls}>Children</span><input type="number" min={0} className={inputCls} value={children} onChange={e => setChildren(Number(e.target.value) || 0)} /></label>
+          <label><span className={labelCls}>Adults</span><input type="number" className={inputCls} value={adults || ''} onChange={e => setAdults(e.target.value === '' ? 0 : Number(e.target.value))} /></label>
+          <label><span className={labelCls}>Children</span><input type="number" className={inputCls} value={children || ''} onChange={e => setChildren(e.target.value === '' ? 0 : Number(e.target.value))} /></label>
           <label className="sm:col-span-2">
             <span className={labelCls}>Status</span>
             <select className={inputCls} value={status} onChange={e => setStatus(e.target.value)}>
@@ -924,18 +977,34 @@ export default function BookingForm({
             <label>
               <span className={labelCls}>Nightly Rate</span>
               <input
-                type="number" min={0} className={inputCls}
-                value={(() => {
+                type="number" className={inputCls}
+                value={nightlyRateInputStr !== '' ? nightlyRateInputStr : (() => {
                   const adultMeal = mealPlanOpen && selectedMealPlan && mealPlanPrice ? Number(mealPlanPrice) : 0;
                   const childMeal = mealPlanOpen && selectedMealPlan && mealPlanChildrenPrice ? Number(mealPlanChildrenPrice) : 0;
                   const xBed = extraBedOpen && extraBeds > 0 && extraBedRate ? extraBeds * Number(extraBedRate) : 0;
-                  return nightlyRate + adults * adultMeal + children * childMeal + xBed;
+                  return (nightlyRate + adults * adultMeal + children * childMeal + xBed) || '';
                 })()}
-                onChange={e => {
-                  const adultMeal = mealPlanOpen && selectedMealPlan && mealPlanPrice ? Number(mealPlanPrice) : 0;
-                  const childMeal = mealPlanOpen && selectedMealPlan && mealPlanChildrenPrice ? Number(mealPlanChildrenPrice) : 0;
-                  const xBed = extraBedOpen && extraBeds > 0 && extraBedRate ? extraBeds * Number(extraBedRate) : 0;
-                  setNightlyRate(Math.max(0, (Number(e.target.value) || 0) - adults * adultMeal - children * childMeal - xBed));
+                onChange={e => setNightlyRateInputStr(e.target.value)}
+                onBlur={e => {
+                  const result = distributeRate(
+                    Number(e.target.value) || 0,
+                    adults, children,
+                    mealPlanOpen && selectedMealPlan && mealPlanPrice ? Number(mealPlanPrice) : 0,
+                    mealPlanOpen && selectedMealPlan && mealPlanChildrenPrice ? Number(mealPlanChildrenPrice) : 0,
+                    mealPlanOpen && !!selectedMealPlan,
+                    extraBeds,
+                    extraBedOpen && extraBeds > 0 && extraBedRate ? Number(extraBedRate) : 0,
+                    extraBedOpen && extraBeds > 0,
+                  );
+                  setNightlyRate(result.roomRent);
+                  if (mealPlanOpen && selectedMealPlan) {
+                    setMealPlanPrice(result.mealAdultPrice.toString());
+                    setMealPlanChildrenPrice(result.mealChildrenPrice.toString());
+                  }
+                  if (extraBedOpen && extraBeds > 0) {
+                    setExtraBedRate(result.bedRate.toString());
+                  }
+                  setNightlyRateInputStr('');
                 }}
               />
             </label>
@@ -958,11 +1027,20 @@ export default function BookingForm({
                 )}
                 {extraBedOpen && extraBeds > 0 && extraBedRate && Number(extraBedRate) > 0 && (
                   <p className="text-xs text-slate-400">
-                    + {extraBeds} extra bed{extraBeds !== 1 ? 's' : ''} × {currency} {Number(extraBedRate).toLocaleString()} = {currency} {(extraBeds * Number(extraBedRate)).toLocaleString()}
+                    + {extraBeds} extra bed{extraBeds !== 1 ? 'ren' : ''} × {currency} {Number(extraBedRate).toLocaleString()} = {currency} {(extraBeds * Number(extraBedRate)).toLocaleString()}
                   </p>
                 )}
               </div>
             )}
+            {nightlyRate > 0 && (() => {
+              const { exTax, taxRate } = computeRoomRentExTax(nightlyRate);
+              return (
+                <div className="mt-1.5 rounded border border-slate-100 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-500 space-y-0.5">
+                  <p>Room rent (ex-GST): {currency} {exTax.toLocaleString()}</p>
+                  <p>GST: {taxRate}% = {currency} {(nightlyRate - exTax).toFixed(2)}</p>
+                </div>
+              );
+            })()}
           </div>
           <div>
             <label>
@@ -1012,7 +1090,21 @@ export default function BookingForm({
               );
             })()}
           </div>
-          <label><span className={labelCls}>Amount Paid</span><input type="number" min={0} className={inputCls} value={paidAmount} onChange={e => setPaidAmount(Number(e.target.value) || 0)} /></label>
+          <label><span className={labelCls}>Amount Paid</span><input type="number" className={inputCls} value={paidAmount || ''} onChange={e => setPaidAmount(e.target.value === '' ? 0 : Number(e.target.value))} /></label>
+          {!isEditMode && paidAmount > 0 && (
+            <label>
+              <span className={labelCls}>Advance Payment Method</span>
+              <select className={inputCls} value={advancePaymentMethod} onChange={e => setAdvancePaymentMethod(e.target.value)}>
+                <option value="CASH">Cash</option>
+                <option value="CREDIT_CARD">Credit Card</option>
+                <option value="DEBIT_CARD">Debit Card</option>
+                <option value="UPI">UPI</option>
+                <option value="BANK_TRANSFER">Bank Transfer</option>
+                <option value="CHEQUE">Cheque</option>
+                <option value="DIGITAL_WALLET">Digital Wallet</option>
+              </select>
+            </label>
+          )}
         </div>
 
         {/* ---> NEW CHECKBOX FOR TWIN BED <--- */}
@@ -1049,7 +1141,7 @@ export default function BookingForm({
       <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
         <button type="button" className={btnSecondary} onClick={onCancel}>Cancel</button>
         <button type="submit" disabled={loading} className={btnPrimary}>
-          {loading ? 'Processing...' : isEditMode ? 'Save Changes' : 'Confirm Booking'}
+          {loading ? 'Processing...' : isEditMode ? 'Save Changes' : 'Create Booking'}
         </button>
       </div>
     </form>

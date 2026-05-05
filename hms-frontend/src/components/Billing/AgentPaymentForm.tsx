@@ -25,14 +25,15 @@ export default function AgentPaymentForm({
   onSuccess,
   onCancel,
 }: AgentPaymentFormProps) {
-  const [amount, setAmount] = useState<number>(balanceDue > 0 ? balanceDue : 0);
+  const [amount, setAmount] = useState<string>(balanceDue > 0 ? String(balanceDue) : '');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!amount || amount <= 0) {
+    const numAmount = parseFloat(amount);
+    if (!amount || numAmount <= 0) {
       setError('Amount must be greater than 0');
       return;
     }
@@ -40,7 +41,7 @@ export default function AgentPaymentForm({
     setSubmitting(true);
     try {
       await paymentApi.recordPayment(propertyId, folioId, {
-        amount,
+        amount: numAmount,
         paymentMethod: 'AGENT_BILLING',
         travelAgentId,
         notes: notes || `Assigned to agent: ${travelAgentName}`,
@@ -75,8 +76,8 @@ export default function AgentPaymentForm({
             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl font-bold text-slate-400">₹</span>
             <input
               type="number"
-              value={amount || ''}
-              onChange={e => { setAmount(parseFloat(e.target.value) || 0); setError(''); }}
+              value={amount}
+              onChange={e => { setAmount(e.target.value); setError(''); }}
               disabled={submitting}
               min="0.01"
               step="0.01"

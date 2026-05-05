@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { fmtDateTime } from '../utils/dateHelpers';
 import { Calendar, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import posApi from '../api/posApi';
@@ -106,9 +107,9 @@ function OutletsTab({ propertyId, locations, onRefresh }: { propertyId: string; 
               <option value="">Type *</option>
               {LOCATION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
-            <input placeholder="Tax Rate %" type="number" className={inputCls} value={form.defaultTaxRate ?? ''}
+            <input placeholder="Tax Rate %" type="number" className={inputCls} value={form.defaultTaxRate || ''}
               onChange={e => setForm(f => ({ ...f, defaultTaxRate: parseFloat(e.target.value) || 0 }))} />
-            <input placeholder="Service Charge %" type="number" className={inputCls} value={form.serviceChargeRate ?? ''}
+            <input placeholder="Service Charge %" type="number" className={inputCls} value={form.serviceChargeRate || ''}
               onChange={e => setForm(f => ({ ...f, serviceChargeRate: parseFloat(e.target.value) || 0 }))} />
             <input placeholder="Opening Time (HH:mm)" className={inputCls} value={form.openingTime || ''}
               onChange={e => setForm(f => ({ ...f, openingTime: e.target.value }))} />
@@ -180,8 +181,8 @@ function OutletsTab({ propertyId, locations, onRefresh }: { propertyId: string; 
 
 function EditOutletInline({ location, onSave, onCancel }: { location: PosLocation; onSave: (u: Record<string, unknown>) => void; onCancel: () => void }) {
   const [name, setName] = useState(location.name);
-  const [taxRate, setTaxRate] = useState(location.defaultTaxRate);
-  const [serviceCharge, setServiceCharge] = useState(location.serviceChargeRate ?? 0);
+  const [taxRate, setTaxRate] = useState<string>(String(location.defaultTaxRate));
+  const [serviceCharge, setServiceCharge] = useState<string>(String(location.serviceChargeRate ?? 0));
   const [opening, setOpening] = useState(location.openingTime || '');
   const [closing, setClosing] = useState(location.closingTime || '');
 
@@ -190,14 +191,14 @@ function EditOutletInline({ location, onSave, onCancel }: { location: PosLocatio
       <h4 className="text-sm font-semibold text-gray-800">Editing: <span className="text-blue-600">{location.name}</span></h4>
       <div className="grid grid-cols-2 gap-3">
         <input placeholder="Name" className={inputCls} value={name} onChange={e => setName(e.target.value)} />
-        <input placeholder="Tax Rate %" type="number" className={inputCls} value={taxRate} onChange={e => setTaxRate(parseFloat(e.target.value) || 0)} />
-        <input placeholder="Service Charge %" type="number" className={inputCls} value={serviceCharge} onChange={e => setServiceCharge(parseFloat(e.target.value) || 0)} />
+        <input placeholder="Tax Rate %" type="number" className={inputCls} value={taxRate} onChange={e => setTaxRate(e.target.value)} />
+        <input placeholder="Service Charge %" type="number" className={inputCls} value={serviceCharge} onChange={e => setServiceCharge(e.target.value)} />
         <input placeholder="Opening Time" className={inputCls} value={opening} onChange={e => setOpening(e.target.value)} />
         <input placeholder="Closing Time" className={inputCls} value={closing} onChange={e => setClosing(e.target.value)} />
       </div>
       <div className="flex gap-2 justify-end pt-1">
         <button onClick={onCancel} className="px-4 py-2 text-sm font-medium border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
-        <button onClick={() => onSave({ name, defaultTaxRate: taxRate, serviceChargeRate: serviceCharge, openingTime: opening || null, closingTime: closing || null })}
+        <button onClick={() => onSave({ name, defaultTaxRate: parseFloat(taxRate) || 0, serviceChargeRate: parseFloat(serviceCharge) || 0, openingTime: opening || null, closingTime: closing || null })}
           className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm">Save Changes</button>
       </div>
     </div>
@@ -412,11 +413,11 @@ function CategoriesItemsTab({ locations }: { locations: PosLocation[] }) {
                 <div className="grid grid-cols-3 gap-3">
                   <input placeholder="Name *" className={inputCls} value={prodForm.name || ''}
                     onChange={e => setProdForm(f => ({ ...f, name: e.target.value }))} />
-                  <input placeholder="Price *" type="number" className={inputCls} value={prodForm.price ?? ''}
+                  <input placeholder="Price *" type="number" className={inputCls} value={prodForm.price || ''}
                     onChange={e => setProdForm(f => ({ ...f, price: parseFloat(e.target.value) || 0 }))} />
-                  <input placeholder="Tax %" type="number" className={inputCls} value={prodForm.taxRate ?? ''}
+                  <input placeholder="Tax %" type="number" className={inputCls} value={prodForm.taxRate || ''}
                     onChange={e => setProdForm(f => ({ ...f, taxRate: parseFloat(e.target.value) || 0 }))} />
-                  <input placeholder="Discount %" type="number" className={inputCls} value={prodForm.discountRate ?? ''}
+                  <input placeholder="Discount %" type="number" className={inputCls} value={prodForm.discountRate || ''}
                     onChange={e => setProdForm(f => ({ ...f, discountRate: parseFloat(e.target.value) || 0 }))} />
                   <input placeholder="Description" className={inputCls} value={prodForm.description || ''}
                     onChange={e => setProdForm(f => ({ ...f, description: e.target.value }))} />
@@ -489,21 +490,21 @@ function CategoriesItemsTab({ locations }: { locations: PosLocation[] }) {
 }
 
 function EditProductRow({ product, onSave, onCancel }: { product: PosProduct; onSave: (u: Record<string, unknown>) => void; onCancel: () => void }) {
-  const [price, setPrice] = useState(product.price);
-  const [discount, setDiscount] = useState(product.discountRate ?? 0);
-  const [tax, setTax] = useState(product.taxRate);
+  const [price, setPrice] = useState<string>(String(product.price));
+  const [discount, setDiscount] = useState<string>(String(product.discountRate ?? 0));
+  const [tax, setTax] = useState<string>(String(product.taxRate));
   const [name, setName] = useState(product.name);
   const rowInput = 'border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full';
 
   return (
     <tr className="bg-blue-50/50">
       <td className="px-4 py-2.5"><input className={rowInput} value={name} onChange={e => setName(e.target.value)} /></td>
-      <td className="px-4 py-2.5"><input type="number" className={`${rowInput} w-24 text-right`} value={price} onChange={e => setPrice(parseFloat(e.target.value) || 0)} /></td>
-      <td className="px-4 py-2.5"><input type="number" className={`${rowInput} w-20 text-right`} value={discount} onChange={e => setDiscount(parseFloat(e.target.value) || 0)} /></td>
-      <td className="px-4 py-2.5"><input type="number" className={`${rowInput} w-20 text-right`} value={tax} onChange={e => setTax(parseFloat(e.target.value) || 0)} /></td>
+      <td className="px-4 py-2.5"><input type="number" className={`${rowInput} w-24 text-right`} value={price} onChange={e => setPrice(e.target.value)} /></td>
+      <td className="px-4 py-2.5"><input type="number" className={`${rowInput} w-20 text-right`} value={discount} onChange={e => setDiscount(e.target.value)} /></td>
+      <td className="px-4 py-2.5"><input type="number" className={`${rowInput} w-20 text-right`} value={tax} onChange={e => setTax(e.target.value)} /></td>
       <td className="px-4 py-2.5 text-center text-gray-400">—</td>
       <td className="px-4 py-2.5 text-right space-x-2">
-        <button onClick={() => onSave({ name, price, discountRate: discount, taxRate: tax })} className="text-emerald-600 hover:text-emerald-800 text-sm font-medium transition-colors">Save</button>
+        <button onClick={() => onSave({ name, price: parseFloat(price) || 0, discountRate: parseFloat(discount) || 0, taxRate: parseFloat(tax) || 0 })} className="text-emerald-600 hover:text-emerald-800 text-sm font-medium transition-colors">Save</button>
         <button onClick={onCancel} className="text-gray-500 hover:text-gray-700 text-sm font-medium transition-colors">Cancel</button>
       </td>
     </tr>
@@ -693,9 +694,7 @@ function OrderHistoryTab({ locations }: { locations: PosLocation[] }) {
                   <tr key={order.id} className="hover:bg-gray-50/50 cursor-pointer transition-colors" onClick={() => setExpandedId(expandedId === order.id ? null : order.id)}>
                     <td className="px-5 py-3.5 font-medium text-gray-900">{order.orderNumber}</td>
                     <td className="px-5 py-3.5 text-gray-500 text-xs">
-                      {new Date(order.orderDate).toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' })}
-                      {' '}
-                      {new Date(order.orderDate).toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' })}
+                      {fmtDateTime(order.orderDate)}
                     </td>
                     <td className="px-5 py-3.5 text-right text-gray-600">{order.items?.length ?? 0}</td>
                     <td className="px-5 py-3.5 text-right text-gray-600">{fmt(order.subtotal)}</td>

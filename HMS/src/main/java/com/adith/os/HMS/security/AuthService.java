@@ -9,6 +9,7 @@ import com.adith.os.HMS.security.dto.LoginRequest;
 import com.adith.os.HMS.security.dto.RegisterRequest;
 import com.adith.os.HMS.security.dto.UpdateUserRequest;
 import com.adith.os.HMS.security.dto.UserInfoDto;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -25,6 +26,9 @@ import java.util.stream.Collectors;
 
 @Service
 public class AuthService {
+
+    @Value("${app.admin.username:adith}")
+    private String seededAdminUsername;
 
     private final UserRepository userRepository;
     private final PropertyRepository propertyRepository;
@@ -118,6 +122,7 @@ public class AuthService {
 
     public List<UserInfoDto> listUsers() {
         return userRepository.findAll().stream()
+                .filter(u -> !u.getUsername().equals(seededAdminUsername))
                 .map(this::buildUserInfoDto)
                 .toList();
     }

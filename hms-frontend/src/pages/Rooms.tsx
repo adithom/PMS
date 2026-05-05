@@ -36,7 +36,6 @@ type RoomsDialog =
   | { type: 'view_property'; property: Property }
   | { type: 'add_property' }
   | { type: 'edit_property'; property: Property }
-  | { type: 'delete_property'; property: Property }
   | { type: 'add_unit'; property: Property }
   | { type: 'edit_unit'; property: Property; unit: UnitDto }
   | null;
@@ -444,16 +443,6 @@ export default function Rooms() {
     }
   };
 
-  const handleDeleteProperty = async () => {
-    if (dialog?.type !== 'delete_property') return;
-    try {
-      await propertyApi.delete(dialog.property.id);
-      setDialog(null);
-      await loadData();
-    } catch (err: any) {
-      alert(`Failed to delete: ${err.message}`);
-    }
-  };
 
   const handleSaveUnit = async (data: { name: string; sortOrder: number }) => {
     if (dialog?.type !== 'add_unit' && dialog?.type !== 'edit_unit') return;
@@ -606,15 +595,25 @@ export default function Rooms() {
                     </button>
                   </div>
                 ) : (
-                  <div
-                    className="grid gap-3"
-                    style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))' }}
-                  >
-                    {rooms.map((room) => {
+                  (() => {
+                    const fetchedUnits = unitsByProperty[property.id] ?? [];
+                    const orderedUnitNames = fetchedUnits.map(u => u.name);
+                    const roomUnitNames = Array.from(new Set(rooms.map(r => r.unitName ?? ''))).filter(Boolean);
+                    const extraNames = roomUnitNames.filter(n => !orderedUnitNames.includes(n));
+                    const allGroupNames = [...orderedUnitNames, ...extraNames];
+                    const unassigned = rooms.filter(r => !r.unitName);
+                    const groups: { label: string | null; groupRooms: Room[] }[] = [
+                      ...allGroupNames
+                        .map(name => ({ label: name, groupRooms: rooms.filter(r => r.unitName === name) }))
+                        .filter(g => g.groupRooms.length > 0),
+                      ...(unassigned.length > 0 ? [{ label: null, groupRooms: unassigned }] : []),
+                    ];
+                    const hasManyGroups = groups.length > 1;
+
+                    const renderRoomButton = (room: Room) => {
                       const displayStatus = resolveRoomDisplayStatus(room, roomDisplayStatus);
                       const meta = STATUS_META[displayStatus];
                       const roomId = getRoomId(room);
-
                       return (
                         <button
                           key={roomId ?? room.number}
@@ -623,7 +622,7 @@ export default function Rooms() {
                             'group flex flex-col rounded-xl border-2 transition-all duration-200 ease-out hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2',
                             meta.tile,
                           )}
-                          style={{ minHeight: '130px' }}
+                          style={{ minHeight: '130px', width: '110px' }}
                           onClick={() => handleRoomClick(room, property.id)}
                         >
                           <div className="flex justify-end p-2.5 pb-0">
@@ -651,8 +650,28 @@ export default function Rooms() {
                           </div>
                         </button>
                       );
-                    })}
-                  </div>
+                    };
+
+                    return (
+                      <div className="space-y-6">
+                        {groups.map(({ label, groupRooms }) => (
+                          <div key={label ?? '__unassigned'}>
+                            {hasManyGroups && (
+                              <div className="mb-3 flex items-center gap-2">
+                                <span className="text-xs font-semibold uppercase tracking-widest text-slate-400">
+                                  {label ?? 'Unassigned'}
+                                </span>
+                                <div className="h-px flex-1 bg-slate-100" />
+                              </div>
+                            )}
+                            <div className="flex flex-wrap justify-center gap-3">
+                              {groupRooms.map(renderRoomButton)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()
                 )}
               </div>
             </section>
@@ -971,11 +990,7 @@ export default function Rooms() {
               </div>
             </div>
 
-            <div className="flex flex-wrap justify-between gap-3 border-t border-slate-100 pt-4">
-              <button type="button" className={btnDanger}
-                onClick={() => setDialog({ type: 'delete_property', property: managedProperty })}>
-                Delete Property
-              </button>
+            <div className="flex flex-wrap justify-end gap-3 border-t border-slate-100 pt-4">
               <button type="button" className={btnPrimary}
                 onClick={() => setDialog({ type: 'edit_property', property: managedProperty })}>
                 Edit Property Info
@@ -1013,27 +1028,7 @@ export default function Rooms() {
         </ModalShell>
       )}
 
-      {dialog?.type === 'delete_property' && managedProperty && (
-        <ModalShell
-          title={`Delete ${managedProperty.name}?`}
-          onClose={() => setDialog({ type: 'view_property', property: managedProperty })}
-        >
-          <div className="space-y-5">
-            <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm leading-6 text-rose-800">
-              <strong>Warning:</strong> This action cannot be undone. You are permanently removing this property and all its associations.
-            </div>
-            <div className="flex justify-end gap-3">
-              <button type="button" className={btnSecondary}
-                onClick={() => setDialog({ type: 'view_property', property: managedProperty })}>
-                Cancel
-              </button>
-              <button type="button" className={btnDanger} onClick={handleDeleteProperty}>
-                Confirm Deletion
-              </button>
-            </div>
-          </div>
-        </ModalShell>
-      )}
+
     </div>
   );
 }

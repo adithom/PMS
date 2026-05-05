@@ -40,7 +40,7 @@ export default function UnitForm({ propertyId, unit, onSave, onCancel }: UnitFor
     const { name, value, type } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: type === 'number' ? parseInt(value) || 0 : value,
+      [name]: type === 'number' ? (value === '' ? 0 : parseInt(value)) : value,
     }));
     
     // Clear error when user types
@@ -103,7 +103,7 @@ export default function UnitForm({ propertyId, unit, onSave, onCancel }: UnitFor
 
       <label>
         <span className={labelCls}>Sort Order</span>
-        <input type="number" name="sortOrder" value={formData.sortOrder} onChange={handleChange} disabled={submitting} min="0" step="1" className={inputCls} />
+        <input type="number" name="sortOrder" value={formData.sortOrder || ''} onChange={handleChange} disabled={submitting} min="0" step="1" className={inputCls} />
         {errors.sortOrder ? (
           <p className="mt-1 text-xs text-rose-500">{errors.sortOrder}</p>
         ) : (

@@ -4,6 +4,9 @@ import groupBookingApi from '../../api/groupBookingApi';
 import type { GroupBookingCreationDto, GroupRoomRequestDto } from '../../api/groupBookingApi';
 import guestApi from '../../api/guestApi';
 import unitApi from '../../api/unitApi';
+import roomApi from '../../api/roomApi';
+import type { Room } from '../../types';
+import { fmtDate } from '../../utils/dateHelpers';
 import ModalShell from '../ModalShell';
 
 interface GroupBookingModalProps {
@@ -21,6 +24,7 @@ export default function GroupBookingModal({ propertyId, onClose, onSuccess }: Gr
   // Data state
   const [guests, setGuests] = useState<any[]>([]);
   const [units, setUnits] = useState<any[]>([]);
+  const [roomsByUnit, setRoomsByUnit] = useState<Record<string, Room[]>>({});
 
   // Form State
   const [formData, setFormData] = useState<GroupBookingCreationDto>({
@@ -45,12 +49,23 @@ export default function GroupBookingModal({ propertyId, onClose, onSuccess }: Gr
         // Fetch both guests and units simultaneously
         const [guestsData, unitsData] = await Promise.all([
           guestApi.getAll(),
-          unitApi.getByProperty(propertyId)
+          unitApi.getByProperty(propertyId),
         ]);
-        
+
         // Handle possible paginated responses or direct arrays
         setGuests(Array.isArray(guestsData) ? guestsData : (guestsData as any).content || []);
-        setUnits(Array.isArray(unitsData) ? unitsData : (unitsData as any).content || []);
+        const fetchedUnits = Array.isArray(unitsData) ? unitsData : (unitsData as any).content || [];
+        setUnits(fetchedUnits);
+
+        const roomsPerUnit = await Promise.all(
+          fetchedUnits.map((u: any) => roomApi.getByUnit(propertyId, u.id).catch(() => []))
+        );
+        const byUnit: Record<string, Room[]> = {};
+        fetchedUnits.forEach((u: any, i: number) => {
+          const rooms: Room[] = Array.isArray(roomsPerUnit[i]) ? roomsPerUnit[i] : [];
+          byUnit[u.id] = rooms;
+        });
+        setRoomsByUnit(byUnit);
       } catch (err: any) {
         setError('Failed to load guests and units. Please close and try again.');
       } finally {
@@ -88,6 +103,10 @@ export default function GroupBookingModal({ propertyId, onClose, onSuccess }: Gr
     setFormData(prev => {
       const newRequests = [...prev.roomRequests];
       newRequests[index] = { ...newRequests[index], [field]: value };
+      if (field === 'unitId' && value) {
+        const baseRate = roomsByUnit[value]?.[0]?.baseRate ?? 0;
+        newRequests[index] = { ...newRequests[index], nightlyRate: baseRate };
+      }
       return { ...prev, roomRequests: newRequests };
     });
   };
@@ -157,7 +176,7 @@ export default function GroupBookingModal({ propertyId, onClose, onSuccess }: Gr
   const inputCls = "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:bg-slate-50 disabled:text-slate-500";
 
   return (
-    <ModalShell title="New Group Block" size="wide" onClose={onClose}>
+    <ModalShell title="New Group Booking" size="wide" onClose={onClose}>
       <div className="flex h-[650px] flex-col">
         
         {/* Progress Bar */}
@@ -311,11 +330,16 @@ export default function GroupBookingModal({ propertyId, onClose, onSuccess }: Gr
                       <div className="absolute -left-3 top-5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-800 font-bold text-white text-xs shadow-sm">
                         {index + 1}
                       </div>
-                      
-                      <div className="grid gap-4 sm:grid-cols-2 ml-4">
+
+                      <div className={`grid gap-4 ml-4 ${index === 0 ? 'sm:grid-cols-1' : 'sm:grid-cols-2'}`}>
                         <div>
-                          <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-slate-500">Unit Type *</label>
-                          <select 
+                          <div className="flex items-center gap-2 mb-1">
+                            <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500">Unit Type *</label>
+                            {index === 0 && (
+                              <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-indigo-700">Organizer's Room</span>
+                            )}
+                          </div>
+                          <select
                             className={inputCls}
                             value={req.unitId}
                             onChange={(e) => updateRoomRequest(index, 'unitId', e.target.value)}
@@ -324,19 +348,21 @@ export default function GroupBookingModal({ propertyId, onClose, onSuccess }: Gr
                             {units.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                           </select>
                         </div>
-                        <div>
-                          <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-slate-500">Guest (Optional)</label>
-                          <select 
-                            className={inputCls}
-                            value={req.childGuestId || ''}
-                            onChange={(e) => updateRoomRequest(index, 'childGuestId', e.target.value)}
-                          >
-                            <option value="">-- Same as Organizer --</option>
-                            {guests.map(g => (
-                              <option key={g.id} value={g.id}>{g.firstName} {g.lastName}</option>
-                            ))}
-                          </select>
-                        </div>
+                        {index > 0 && (
+                          <div>
+                            <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-slate-500">Guest (Optional)</label>
+                            <select
+                              className={inputCls}
+                              value={req.childGuestId || ''}
+                              onChange={(e) => updateRoomRequest(index, 'childGuestId', e.target.value)}
+                            >
+                              <option value="">-- Same as Organizer --</option>
+                              {guests.map(g => (
+                                <option key={g.id} value={g.id}>{g.firstName} {g.lastName}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
                       </div>
 
                       <div className="grid gap-4 sm:grid-cols-3 ml-4">
@@ -363,8 +389,8 @@ export default function GroupBookingModal({ propertyId, onClose, onSuccess }: Gr
                         </div>
                       </div>
 
-                      {formData.roomRequests.length > 1 && (
-                        <button 
+                      {index > 0 && (
+                        <button
                           onClick={() => removeRoomRequest(index)}
                           className="absolute -right-2 -top-2 rounded-full bg-white p-1.5 text-slate-400 shadow-sm ring-1 ring-slate-200 transition-all hover:bg-rose-50 hover:text-rose-600"
                         >
@@ -384,7 +410,7 @@ export default function GroupBookingModal({ propertyId, onClose, onSuccess }: Gr
                   </div>
                   <h2 className="text-2xl font-extrabold text-slate-900">Ready to build the block?</h2>
                   <p className="mt-2 max-w-md text-sm text-slate-500">
-                    You are about to create <strong>1 Master Group Booking</strong> and <strong>{formData.roomRequests.length} Child Room Bookings</strong> for the dates <strong>{formData.checkIn}</strong> to <strong>{formData.checkOut}</strong>.
+                    You are about to create <strong>1 Master Group Booking</strong> and <strong>{formData.roomRequests.length} Child Room Bookings</strong> for the dates <strong>{fmtDate(formData.checkIn)}</strong> to <strong>{fmtDate(formData.checkOut)}</strong>.
                   </p>
                   
                   <div className="mt-6 rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm w-full max-w-sm">

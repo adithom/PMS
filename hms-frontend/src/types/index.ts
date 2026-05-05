@@ -104,6 +104,8 @@ export interface Booking {
   extraBeds?: number;
   extraBedRatePerNight?: number;
   extraBedChargeCode?: 'ROOM_RENT' | 'MISC';
+  nightlyRate?: number;
+  nightlyRateExTax?: number;
 }
 
 export interface TravelAgent {

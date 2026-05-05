@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import folioApi from '../../api/folioApi';
+import { fmtDate } from '../../utils/dateHelpers';
 import type { ChargeDto, FolioDto } from '../../api/folioApi';
 
 /* ────────────────────────────────────────────────────────────── */
@@ -217,7 +218,7 @@ export default function FolioRoutingForm({ propertyId, folioId, charges, currenc
                       />
                     </td>
                     <td className="p-3 text-slate-600">
-                      {new Date(charge.chargeDate + 'T00:00:00').toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' }).replace(/\//g, '-')}
+                      {fmtDate(charge.chargeDate)}
                     </td>
                     <td className="p-3">
                       <span className="block font-medium text-slate-900">{charge.description || charge.chargeCode}</span>

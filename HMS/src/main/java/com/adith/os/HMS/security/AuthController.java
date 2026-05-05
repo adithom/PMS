@@ -6,6 +6,7 @@ import com.adith.os.HMS.security.dto.RegisterRequest;
 import com.adith.os.HMS.security.dto.UpdateUserRequest;
 import com.adith.os.HMS.security.dto.UserInfoDto;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -60,6 +61,9 @@ public class AuthController {
 
     @GetMapping("/me")
     public ResponseEntity<UserInfoDto> getCurrentUser(@AuthenticationPrincipal UserPrincipal userPrincipal) {
+        if (userPrincipal == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
         User user = userPrincipal.getUser();
 
         String posLocationId = user.getPosLocation() != null ? user.getPosLocation().getId().toString() : null;

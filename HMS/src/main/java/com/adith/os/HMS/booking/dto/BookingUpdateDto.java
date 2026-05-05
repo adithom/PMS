@@ -31,6 +31,12 @@ public record BookingUpdateDto(
 
         BigDecimal totalPrice,
 
+        @PositiveOrZero
+        BigDecimal nightlyRate,
+
+        @PositiveOrZero
+        BigDecimal nightlyRateExTax,
+
         BigDecimal paidAmount,
 
         BookingStatus status,

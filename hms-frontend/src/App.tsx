@@ -56,7 +56,7 @@ function AppRoutes() {
       <Route
         path="/rooms"
         element={
-          <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER', 'FRONTDESK', 'HOUSEKEEPING']}>
+          <ProtectedRoute allowedRoles={['ADMIN']}>
             <>
               <Navigation allowedRoutes={allowedRoutes} />
               <Rooms />
@@ -136,7 +136,7 @@ function AppRoutes() {
        <Route
         path="/reports"
         element={
-          <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER', 'FRONTDESK', 'HOUSEKEEPING']}>
+          <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER', 'FRONTDESK']}>
             <>
               <Navigation allowedRoutes={allowedRoutes} />
               <Reports />

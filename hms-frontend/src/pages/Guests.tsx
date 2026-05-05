@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { fmtDate } from '../utils/dateHelpers';
 import guestApi from '../api/guestApi';
 import bookingApi from '../api/bookingApi';
 import propertyApi from '../api/propertyApi';
@@ -50,10 +51,6 @@ const getStatusColor = (status: string) => {
   }
 };
 
-const formatDate = (dateStr: string) => {
-  return new Date(dateStr.includes('T') ? dateStr : dateStr + 'T00:00:00')
-    .toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' }).replace(/\//g, '-');
-};
 
 /* ────────────────────────────────────────────────────────────── */
 /* Page Component                                               */
@@ -327,8 +324,8 @@ export default function Guests() {
                     <div className="mt-3 grid grid-cols-2 gap-y-2 text-[11px] font-medium text-slate-500">
                       <p><span className="font-bold text-slate-400">Room:</span> {(booking as any).roomNumber || '—'}</p>
                       <p><span className="font-bold text-slate-400">Unit:</span> {(booking as any).unitName || '—'}</p>
-                      <p><span className="font-bold text-slate-400">In:</span> {formatDate(booking.checkIn)}</p>
-                      <p><span className="font-bold text-slate-400">Out:</span> {formatDate(booking.checkOut)}</p>
+                      <p><span className="font-bold text-slate-400">In:</span> {fmtDate(booking.checkIn)}</p>
+                      <p><span className="font-bold text-slate-400">Out:</span> {fmtDate(booking.checkOut)}</p>
                       <p><span className="font-bold text-slate-400">Guests:</span> {booking.adults}A, {booking.children}C</p>
                       <p><span className="font-bold text-slate-400">Total:</span> {booking.currency} {booking.totalPrice?.toFixed(2) || '0.00'}</p>
                     </div>

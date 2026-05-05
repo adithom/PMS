@@ -27,7 +27,7 @@ export default function GuestSearchModal({ isOpen, onClose, onSelectBooking, pro
         setError(null);
         try {
             const allBookings = await bookingApi.getByProperty(propertyId);
-            const active = allBookings.filter(b => b.status === 'CHECKED_IN' || b.status === 'CONFIRMED');
+            const active = allBookings.filter(b => b.status === 'CHECKED_IN');
             setBookings(active);
         } catch {
             setError('Failed to load bookings');
