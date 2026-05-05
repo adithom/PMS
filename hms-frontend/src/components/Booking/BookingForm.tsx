@@ -1141,7 +1141,7 @@ export default function BookingForm({
       <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
         <button type="button" className={btnSecondary} onClick={onCancel}>Cancel</button>
         <button type="submit" disabled={loading} className={btnPrimary}>
-          {loading ? 'Processing...' : isEditMode ? 'Save Changes' : 'Confirm Booking'}
+          {loading ? 'Processing...' : isEditMode ? 'Save Changes' : 'Create Booking'}
         </button>
       </div>
     </form>

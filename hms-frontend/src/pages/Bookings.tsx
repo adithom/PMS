@@ -515,7 +515,7 @@ export default function Bookings() {
             </button>
             <button type="button" className={btnSecondary} onClick={() => setShowGroupModal(true)}>
               <Users className="h-4 w-4 text-indigo-500" />
-              New Group Block
+              New Group Booking
             </button>
             <button type="button" className={btnPrimary} onClick={() => openForm(null, '', '')}>
               + New Booking
