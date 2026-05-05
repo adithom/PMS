@@ -1,6 +1,7 @@
 package com.adith.os.HMS.booking.dto;
 
 import com.adith.os.HMS.billing.folio.ChargeCode;
+import com.adith.os.HMS.billing.payment.PaymentMethod;
 import com.adith.os.HMS.booking.BookingStatus;
 import com.adith.os.HMS.property.mealplan.MealPlanType;
 import com.adith.os.HMS.travelagent.dto.TravelAgentCreationDto;
@@ -41,6 +42,9 @@ public record BookingCreationDto(
         @PositiveOrZero(message = "Nightly rate cannot be negative")
         BigDecimal nightlyRate,
 
+        @PositiveOrZero(message = "Nightly rate ex-tax cannot be negative")
+        BigDecimal nightlyRateExTax,
+
         @PositiveOrZero(message = "Paid amount cannot be negative")
         BigDecimal paidAmount,
 
@@ -72,7 +76,9 @@ public record BookingCreationDto(
         @PositiveOrZero(message = "Extra bed rate cannot be negative")
         BigDecimal extraBedRatePerNight,
 
-        ChargeCode extraBedChargeCode  // ROOM_RENT or MISC; null defaults to MISC in night audit
+        ChargeCode extraBedChargeCode,  // ROOM_RENT or MISC; null defaults to MISC in night audit
+
+        PaymentMethod advancePaymentMethod  // Optional — payment method for the advance payment; defaults to CASH if paidAmount > 0
 
 ) {
     public BookingCreationDto {

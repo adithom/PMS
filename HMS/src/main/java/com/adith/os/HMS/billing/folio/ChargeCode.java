@@ -4,7 +4,7 @@ import java.math.BigDecimal;
 
 public enum ChargeCode {
 
-    ROOM_RENT(ChargeCategory.ROOM_RENT, new BigDecimal("12.00")),
+    ROOM_RENT(ChargeCategory.ROOM_RENT, new BigDecimal("5.00")),
     MEAL_PLAN(ChargeCategory.MEAL_PLAN, new BigDecimal("5.00")),
     RESTAURANT(ChargeCategory.ANCILLARY, new BigDecimal("5.00")),
     LAUNDRY(ChargeCategory.ANCILLARY, new BigDecimal("18.00")),
@@ -39,5 +39,12 @@ public enum ChargeCode {
 
     public boolean isMealPlan() {
         return this.category == ChargeCategory.MEAL_PLAN;
+    }
+
+    public static BigDecimal computeRoomRentTaxRate(BigDecimal nightlyRate) {
+        if (nightlyRate == null || nightlyRate.compareTo(new BigDecimal("7500")) <= 0) {
+            return new BigDecimal("5.00");
+        }
+        return new BigDecimal("18.00");
     }
 }

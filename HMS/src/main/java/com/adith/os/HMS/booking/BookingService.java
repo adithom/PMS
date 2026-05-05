@@ -18,6 +18,10 @@ import com.adith.os.HMS.billing.folio.Folio;
 import com.adith.os.HMS.billing.folio.FolioCharge;
 import com.adith.os.HMS.billing.folio.FolioService;
 import com.adith.os.HMS.billing.folio.dto.ChargeCreationDto;
+import com.adith.os.HMS.billing.folio.dto.FolioDto;
+import com.adith.os.HMS.billing.payment.PaymentMethod;
+import com.adith.os.HMS.billing.payment.PaymentService;
+import com.adith.os.HMS.billing.payment.dto.PaymentCreationDto;
 import com.adith.os.HMS.booking.dto.BookingCreationDto;
 import com.adith.os.HMS.booking.dto.BookingDto;
 import com.adith.os.HMS.booking.dto.BookingUpdateDto;
@@ -41,9 +45,13 @@ import com.adith.os.HMS.unit.UnitRepository;
 
 import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 public class BookingService {
+
+    private static final Logger log = LoggerFactory.getLogger(BookingService.class);
 
     private final PropertyRepository propertyRepository;
     private final RoomRepository roomRepository;
@@ -53,6 +61,7 @@ public class BookingService {
     private final BookingMapper bookingMapper;
 
     private final FolioService folioService;
+    private final PaymentService paymentService;
     private final RoomAssignmentService roomAssignmentService;
     private final RoomAssignmentRepository roomAssignmentRepository;
     private final TravelAgentService travelAgentService;
@@ -69,7 +78,8 @@ public class BookingService {
     public BookingService(PropertyRepository propertyRepository, RoomRepository roomRepository,
                           GuestRepository guestRepository, UnitRepository unitRepository,
                           BookingRepository bookingRepository, BookingMapper bookingMapper,
-                          FolioService folioService, RoomAssignmentService roomAssignmentService,
+                          FolioService folioService, PaymentService paymentService,
+                          RoomAssignmentService roomAssignmentService,
                           RoomAssignmentRepository roomAssignmentRepository,
                           TravelAgentService travelAgentService,
                           PropertyMealPlanRepository mealPlanRepository) {
@@ -80,6 +90,7 @@ public class BookingService {
         this.bookingRepository = bookingRepository;
         this.bookingMapper = bookingMapper;
         this.folioService = folioService;
+        this.paymentService = paymentService;
         this.roomAssignmentService = roomAssignmentService;
         this.roomAssignmentRepository = roomAssignmentRepository;
         this.travelAgentService = travelAgentService;
@@ -226,13 +237,33 @@ public class BookingService {
                             "SYSTEM",// createdBy
                             null     // routedToFolioId - not set for master folio
                     );
-            folioService.createFolio(propertyId, folioDto);
+            FolioDto createdFolio = folioService.createFolio(propertyId, folioDto);
+
+            BigDecimal advance = bookingCreationDto.paidAmount();
+            if (advance != null && advance.compareTo(BigDecimal.ZERO) > 0) {
+                PaymentMethod method = bookingCreationDto.advancePaymentMethod() != null
+                        ? bookingCreationDto.advancePaymentMethod()
+                        : PaymentMethod.CASH;
+                PaymentCreationDto paymentDto = new PaymentCreationDto(
+                        advance, method, null,
+                        null, null, null,
+                        null, null, null,
+                        null,
+                        "Advance payment at booking creation",
+                        "SYSTEM",
+                        null
+                );
+                paymentService.recordPayment(propertyId, createdFolio.id(), paymentDto, "SYSTEM");
+            }
 
             // Create initial room assignment if room is assigned
-            roomAssignmentService.createInitialAssignment(savedBooking, bookingCreationDto.nightlyRate());
+            roomAssignmentService.createInitialAssignment(savedBooking, bookingCreationDto.nightlyRate(), bookingCreationDto.nightlyRateExTax());
 
             return bookingMapper.toDto(savedBooking);
+        } catch (ResponseStatusException e) {
+            throw e;
         } catch (Exception e) {
+            log.error("Failed to create booking", e);
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
                     "Failed to create booking: " + e.getMessage());
         }
@@ -569,6 +600,11 @@ public class BookingService {
             // Sync dates before saving
             roomAssignmentService.syncDatesForBookingUpdate(bookingId, dto.checkIn(), dto.checkOut());
 
+            // Propagate nightly rate changes to active RoomAssignment
+            if (dto.nightlyRate() != null) {
+                roomAssignmentService.updateNightlyRates(bookingId, dto.nightlyRate(), dto.nightlyRateExTax());
+            }
+
             Booking savedBooking = bookingRepository.save(booking);
             return bookingMapper.toDto(savedBooking);
         } catch (Exception e) {
@@ -789,6 +825,10 @@ public class BookingService {
 
             if (datesChanged) {
                 roomAssignmentService.syncDatesForBookingUpdate(bookingId, newCheckIn, newCheckOut);
+            }
+
+            if (dto.nightlyRate() != null) {
+                roomAssignmentService.updateNightlyRates(bookingId, dto.nightlyRate(), dto.nightlyRateExTax());
             }
 
             Booking savedBooking = bookingRepository.save(booking);
@@ -1046,7 +1086,7 @@ public class BookingService {
                                 "Booking Extension - Room Rent",
                                 nightlyRateToApply,
                                 BigDecimal.ONE,
-                                BigDecimal.ZERO, // Tax rate
+                                null, // taxRate — computed by FolioService based on nightly rate threshold
                                 BigDecimal.ZERO, // Discount rate
                                 "BOOKING",
                                 bookingId,

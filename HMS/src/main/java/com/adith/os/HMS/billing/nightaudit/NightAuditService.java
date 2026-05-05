@@ -164,15 +164,18 @@ public class NightAuditService {
                         ? assignment.getNightlyRate()
                         : room.getBaseRate();
 
-                BigDecimal roomRentTaxRate = nightlyRate.compareTo(new BigDecimal("7500")) < 0
-                        ? new BigDecimal("5.00")
-                        : new BigDecimal("18.00");
+                // Use stored ex-tax rate as the charge base; fall back to inclusive rate for legacy assignments
+                BigDecimal exTaxRate = assignment.getNightlyRateExTax() != null
+                        ? assignment.getNightlyRateExTax()
+                        : nightlyRate;
+
+                BigDecimal roomRentTaxRate = ChargeCode.computeRoomRentTaxRate(exTaxRate);
 
                 ChargeCreationDto chargeDto = new ChargeCreationDto(
                         chargeDate,
                         ChargeCode.ROOM_RENT,
                         "Room " + room.getNumber() + " - Nightly Rate",
-                        nightlyRate,
+                        exTaxRate,
                         BigDecimal.ONE,
                         roomRentTaxRate,
                         BigDecimal.ZERO,

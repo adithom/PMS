@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { fmtDate } from '../../utils/dateHelpers';
 import bookingApi from '../../api/bookingApi';
 import BookingForm from './BookingForm';
 import EarlyCheckoutModal from './EarlyCheckoutModal';
@@ -42,10 +43,6 @@ const getStatusColor = (status: BookingStatus) => {
   }
 };
 
-const formatDate = (dateStr: string) => {
-  return new Date(dateStr.includes('T') ? dateStr : dateStr + 'T00:00:00')
-    .toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' }).replace(/\//g, '-');
-};
 
 const getTodayStr = () =>
   new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
@@ -176,8 +173,8 @@ export default function BookingsList({ bookings, propertyId, listType, onClose, 
                     <p><span className="font-bold text-slate-400">Room:</span> {(booking as any).roomNumber || 'Not assigned'}</p>
                     <p><span className="font-bold text-slate-400">Unit:</span> {(booking as any).unitName || 'N/A'}</p>
                     <p><span className="font-bold text-slate-400">Total:</span> {booking.currency} {booking.totalPrice?.toFixed(2) || '0.00'}</p>
-                    <p><span className="font-bold text-slate-400">In:</span> {formatDate(booking.checkIn)}</p>
-                    <p><span className="font-bold text-slate-400">Out:</span> {formatDate(booking.checkOut)}</p>
+                    <p><span className="font-bold text-slate-400">In:</span> {fmtDate(booking.checkIn)}</p>
+                    <p><span className="font-bold text-slate-400">Out:</span> {fmtDate(booking.checkOut)}</p>
                     <p><span className="font-bold text-slate-400">Guests:</span> {booking.adults}A, {booking.children}C</p>
                   </div>
 

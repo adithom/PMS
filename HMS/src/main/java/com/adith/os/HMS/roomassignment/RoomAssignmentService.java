@@ -56,6 +56,11 @@ public class RoomAssignmentService {
      */
     @Transactional
     public RoomAssignment createInitialAssignment(Booking booking, BigDecimal nightlyRate) {
+        return createInitialAssignment(booking, nightlyRate, null);
+    }
+
+    @Transactional
+    public RoomAssignment createInitialAssignment(Booking booking, BigDecimal nightlyRate, BigDecimal nightlyRateExTax) {
         if (booking.getRoom() == null) {
             return null; // No room assigned yet, skip
         }
@@ -79,8 +84,21 @@ public class RoomAssignmentService {
                 "Initial room assignment",
                 effectiveRate
         );
+        assignment.setNightlyRateExTax(nightlyRateExTax);
 
         return roomAssignmentRepository.save(assignment);
+    }
+
+    @Transactional
+    public void updateNightlyRates(UUID bookingId, BigDecimal nightlyRate, BigDecimal nightlyRateExTax) {
+        List<RoomAssignment> assignments = roomAssignmentRepository.findByBookingId(bookingId);
+        for (RoomAssignment a : assignments) {
+            if (a.getStatus() == RoomAssignmentStatus.SCHEDULED || a.getStatus() == RoomAssignmentStatus.ACTIVE) {
+                a.setNightlyRate(nightlyRate);
+                a.setNightlyRateExTax(nightlyRateExTax);
+                roomAssignmentRepository.save(a);
+            }
+        }
     }
 
     /**

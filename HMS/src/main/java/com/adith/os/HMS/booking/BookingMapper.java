@@ -7,12 +7,15 @@ import com.adith.os.HMS.property.Property;
 import com.adith.os.HMS.property.mealplan.PropertyMealPlan;
 import com.adith.os.HMS.property.mealplan.PropertyMealPlanRepository;
 import com.adith.os.HMS.room.Room;
+import com.adith.os.HMS.roomassignment.RoomAssignment;
+import com.adith.os.HMS.roomassignment.RoomAssignmentStatus;
 import com.adith.os.HMS.unit.Unit;
 import jakarta.validation.Valid;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.time.temporal.ChronoUnit;
+import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -106,8 +109,29 @@ public class BookingMapper {
                 resolveMealPlanChildrenPrice(booking),
                 booking.getExtraBeds(),
                 booking.getExtraBedRatePerNight(),
-                booking.getExtraBedChargeCode()
+                booking.getExtraBedChargeCode(),
+                resolveNightlyRate(booking),
+                resolveNightlyRateExTax(booking)
         );
+    }
+
+    private RoomAssignment resolveActiveAssignment(Booking booking) {
+        if (booking.getRoomAssignments() == null || booking.getRoomAssignments().isEmpty()) return null;
+        return booking.getRoomAssignments().stream()
+                .filter(a -> a.getStatus() == RoomAssignmentStatus.SCHEDULED
+                        || a.getStatus() == RoomAssignmentStatus.ACTIVE)
+                .min(Comparator.comparing(RoomAssignment::getStartDate))
+                .orElse(null);
+    }
+
+    private BigDecimal resolveNightlyRate(Booking booking) {
+        RoomAssignment a = resolveActiveAssignment(booking);
+        return a != null ? a.getNightlyRate() : null;
+    }
+
+    private BigDecimal resolveNightlyRateExTax(Booking booking) {
+        RoomAssignment a = resolveActiveAssignment(booking);
+        return a != null ? a.getNightlyRateExTax() : null;
     }
 
     private BigDecimal resolveMealPlanPrice(Booking booking) {

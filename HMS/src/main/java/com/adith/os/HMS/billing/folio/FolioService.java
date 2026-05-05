@@ -269,7 +269,14 @@ public class FolioService {
             charge.setDescription(dto.description());
             charge.setUnitPrice(dto.unitPrice());
             charge.setQuantity(dto.quantity() != null ? dto.quantity() : BigDecimal.ONE);
-            BigDecimal taxRate = dto.taxRate() != null ? dto.taxRate() : dto.chargeCode().getDefaultTaxRate();
+            BigDecimal taxRate;
+            if (dto.taxRate() != null) {
+                taxRate = dto.taxRate();
+            } else if (dto.chargeCode() == ChargeCode.ROOM_RENT) {
+                taxRate = ChargeCode.computeRoomRentTaxRate(dto.unitPrice());
+            } else {
+                taxRate = dto.chargeCode().getDefaultTaxRate();
+            }
             charge.setTaxRate(taxRate);
             charge.setDiscountRate(dto.discountRate() != null ? dto.discountRate() : BigDecimal.ZERO);
             charge.setReferenceType(dto.referenceType());

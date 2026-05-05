@@ -16,9 +16,6 @@ public class DatabaseSeeder {
     @Value("${app.admin.username:adith}")
     private String myUsername;
 
-    @Value("${app.admin.email:adith@spicetree.com}")
-    private String myEmail; 
-
     @Value("${app.admin.password:adith123}")
     private String myPassword;
 
@@ -33,7 +30,6 @@ public class DatabaseSeeder {
                 
                 User me = new User();
                 me.setUsername(myUsername);
-                me.setEmail(myEmail);
                 
                 me.setRole(Role.ADMIN); 
                 

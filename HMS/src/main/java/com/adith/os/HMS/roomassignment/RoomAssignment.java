@@ -49,6 +49,9 @@ public class RoomAssignment {
     @Column(name = "nightly_rate", precision = 10, scale = 2)
     private BigDecimal nightlyRate;
 
+    @Column(name = "nightly_rate_ex_tax", precision = 10, scale = 2)
+    private BigDecimal nightlyRateExTax;
+
     public RoomAssignment() {
     }
 
@@ -142,6 +145,14 @@ public class RoomAssignment {
 
     public void setNightlyRate(BigDecimal nightlyRate) {
         this.nightlyRate = nightlyRate;
+    }
+
+    public BigDecimal getNightlyRateExTax() {
+        return nightlyRateExTax;
+    }
+
+    public void setNightlyRateExTax(BigDecimal nightlyRateExTax) {
+        this.nightlyRateExTax = nightlyRateExTax;
     }
 
     @Override

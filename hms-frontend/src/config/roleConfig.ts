@@ -10,16 +10,16 @@ export interface RouteConfig {
 // Define all available routes with their access control
 export const routes: RouteConfig[] = [
   {
-    path: '/rooms',
-    label: 'Inventory',
-    component: 'Rooms',
-    allowedRoles: ['ADMIN', 'MANAGER', 'FRONTDESK', 'HOUSEKEEPING']
-  },
-  {
     path: '/bookings',
     label: 'Bookings',
     component: 'Bookings',
     allowedRoles: ['ADMIN', 'MANAGER', 'FRONTDESK', 'AGENCY']
+  },
+  {
+    path: '/rooms',
+    label: 'Inventory',
+    component: 'Rooms',
+    allowedRoles: ['ADMIN']
   },
   {
     path: '/guests',
@@ -49,7 +49,7 @@ export const routes: RouteConfig[] = [
     path: '/reports',
     label: 'Reports',
     component: 'Reports',
-    allowedRoles: ['ADMIN', 'MANAGER']
+    allowedRoles: ['ADMIN', 'MANAGER', 'FRONTDESK']
   },
   {
     path: '/console',

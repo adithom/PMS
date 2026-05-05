@@ -39,7 +39,7 @@ export default function GuestForm({ guest, onSave, onCancel }: GuestFormProps) {
         phone: guest.phone || '',
         idNumber: guest.idNumber || '',
         guestIdType: guest.guestIdType || '',
-        dateOfBirth: '',
+        dateOfBirth: guest.dateOfBirth ? guest.dateOfBirth.split('T')[0] : '',
         preferences: guest.preferences || ''
       });
     }
@@ -89,6 +89,7 @@ export default function GuestForm({ guest, onSave, onCancel }: GuestFormProps) {
       if (formData.idNumber.trim()) payload.idNumber = formData.idNumber.trim();
       if (formData.guestIdType) payload.guestIdType = formData.guestIdType;
       if (formData.preferences.trim()) payload.preferences = formData.preferences.trim();
+      if (formData.dateOfBirth) payload.dateOfBirth = formData.dateOfBirth;
 
       await onSave(payload);
     } catch (err: any) {
@@ -148,6 +149,11 @@ export default function GuestForm({ guest, onSave, onCancel }: GuestFormProps) {
           </select>
         </label>
       </div>
+
+      <label>
+        <span className={labelCls}>Date of Birth</span>
+        <input type="date" name="dateOfBirth" value={formData.dateOfBirth} onChange={handleChange} disabled={submitting} className={inputCls} />
+      </label>
 
       <label>
         <span className={labelCls}>Preferences</span>

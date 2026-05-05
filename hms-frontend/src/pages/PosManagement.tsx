@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { fmtDateTime } from '../utils/dateHelpers';
 import { Calendar, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import posApi from '../api/posApi';
@@ -693,9 +694,7 @@ function OrderHistoryTab({ locations }: { locations: PosLocation[] }) {
                   <tr key={order.id} className="hover:bg-gray-50/50 cursor-pointer transition-colors" onClick={() => setExpandedId(expandedId === order.id ? null : order.id)}>
                     <td className="px-5 py-3.5 font-medium text-gray-900">{order.orderNumber}</td>
                     <td className="px-5 py-3.5 text-gray-500 text-xs">
-                      {new Date(order.orderDate).toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' })}
-                      {' '}
-                      {new Date(order.orderDate).toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' })}
+                      {fmtDateTime(order.orderDate)}
                     </td>
                     <td className="px-5 py-3.5 text-right text-gray-600">{order.items?.length ?? 0}</td>
                     <td className="px-5 py-3.5 text-right text-gray-600">{fmt(order.subtotal)}</td>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { fmtDateTime } from '../../utils/dateHelpers';
 import { X, ArrowRightLeft, FileText, Printer } from 'lucide-react';
 import folioApi from '../../api/folioApi';
 import type { FolioDetailDto, ChargeDto } from '../../api/folioApi';
@@ -228,11 +229,7 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                           {category.charges.map(charge => {
-                            const d = new Date(charge.postingDate ?? charge.chargeDate);
-                            const dateStr =
-                              d.toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' }).replace(/\//g, '-') +
-                              ' ' +
-                              d.toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' });
+                            const dateStr = fmtDateTime(charge.postingDate ?? charge.chargeDate);
                             return (
                               <tr key={charge.id} className={`transition-colors hover:bg-slate-50 ${charge.isVoided ? 'opacity-50' : ''}`}>
                                 <td className="px-4 py-3 text-xs text-slate-500">{dateStr}</td>

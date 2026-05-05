@@ -93,7 +93,10 @@ public record BookingDto(
 
         Integer extraBeds,
         BigDecimal extraBedRatePerNight,
-        ChargeCode extraBedChargeCode
+        ChargeCode extraBedChargeCode,
+
+        BigDecimal nightlyRate,
+        BigDecimal nightlyRateExTax
 ) {
     // Compact constructor for validation and defaults
     public BookingDto {
