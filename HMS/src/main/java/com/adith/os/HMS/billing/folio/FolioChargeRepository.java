@@ -34,4 +34,20 @@ public interface FolioChargeRepository extends JpaRepository<FolioCharge, UUID> 
 
     boolean existsByFolioIdAndReferenceTypeAndChargeDateAndIsVoidedFalse(
             UUID folioId, String referenceType, LocalDate chargeDate);
+
+    // Phase B: charge-level routing queries
+
+    @Query("SELECT c FROM FolioCharge c WHERE c.folio.booking.reservation.id = :reservationId " +
+            "AND c.routeToMaster = true AND c.isVoided = false " +
+            "ORDER BY c.chargeDate")
+    List<FolioCharge> findRouteToMasterChargesByReservationId(@Param("reservationId") UUID reservationId);
+
+    @Query("SELECT c FROM FolioCharge c WHERE c.folio.booking.reservation.id = :reservationId " +
+            "AND c.isVoided = false")
+    List<FolioCharge> findActiveChargesByReservationId(@Param("reservationId") UUID reservationId);
+
+    @Query("SELECT c FROM FolioCharge c WHERE c.folio.booking.id = :bookingId " +
+            "AND c.routeToMaster = false AND c.isVoided = false " +
+            "ORDER BY c.chargeDate")
+    List<FolioCharge> findOwnFolioChargesByBookingId(@Param("bookingId") UUID bookingId);
 }

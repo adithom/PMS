@@ -26,7 +26,7 @@ public class BillMapper {
             List<ChargeDto> charges,
             String guestGstNumber
     ) {
-        return toBillDto(bill, folio, charges, guestGstNumber, null);
+        return toBillDto(bill, folio, charges, guestGstNumber, null, BigDecimal.ZERO);
     }
 
     public static BillDto toBillDto(
@@ -35,6 +35,22 @@ public class BillMapper {
             List<ChargeDto> charges,
             String guestGstNumber,
             String pdfDownloadUrl
+    ) {
+        return toBillDto(bill, folio, charges, guestGstNumber, pdfDownloadUrl, BigDecimal.ZERO);
+    }
+
+    /**
+     * Phase B overload: caller supplies an `appliedMasterCredit` — the share of reservation-level
+     * payments allocated to this bill at generation time (used when the reservation is in SEPARATE
+     * billing mode and master payments need to be split equally across non-master bookings).
+     */
+    public static BillDto toBillDto(
+            Bill bill,
+            Folio folio,
+            List<ChargeDto> charges,
+            String guestGstNumber,
+            String pdfDownloadUrl,
+            BigDecimal appliedMasterCredit
     ) {
 
         // 1. Include voided charges with zeroed amounts and [VOID] label
@@ -99,6 +115,13 @@ public class BillMapper {
 
         // Calculate the absolute final paid amount and balance due
         BigDecimal finalAmountPaid = categoryAmountPaid.subtract(categoryRefunds);
+
+        // Phase B: apply the booking's share of reservation-level payments (master credit) — only on the bill
+        // designated by the caller (typically ROOM_RENT, the first generated bill in a multi-bill batch).
+        if (appliedMasterCredit != null && appliedMasterCredit.compareTo(BigDecimal.ZERO) > 0) {
+            finalAmountPaid = finalAmountPaid.add(appliedMasterCredit);
+        }
+
         BigDecimal grandTotal = totals.total();
 
         // Use .max(BigDecimal.ZERO) so if the guest overpaid, the balance due just shows 0.00 instead of a negative number

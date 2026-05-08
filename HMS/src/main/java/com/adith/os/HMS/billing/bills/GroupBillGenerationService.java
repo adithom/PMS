@@ -115,6 +115,7 @@ public class GroupBillGenerationService {
             List<FolioCharge> validCharges = folio.getCharges() == null ? List.of()
                     : folio.getCharges().stream()
                            .filter(c -> !c.isVoided() && c.getBill() == null && c.getGroupBill() == null)
+                           .filter(FolioCharge::isRouteToMaster)   // Phase B: master bill only includes charges flagged routeToMaster=true
                            .toList();
 
             // Group this child's charges by BillType

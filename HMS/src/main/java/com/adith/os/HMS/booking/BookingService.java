@@ -29,6 +29,9 @@ import com.adith.os.HMS.guest.Guest;
 import com.adith.os.HMS.guest.GuestRepository;
 import com.adith.os.HMS.property.Property;
 import com.adith.os.HMS.property.PropertyRepository;
+import com.adith.os.HMS.reservation.Reservation;
+import com.adith.os.HMS.reservation.ReservationRepository;
+import com.adith.os.HMS.reservation.ReservationStatus;
 import com.adith.os.HMS.room.Room;
 import com.adith.os.HMS.room.RoomRepository;
 import com.adith.os.HMS.room.RoomStatus;
@@ -66,6 +69,7 @@ public class BookingService {
     private final RoomAssignmentRepository roomAssignmentRepository;
     private final TravelAgentService travelAgentService;
     private final PropertyMealPlanRepository mealPlanRepository;
+    private final ReservationRepository reservationRepository;
 
     // Active statuses for room assignments
     private static final List<RoomAssignmentStatus> ACTIVE_ASSIGNMENT_STATUSES =
@@ -82,7 +86,8 @@ public class BookingService {
                           RoomAssignmentService roomAssignmentService,
                           RoomAssignmentRepository roomAssignmentRepository,
                           TravelAgentService travelAgentService,
-                          PropertyMealPlanRepository mealPlanRepository) {
+                          PropertyMealPlanRepository mealPlanRepository,
+                          ReservationRepository reservationRepository) {
         this.propertyRepository = propertyRepository;
         this.roomRepository = roomRepository;
         this.guestRepository = guestRepository;
@@ -95,6 +100,7 @@ public class BookingService {
         this.roomAssignmentRepository = roomAssignmentRepository;
         this.travelAgentService = travelAgentService;
         this.mealPlanRepository = mealPlanRepository;
+        this.reservationRepository = reservationRepository;
     }
 
     @Transactional
@@ -212,6 +218,21 @@ public class BookingService {
                 booking.setTravelAgent(travelAgent);
                 booking.setCommissionRate(travelAgent.getCommissionRate());
             }
+
+            Reservation reservation = new Reservation();
+            reservation.setProperty(property);
+            reservation.setOrganizerGuest(guest);
+            reservation.setCheckIn(bookingCreationDto.checkIn());
+            reservation.setCheckOut(bookingCreationDto.checkOut());
+            reservation.setCurrency(booking.getCurrency());
+            reservation.setSpecialRequests(bookingCreationDto.specialRequests());
+            reservation.setStatus(ReservationStatus.PENDING);
+            if (travelAgent != null) {
+                reservation.setTravelAgent(travelAgent);
+                reservation.setCommissionRate(travelAgent.getCommissionRate());
+            }
+            Reservation savedReservation = reservationRepository.save(reservation);
+            booking.setReservation(savedReservation);
 
             if (bookingCreationDto.mealPlanType() != null) {
                 PropertyMealPlan plan = mealPlanRepository
@@ -1091,7 +1112,8 @@ public class BookingService {
                                 "BOOKING",
                                 bookingId,
                                 dto.notes() != null ? dto.notes() : "Extended Stay",
-                                "SYSTEM"
+                                "SYSTEM",
+                                null
                         );
                 folioService.addCharge(propertyId, folio.getId(), chargeDto);
             }
@@ -1243,7 +1265,7 @@ public class BookingService {
                             "Early Checkout Custom Adjustment",
                             adjustmentNeeded.negate(), // Make it negative
                             BigDecimal.ONE,
-                            BigDecimal.ZERO, BigDecimal.ZERO, null, null, "Early Checkout", "SYSTEM"
+                            BigDecimal.ZERO, BigDecimal.ZERO, null, null, "Early Checkout", "SYSTEM", null
                     );
                     folioService.addCharge(propertyId, folio.getId(), adjDto);
                 }

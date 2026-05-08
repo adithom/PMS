@@ -64,22 +64,24 @@ public class PaymentService {
             payment.setTargetCategory(dto.targetCategory());
         }
 
+        // Phase B: derive routing target — reservationId for master folios, bookingId otherwise
+        com.adith.os.HMS.booking.Booking b = folio.getBooking();
+        if (b != null) {
+            if (b.isGroupMaster() && b.getReservation() != null) {
+                payment.setReservationId(b.getReservation().getId());
+            } else {
+                payment.setBookingId(b.getId());
+            }
+        }
+
         Payment savedPayment = paymentRepository.save(payment);
 
-        // Instantly recalculate the folio
+        // Instantly recalculate the folio (self-only in Phase B)
         folio.getPayments().add(savedPayment);
         folio.recalculateTotals();
 
         // Folios are closed at checkout, not at payment time.
-
-        Folio savedFolio = folioRepository.save(folio);
-
-        // Bubble up recalculation to the Parent if this folio is routed
-        if (savedFolio.isRouted()) {
-            Folio parentFolio = savedFolio.getRoutedToFolio();
-            parentFolio.recalculateTotals();
-            folioRepository.save(parentFolio);
-        }
+        folioRepository.save(folio);
 
         return paymentMapper.toDto(savedPayment);
     }
@@ -122,14 +124,7 @@ public class PaymentService {
             // Update folio totals
             Folio folio = payment.getFolio();
             folio.recalculateTotals();
-            Folio savedFolio = folioRepository.save(folio);
-
-            // Bubble up recalculation to the Parent if this folio is routed
-            if (savedFolio.isRouted()) {
-                Folio parentFolio = savedFolio.getRoutedToFolio();
-                parentFolio.recalculateTotals();
-                folioRepository.save(parentFolio);
-            }
+            folioRepository.save(folio);
 
             return paymentMapper.toDto(savedPayment);
         } catch (IllegalStateException | IllegalArgumentException e) {
@@ -191,14 +186,7 @@ public class PaymentService {
             if (dto.paymentStatus() == PaymentStatus.COMPLETED) {
                 Folio folio = payment.getFolio();
                 folio.recalculateTotals();
-                Folio savedFolio = folioRepository.save(folio);
-
-                // Bubble up recalculation to the Parent if this folio is routed
-                if (savedFolio.isRouted()) {
-                    Folio parentFolio = savedFolio.getRoutedToFolio();
-                    parentFolio.recalculateTotals();
-                    folioRepository.save(parentFolio);
-                }
+                folioRepository.save(folio);
             }
 
             return paymentMapper.toDto(savedPayment);

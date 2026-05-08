@@ -74,6 +74,9 @@ public class FolioCharge {
     @Column(name = "is_voided", nullable = false)
     private boolean isVoided = false;
 
+    @Column(name = "route_to_master", nullable = false, columnDefinition = "boolean default false")
+    private boolean routeToMaster = false;
+
     @Column(name = "voided_at")
     private OffsetDateTime voidedAt;
 
@@ -303,6 +306,14 @@ public class FolioCharge {
 
     public void setVoided(boolean voided) {
         isVoided = voided;
+    }
+
+    public boolean isRouteToMaster() {
+        return routeToMaster;
+    }
+
+    public void setRouteToMaster(boolean routeToMaster) {
+        this.routeToMaster = routeToMaster;
     }
 
     public OffsetDateTime getVoidedAt() {

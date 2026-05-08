@@ -279,6 +279,16 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
             @Param("endDate") java.time.LocalDate endDate
     );
 
+    // Phase B: count of non-master child bookings for a reservation (for master-credit equal split)
+    @Query("SELECT COUNT(b) FROM Booking b WHERE b.reservation.id = :reservationId AND b.isGroupMaster = false")
+    long countNonMasterByReservationId(@Param("reservationId") UUID reservationId);
+
+    @Query("SELECT b FROM Booking b WHERE b.reservation.id = :reservationId AND b.isGroupMaster = false")
+    List<Booking> findNonMasterByReservationId(@Param("reservationId") UUID reservationId);
+
+    @Query("SELECT b FROM Booking b WHERE b.reservation.id = :reservationId")
+    List<Booking> findByReservationId(@Param("reservationId") UUID reservationId);
+
     boolean existsByTravelAgentId(UUID travelAgentId);
 
     @Query("SELECT b FROM Booking b WHERE b.travelAgent.id = :travelAgentId ORDER BY b.checkIn DESC")

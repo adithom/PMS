@@ -61,4 +61,20 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
     @Query("SELECT COUNT(p) FROM Payment p WHERE p.folio.property.id = :propertyId " +
             "AND p.paymentStatus = 'PENDING'")
     long countPendingPaymentsByProperty(@Param("propertyId") UUID propertyId);
+
+    // Phase B: routing-aware queries (Payment.bookingId / reservationId)
+
+    @Query("SELECT COALESCE(SUM(p.amount - COALESCE(p.refundedAmount, 0)), 0) FROM Payment p " +
+            "WHERE p.bookingId = :bookingId AND p.paymentStatus = 'COMPLETED'")
+    BigDecimal sumCompletedByBookingId(@Param("bookingId") UUID bookingId);
+
+    @Query("SELECT COALESCE(SUM(p.amount - COALESCE(p.refundedAmount, 0)), 0) FROM Payment p " +
+            "WHERE p.reservationId = :reservationId AND p.paymentStatus = 'COMPLETED'")
+    BigDecimal sumCompletedByReservationId(@Param("reservationId") UUID reservationId);
+
+    @Query("SELECT p FROM Payment p WHERE p.bookingId = :bookingId ORDER BY p.paymentDate DESC")
+    List<Payment> findByBookingId(@Param("bookingId") UUID bookingId);
+
+    @Query("SELECT p FROM Payment p WHERE p.reservationId = :reservationId ORDER BY p.paymentDate DESC")
+    List<Payment> findByReservationId(@Param("reservationId") UUID reservationId);
 }

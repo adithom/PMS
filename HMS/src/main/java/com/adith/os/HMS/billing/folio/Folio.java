@@ -125,54 +125,41 @@ public class Folio {
     }
 
     // Business methods
+    /**
+     * Recompute self-only totals.
+     *
+     * Phase B: routing is at the charge level (FolioCharge.routeToMaster), not the folio level,
+     * and reservation-level master rollups happen at bill-generation time — not here.
+     * - subtotal/tax/total/discount: sum of all non-voided charges physically on this folio.
+     * - paidAmount: sum of completed payments on this folio's collection (Payment is dual-written
+     *   with folio FK + bookingId; bill generation uses the bookingId/reservationId queries).
+     * - balanceDue: own non-routed charges minus own payments (the booking-bill view).
+     */
     public void recalculateTotals() {
-        // 1. Totals from charges physically on THIS folio
         BigDecimal selfSubtotal  = BigDecimal.ZERO;
         BigDecimal selfTax       = BigDecimal.ZERO;
         BigDecimal selfDiscount  = BigDecimal.ZERO;
         BigDecimal selfTotal     = BigDecimal.ZERO;
+        BigDecimal settleable    = BigDecimal.ZERO;
 
         if (charges != null) {
-            List<FolioCharge> valid = charges.stream().filter(c -> !c.isVoided()).toList();
-            selfSubtotal = valid.stream().map(FolioCharge::getSubtotal).reduce(BigDecimal.ZERO, BigDecimal::add);
-            selfTax      = valid.stream().map(FolioCharge::getTaxAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
-            selfDiscount = valid.stream().map(FolioCharge::getDiscountAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
-            selfTotal    = valid.stream().map(FolioCharge::getTotalAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
-        }
-
-        // 2. Totals from child folios routed TO this folio
-        BigDecimal routedSubtotal  = BigDecimal.ZERO;
-        BigDecimal routedTax       = BigDecimal.ZERO;
-        BigDecimal routedDiscount  = BigDecimal.ZERO;
-        BigDecimal routedTotal     = BigDecimal.ZERO;
-        BigDecimal routedPaid      = BigDecimal.ZERO;
-
-        if (routedFolios != null && !routedFolios.isEmpty()) {
-            for (Folio child : routedFolios) {
-                if (child.getCharges() != null) {
-                    List<FolioCharge> valid = child.getCharges().stream().filter(c -> !c.isVoided()).toList();
-                    routedSubtotal = routedSubtotal.add(valid.stream().map(FolioCharge::getSubtotal).reduce(BigDecimal.ZERO, BigDecimal::add));
-                    routedTax      = routedTax.add(valid.stream().map(FolioCharge::getTaxAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
-                    routedDiscount = routedDiscount.add(valid.stream().map(FolioCharge::getDiscountAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
-                    routedTotal    = routedTotal.add(valid.stream().map(FolioCharge::getTotalAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
-                }
-
-                if (child.getPayments() != null) {
-                    routedPaid = routedPaid.add(child.getPayments().stream()
-                            .filter(p -> p.getPaymentStatus() == PaymentStatus.COMPLETED)
-                            .map(p -> p.getAmount().subtract(p.getRefundedAmount() != null ? p.getRefundedAmount() : BigDecimal.ZERO))
-                            .reduce(BigDecimal.ZERO, BigDecimal::add));
+            for (FolioCharge c : charges) {
+                if (c.isVoided()) continue;
+                selfSubtotal = selfSubtotal.add(c.getSubtotal());
+                selfTax      = selfTax.add(c.getTaxAmount());
+                selfDiscount = selfDiscount.add(c.getDiscountAmount());
+                selfTotal    = selfTotal.add(c.getTotalAmount());
+                if (!c.isRouteToMaster()) {
+                    settleable = settleable.add(c.getTotalAmount());
                 }
             }
         }
 
-        // 3. Combined Charges
-        this.subtotal       = selfSubtotal.add(routedSubtotal);
-        this.taxAmount      = selfTax.add(routedTax);
-        this.discountAmount = selfDiscount.add(routedDiscount);
-        this.totalAmount    = selfTotal.add(routedTotal);
+        this.subtotal       = selfSubtotal;
+        this.taxAmount      = selfTax;
+        this.discountAmount = selfDiscount;
+        this.totalAmount    = selfTotal;
 
-        // 4. Combined Payments
         BigDecimal selfPaid = payments != null
                 ? payments.stream()
                 .filter(p -> p.getPaymentStatus() == PaymentStatus.COMPLETED)
@@ -180,14 +167,8 @@ public class Folio {
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 : BigDecimal.ZERO;
 
-        this.paidAmount = selfPaid.add(routedPaid);
-
-        // 5. Balance due
-        if (this.isRouted()) {
-            this.balanceDue = BigDecimal.ZERO;
-        } else {
-            this.balanceDue = this.totalAmount.subtract(this.paidAmount).max(BigDecimal.ZERO);
-        }
+        this.paidAmount = selfPaid;
+        this.balanceDue = settleable.subtract(selfPaid).max(BigDecimal.ZERO);
     }
 
     public boolean isFullyPaid() {

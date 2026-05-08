@@ -34,5 +34,7 @@ public record ChargeCreationDto(
 
         String notes,
 
-        String postedBy
+        String postedBy,
+
+        Boolean routeToMaster
 ) {}

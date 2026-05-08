@@ -18,10 +18,15 @@ public class Payment {
     @GeneratedValue(strategy = GenerationType.AUTO)
     private UUID id;
 
-    @NotNull
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "folio_id", nullable = false)
+    @JoinColumn(name = "folio_id")
     private Folio folio;
+
+    @Column(name = "reservation_id")
+    private UUID reservationId;
+
+    @Column(name = "booking_id")
+    private UUID bookingId;
 
     @Column(name = "payment_number", unique = true, nullable = false)
     private String paymentNumber;
@@ -253,6 +258,22 @@ public class Payment {
 
     public void setFolio(Folio folio) {
         this.folio = folio;
+    }
+
+    public UUID getReservationId() {
+        return reservationId;
+    }
+
+    public void setReservationId(UUID reservationId) {
+        this.reservationId = reservationId;
+    }
+
+    public UUID getBookingId() {
+        return bookingId;
+    }
+
+    public void setBookingId(UUID bookingId) {
+        this.bookingId = bookingId;
     }
 
     public String getPaymentNumber() {

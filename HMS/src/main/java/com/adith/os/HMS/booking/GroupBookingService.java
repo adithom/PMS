@@ -7,6 +7,9 @@ import com.adith.os.HMS.guest.Guest;
 import com.adith.os.HMS.guest.GuestRepository;
 import com.adith.os.HMS.property.Property;
 import com.adith.os.HMS.property.PropertyRepository;
+import com.adith.os.HMS.reservation.Reservation;
+import com.adith.os.HMS.reservation.ReservationRepository;
+import com.adith.os.HMS.reservation.ReservationStatus;
 import com.adith.os.HMS.room.Room;
 import com.adith.os.HMS.room.RoomRepository;
 import com.adith.os.HMS.room.RoomStatus;
@@ -37,6 +40,8 @@ public class GroupBookingService {
     private final FolioRepository folioRepository;
     private final FolioService folioService;
     private final TravelAgentService travelAgentService;
+    private final ReservationRepository reservationRepository;
+    private final FolioChargeRepository folioChargeRepository;
 
     public GroupBookingService(
             PropertyRepository propertyRepository,
@@ -46,7 +51,9 @@ public class GroupBookingService {
             BookingRepository bookingRepository,
             FolioRepository folioRepository,
             FolioService folioService,
-            TravelAgentService travelAgentService) {
+            TravelAgentService travelAgentService,
+            ReservationRepository reservationRepository,
+            FolioChargeRepository folioChargeRepository) {
         this.propertyRepository = propertyRepository;
         this.guestRepository = guestRepository;
         this.unitRepository = unitRepository;
@@ -55,6 +62,8 @@ public class GroupBookingService {
         this.folioRepository = folioRepository;
         this.folioService = folioService;
         this.travelAgentService = travelAgentService;
+        this.reservationRepository = reservationRepository;
+        this.folioChargeRepository = folioChargeRepository;
     }
 
     // =========================================================================
@@ -101,9 +110,28 @@ public class GroupBookingService {
         TravelAgent travelAgent = travelAgentService.resolveOrCreate(
                 dto.travelAgentId(), dto.newTravelAgent());
 
+        // ---- 0. Create the Reservation that owns this group ----
+        Reservation reservation = new Reservation();
+        reservation.setProperty(property);
+        reservation.setOrganizerGuest(organizer);
+        reservation.setCheckIn(dto.checkIn());
+        reservation.setCheckOut(dto.checkOut());
+        reservation.setCurrency(dto.currency());
+        reservation.setSpecialRequests(dto.specialRequests());
+        reservation.setGroupReference(dto.groupReference());
+        reservation.setStatus(ReservationStatus.PENDING);
+        reservation.setDefaultRouteToMaster(
+                dto.billingMode() == GroupBookingCreationDto.GroupBillingMode.CONSOLIDATED);
+        if (travelAgent != null) {
+            reservation.setTravelAgent(travelAgent);
+            reservation.setCommissionRate(travelAgent.getCommissionRate());
+        }
+        Reservation savedReservation = reservationRepository.save(reservation);
+
         // ---- 1. Create the parent booking ----
         Booking parent = new Booking();
         parent.setProperty(property);
+        parent.setReservation(savedReservation);
         parent.setGuest(organizer);
         parent.setUnit(null);   // master booking has no unit
         parent.setRoom(null);
@@ -145,6 +173,7 @@ public class GroupBookingService {
         for (ValidatedRoomRequest vr : validated) {
             Booking child = new Booking();
             child.setProperty(property);
+            child.setReservation(savedReservation);
             child.setGuest(vr.guest());
             child.setUnit(vr.unit());
             child.setRoom(vr.room()); // may be null — assigned at check-in
@@ -327,7 +356,12 @@ public class GroupBookingService {
     }
 
     /**
-     * Route ALL child folios to the organizer's master folio (switch to consolidated).
+     * Switch the reservation to CONSOLIDATED billing. Phase B:
+     *  - Set reservation.defaultRouteToMaster = true (drives night-audit default for new charges).
+     *  - Bulk-flip all unbilled, non-voided charges in the reservation to routeToMaster = true.
+     *  - Legacy folio.routedToFolio is also still set for safety; Phase C drops it.
+     *  - No payment movement: reservation-level payments stay put. Booking bills won't include
+     *    a master-credit share when defaultRouteToMaster=true (master payments live on the master bill).
      */
     @Transactional
     public GroupBookingSummaryDto consolidateBilling(UUID propertyId, UUID parentBookingId) {
@@ -338,6 +372,22 @@ public class GroupBookingService {
                     "Parent booking has no master folio");
         }
 
+        if (parent.getReservation() != null) {
+            parent.getReservation().setDefaultRouteToMaster(true);
+            reservationRepository.save(parent.getReservation());
+
+            List<FolioCharge> unbilled = folioChargeRepository
+                    .findActiveChargesByReservationId(parent.getReservation().getId())
+                    .stream()
+                    .filter(c -> c.getBill() == null && c.getGroupBill() == null)
+                    .toList();
+            for (FolioCharge c : unbilled) {
+                c.setRouteToMaster(true);
+            }
+            folioChargeRepository.saveAll(unbilled);
+        }
+
+        // Legacy folio-level routing (still kept for Phase B co-existence; Phase C deletes)
         List<Booking> children = bookingRepository.findByParentBookingId(parentBookingId);
         for (Booking child : children) {
             Folio childFolio = child.getMasterFolio();
@@ -353,12 +403,33 @@ public class GroupBookingService {
     }
 
     /**
-     * Un-route ALL child folios — each room settles independently (switch to separate).
+     * Switch the reservation to SEPARATE billing. Phase B:
+     *  - Set reservation.defaultRouteToMaster = false (new charges land on the booking's own bill).
+     *  - Bulk-flip all unbilled, non-voided charges in the reservation to routeToMaster = false.
+     *  - Legacy folio.routedToFolio is cleared for safety; Phase C drops it.
+     *  - No payment movement: reservation-level payments stay put. Booking bills generated next will
+     *    include their equal share of those payments as an "applied master credit" (handled by BillService).
      */
     @Transactional
     public GroupBookingSummaryDto separateBilling(UUID propertyId, UUID parentBookingId) {
         Booking parent = getValidatedGroupMaster(propertyId, parentBookingId);
 
+        if (parent.getReservation() != null) {
+            parent.getReservation().setDefaultRouteToMaster(false);
+            reservationRepository.save(parent.getReservation());
+
+            List<FolioCharge> unbilled = folioChargeRepository
+                    .findActiveChargesByReservationId(parent.getReservation().getId())
+                    .stream()
+                    .filter(c -> c.getBill() == null && c.getGroupBill() == null)
+                    .toList();
+            for (FolioCharge c : unbilled) {
+                c.setRouteToMaster(false);
+            }
+            folioChargeRepository.saveAll(unbilled);
+        }
+
+        // Legacy folio-level routing cleanup (Phase C deletes)
         List<Booking> children = bookingRepository.findByParentBookingId(parentBookingId);
         for (Booking child : children) {
             Folio childFolio = child.getMasterFolio();

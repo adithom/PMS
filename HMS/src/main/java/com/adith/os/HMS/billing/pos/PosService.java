@@ -314,7 +314,8 @@ public class PosService {
                 "POS_ORDER",
                 order.getId(),
                 "Charged from POS",
-                "SYSTEM");
+                "SYSTEM",
+                null);
 
         UUID propertyId = order.getProperty().getId();
         folioService.addCharge(propertyId, folioId, chargeDto);

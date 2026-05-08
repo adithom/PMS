@@ -284,29 +284,76 @@ public class FolioService {
             charge.setNotes(dto.notes());
             charge.setPostedBy(dto.postedBy() != null ? dto.postedBy() : "SYSTEM");
 
+            boolean routeToMaster;
+            if (dto.routeToMaster() != null) {
+                routeToMaster = dto.routeToMaster();
+            } else if (folio.getBooking() != null && folio.getBooking().getReservation() != null) {
+                routeToMaster = folio.getBooking().getReservation().isDefaultRouteToMaster();
+            } else {
+                routeToMaster = false;
+            }
+            charge.setRouteToMaster(routeToMaster);
+
             folioChargeRepository.save(charge);
 
             if (folio.getCharges() != null) {
                 folio.getCharges().add(charge);
             }
 
-            // Recalculate folio totals
+            // Recalculate folio totals (self-only in Phase B; master rollups happen at bill generation)
             folio.recalculateTotals();
             Folio savedFolio = folioRepository.save(folio);
-
-            // --- NEW: Bubble up the recalculation to the Parent ---
-            if (savedFolio.isRouted()) {
-                Folio parentFolio = savedFolio.getRoutedToFolio();
-                // Re-fetch from DB or rely on the Hibernate session to ensure child lists are fresh
-                parentFolio.recalculateTotals();
-                folioRepository.save(parentFolio);
-            }
 
             return folioMapper.toDto(savedFolio);
         } catch (Exception e) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
                     "Failed to add charge: " + e.getMessage());
         }
+    }
+
+    /**
+     * Phase B: flip a charge's routeToMaster flag.
+     *
+     * Lock granularity is the folio: if the folio has any *active* (non-voided) bill, charges in it
+     * are immutable. Voiding a bill clears that lock — charges that were once on a now-voided bill
+     * become editable (and re-routable) again. A voided charge itself is also locked.
+     */
+    @Transactional
+    public FolioDto setChargeRoute(UUID propertyId, UUID folioId, UUID chargeId, boolean routeToMaster) {
+        if (propertyId == null || folioId == null || chargeId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Property, folio, and charge IDs are required");
+        }
+
+        Folio folio = folioRepository.findById(folioId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Folio not found"));
+        if (!folio.getProperty().getId().equals(propertyId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Folio does not belong to the specified property");
+        }
+
+        FolioCharge charge = folioChargeRepository.findById(chargeId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Charge not found"));
+        if (!charge.getFolio().getId().equals(folioId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Charge does not belong to the specified folio");
+        }
+        if (charge.isVoided()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot reroute a voided charge");
+        }
+
+        boolean folioHasActiveBill = folio.getBills() != null
+                && folio.getBills().stream().anyMatch(b -> !b.isVoided());
+        if (folioHasActiveBill) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Cannot reroute charges on a folio with an active bill. Void the bill first.");
+        }
+
+        charge.setRouteToMaster(routeToMaster);
+        folioChargeRepository.save(charge);
+
+        folio.recalculateTotals();
+        Folio savedFolio = folioRepository.save(folio);
+        return folioMapper.toDto(savedFolio);
     }
 
     /**
