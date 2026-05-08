@@ -26,8 +26,8 @@ public class Folio {
     @Column(name = "folio_number", unique = true, nullable = false)
     private String folioNumber;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "booking_id")
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "booking_id", unique = true)
     private Booking booking;
 
     @NotNull

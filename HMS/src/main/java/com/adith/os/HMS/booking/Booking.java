@@ -83,18 +83,18 @@ public class Booking {
     @Column(name = "created_at", nullable = false, columnDefinition = "timestamp with time zone default now()")
     private OffsetDateTime createdAt;
 
-    @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL)
-    private List<Folio> folios;
+    @OneToOne(mappedBy = "booking", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private Folio folio;
 
     @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL)
     private List<RoomAssignment> roomAssignments = new ArrayList<>();
 
-    /**
-     * Each booking has exactly one folio. Returns it if present.
-     */
     public Folio getFolio() {
-        if (folios == null || folios.isEmpty()) return null;
-        return folios.get(0);
+        return folio;
+    }
+
+    public void setFolio(Folio folio) {
+        this.folio = folio;
     }
 
     @Column(name = "is_twin_bed", nullable = false, columnDefinition = "boolean default false")
