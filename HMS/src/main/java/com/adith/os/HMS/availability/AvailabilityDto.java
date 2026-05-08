@@ -48,18 +48,8 @@ record AvailabilitySearchDto(
         List<AvailableRoomDto> availableRoomsList
 ) {}
 
-// 5. Availability by unit
-record UnitAvailabilityDto(
-        UUID unitId,
-        String unitName,
-        int totalRooms,
-        int availableRooms,
-        int bookedRooms,
-        double occupancyRate,
-        List<AvailableRoomDto> availableRoomsList
-) {}
-
 // 6. Daily availability for calendar view
+// bookedRooms = physicallyAssignedRooms + unassignedHolds; availableRoomsList.size() == availableRooms always
 record DailyAvailabilityDto(
         @JsonFormat(pattern = "yyyy-MM-dd")
         LocalDate date,
@@ -67,6 +57,7 @@ record DailyAvailabilityDto(
         int totalActiveRooms,
         int availableRooms,
         int bookedRooms,
+        int unassignedHolds,
         int inMaintenanceRooms,
         double occupancyRate,
         List<AvailableRoomDto> availableRoomsList

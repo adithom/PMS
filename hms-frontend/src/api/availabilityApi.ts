@@ -36,24 +36,15 @@ export interface AvailabilitySearchDto {
   availableRoomsList: AvailableRoomDto[];
 }
 
-// 4. Availability by unit
-export interface UnitAvailabilityDto {
-  unitId: string;
-  unitName: string;
-  totalRooms: number;
-  availableRooms: number;
-  bookedRooms: number;
-  occupancyRate: number;
-  availableRoomsList: AvailableRoomDto[];
-}
-
 // 5. Daily availability for calendar view
+// bookedRooms = physicalAssignments + unassignedHolds; availableRoomsList.size() == availableRooms always
 export interface DailyAvailabilityDto {
   date: string; // yyyy-MM-dd format
   dayOfWeek: string;
   totalActiveRooms: number;
   availableRooms: number;
   bookedRooms: number;
+  unassignedHolds: number;
   inMaintenanceRooms: number;
   occupancyRate: number;
   availableRoomsList: AvailableRoomDto[];

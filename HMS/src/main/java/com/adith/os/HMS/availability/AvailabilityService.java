@@ -130,6 +130,15 @@ public class AvailabilityService {
         /**
          * 3. Get daily availability for calendar view.
          * Uses RoomAssignment table for overlap checks.
+         *
+         * <p>Definitions:
+         * <ul>
+         *   <li>{@code bookedRooms} = physicallyOccupied (via RoomAssignment) + unassignedHolds (Bookings
+         *       with no assigned room that still consume capacity)</li>
+         *   <li>{@code availableRooms} = totalActiveRooms − bookedRooms</li>
+         *   <li>{@code availableRoomsList.size()} == {@code availableRooms} always (sorted by room number,
+         *       trimmed to account for holds)</li>
+         * </ul>
          */
         public List<DailyAvailabilityDto> getDailyAvailability(UUID propertyId, LocalDate startDate,
                         LocalDate endDate) {
@@ -179,11 +188,12 @@ public class AvailabilityService {
                                         .map(ra -> ra.getRoom().getId())
                                         .collect(Collectors.toSet());
 
-                        List<Room> availableRooms = allActiveRooms.stream()
+                        // Sort by room number for determinism, then trim to availableRoomsNumber so
+                        // availableRoomsList.size() == availableRooms (holds occupy capacity but have no room yet)
+                        List<AvailableRoomDto> availableRoomDtos = allActiveRooms.stream()
                                         .filter(room -> !bookedRoomIds.contains(room.getId()))
-                                        .collect(Collectors.toList());
-
-                        List<AvailableRoomDto> availableRoomDtos = availableRooms.stream()
+                                        .sorted(Comparator.comparing(Room::getNumber))
+                                        .limit(availableRoomsNumber)
                                         .map(this::mapToAvailableRoomDto)
                                         .collect(Collectors.toList());
 
@@ -193,6 +203,7 @@ public class AvailabilityService {
                                         totalActiveRooms,
                                         availableRoomsNumber,
                                         totalBookedCapacity,
+                                        (int) unassignedBookings,
                                         maintenanceRooms.size(),
                                         Math.round(occupancyRate * 100.0) / 100.0,
                                         availableRoomDtos));
@@ -264,7 +275,11 @@ public class AvailabilityService {
         }
 
         /**
-         * 5. Get occupancy report for a time period
+         * 5. Get occupancy report for a time period.
+         *
+         * <p>{@code bookedRoomNights} = sum of daily {@code bookedRooms} across the period, where each
+         * day's value includes both physically assigned rooms and unassigned capacity holds.
+         * {@code averageOccupancyRate} is the mean of per-day rates computed on the same basis.
          */
         public PeriodOccupancyReportDto getPeriodOccupancyReport(UUID propertyId, LocalDate startDate,
                         LocalDate endDate) {
@@ -425,40 +440,4 @@ public class AvailabilityService {
                                 booking.getStatus().toString());
         }
 
-        private List<UnitAvailabilityDto> createUnitBreakdown(List<Room> allRooms, Set<UUID> bookedRoomIds) {
-                Map<Unit, List<Room>> roomsByUnit = allRooms.stream()
-                                .filter(room -> room.getUnit() != null)
-                                .collect(Collectors.groupingBy(Room::getUnit));
-
-                return roomsByUnit.entrySet().stream()
-                                .map(entry -> {
-                                        Unit unit = entry.getKey();
-                                        List<Room> rooms = entry.getValue();
-
-                                        int totalRooms = rooms.size();
-                                        int bookedRooms = (int) rooms.stream()
-                                                        .filter(room -> bookedRoomIds.contains(room.getId()))
-                                                        .count();
-                                        int availableRooms = totalRooms - bookedRooms;
-
-                                        double occupancyRate = totalRooms > 0
-                                                        ? (double) bookedRooms / totalRooms * 100
-                                                        : 0.0;
-
-                                        List<AvailableRoomDto> availableRoomsList = rooms.stream()
-                                                        .filter(room -> !bookedRoomIds.contains(room.getId()))
-                                                        .map(this::mapToAvailableRoomDto)
-                                                        .collect(Collectors.toList());
-
-                                        return new UnitAvailabilityDto(
-                                                        unit.getId(),
-                                                        unit.getName(),
-                                                        totalRooms,
-                                                        availableRooms,
-                                                        bookedRooms,
-                                                        Math.round(occupancyRate * 100.0) / 100.0,
-                                                        availableRoomsList);
-                                })
-                                .collect(Collectors.toList());
-        }
 }
