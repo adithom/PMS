@@ -453,10 +453,8 @@ public class PosService {
         FolioCreationDto folioDto = new FolioCreationDto(
                 null,
                 walkInGuestId,
-                FolioType.WALK_IN,
                 "Walk-in POS folio — " + location.getName(),
-                username,
-                null
+                username
         );
 
         FolioDto created = folioService.createFolio(property.getId(), folioDto);

@@ -9,36 +9,36 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Response DTO returned after creating or fetching a group booking.
- * Contains the parent booking summary plus all child booking summaries.
+ * Response DTO returned after creating or fetching a group reservation.
+ * The reservation is the top-level container; bookings under it are
+ * the actual room stays. There is no longer a "parent" booking placeholder.
  */
 public record GroupBookingSummaryDto(
 
-        // --- Parent booking info ---
-        UUID parentBookingId,
+        // --- Reservation info ---
+        UUID reservationId,
         String groupReference,
         UUID organizerGuestId,
         String organizerGuestName,
         LocalDate checkIn,
         LocalDate checkOut,
-        BookingStatus overallStatus,    // Derived: worst-case status across children
+        BookingStatus overallStatus,    // Derived: worst-case status across bookings
         int totalRooms,
-        BigDecimal totalGroupPrice,     // Sum of all child booking totalPrices
+        BigDecimal totalGroupPrice,     // Sum of all member booking totalPrices
         String currency,
         OffsetDateTime createdAt,
 
         // --- Billing ---
-        String billingMode,             // "SEPARATE" or "CONSOLIDATED"
-        UUID masterFolioId,             // The organizer's folio (used for consolidated billing)
+        String billingMode,             // "SEPARATE" or "CONSOLIDATED" — derived from reservation.defaultRouteToMaster
 
-        // --- Children ---
-        List<ChildBookingSummaryDto> childBookings
+        // --- Member bookings ---
+        List<BookingSummaryDto> bookings
 ) {
 
     /**
-     * Summary of a single child booking within the group.
+     * Summary of a single booking within the reservation.
      */
-    public record ChildBookingSummaryDto(
+    public record BookingSummaryDto(
             UUID bookingId,
             UUID guestId,
             String guestName,
@@ -50,7 +50,6 @@ public record GroupBookingSummaryDto(
             BigDecimal balanceDue,
             UUID folioId,
             String folioNumber,
-            boolean folioIsRouted,      // true if routed to master folio
             String specialRequests,
             Boolean isTwinBed
     ) {}

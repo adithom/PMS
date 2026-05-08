@@ -248,15 +248,13 @@ public class BookingService {
 
             Booking savedBooking = bookingRepository.save(booking);
 
-            // NEW: Automatically create a Master Folio for this new booking
+            // Auto-create the booking's folio
             com.adith.os.HMS.billing.folio.dto.FolioCreationDto folioDto =
                     new com.adith.os.HMS.billing.folio.dto.FolioCreationDto(
                             savedBooking.getId(),
                             savedBooking.getGuest().getId(),
-                            com.adith.os.HMS.billing.folio.FolioType.MASTER,
                             savedBooking.getSpecialRequests(),
-                            "SYSTEM",// createdBy
-                            null     // routedToFolioId - not set for master folio
+                            "SYSTEM"
                     );
             FolioDto createdFolio = folioService.createFolio(propertyId, folioDto);
 
@@ -1058,7 +1056,7 @@ public class BookingService {
             nightlyRateToApply = dto.extensionNightlyRate();
         } else {
             // Automatically calculate the average nightly rate from the current stay
-            Folio masterFolio = booking.getMasterFolio();
+            Folio masterFolio = booking.getFolio();
             if (masterFolio != null && originalNights > 0) {
                 BigDecimal currentRoomTotal = masterFolio.getCharges().stream()
                         .filter(c -> !c.isVoided() && c.getChargeCode().isRoomRent())
@@ -1088,7 +1086,7 @@ public class BookingService {
         booking.setCheckOut(newCheckOut);
 
         // 6. Post Charges to Folio
-        Folio folio = booking.getMasterFolio();
+        Folio folio = booking.getFolio();
         if (folio != null) {
             // Prevent modifying closed/posted folios
             if (folio.getStatus() == com.adith.os.HMS.billing.folio.FolioStatus.POSTED ||
@@ -1185,7 +1183,7 @@ public class BookingService {
         }
 
         // Optional: Prevent checkout if folio has a balance
-        Folio masterFolio = booking.getMasterFolio();
+        Folio masterFolio = booking.getFolio();
         if (masterFolio != null && !masterFolio.isFullyPaid()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Cannot check out: Folio has an outstanding balance of " + masterFolio.getBalanceDue());
         }
@@ -1212,7 +1210,7 @@ public class BookingService {
         booking.setStatus(BookingStatus.CHECKED_OUT);
 
         // 2. Fetch the Master Folio
-        Folio folio = booking.getMasterFolio();
+        Folio folio = booking.getFolio();
 
         // 3. Handle Financials based on Policy
         switch (policy) {

@@ -12,8 +12,8 @@ import java.util.UUID;
 public record PaymentDto(
         UUID id,
         String paymentNumber,
-        UUID folioId,
-        String folioNumber,
+        UUID bookingId,        // populated for folio (booking-level) payments
+        UUID reservationId,    // populated for reservation-level (master) payments
         BigDecimal amount,
         String currency,
         PaymentMethod paymentMethod,

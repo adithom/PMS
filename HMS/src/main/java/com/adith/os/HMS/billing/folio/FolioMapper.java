@@ -6,6 +6,7 @@ import com.adith.os.HMS.billing.folio.dto.FolioDetailDto;
 import com.adith.os.HMS.billing.folio.dto.FolioDto;
 import com.adith.os.HMS.billing.payment.Payment;
 import com.adith.os.HMS.billing.payment.PaymentMapper;
+import com.adith.os.HMS.billing.payment.PaymentRepository;
 import com.adith.os.HMS.billing.payment.dto.PaymentDto;
 import com.adith.os.HMS.booking.Booking;
 import com.adith.os.HMS.guest.Guest;
@@ -23,9 +24,11 @@ import java.util.stream.Collectors;
 public class FolioMapper {
 
     private final PaymentMapper paymentMapper;
+    private final PaymentRepository paymentRepository;
 
-    public FolioMapper(PaymentMapper paymentMapper) {
+    public FolioMapper(PaymentMapper paymentMapper, PaymentRepository paymentRepository) {
         this.paymentMapper = paymentMapper;
+        this.paymentRepository = paymentRepository;
     }
 
     public Folio toEntity(@Valid FolioCreationDto dto, Property property, Guest guest, Booking booking) {
@@ -37,7 +40,6 @@ public class FolioMapper {
         folio.setProperty(property);
         folio.setGuest(guest);
         folio.setBooking(booking);  // Can be null for walk-ins
-        folio.setFolioType(dto.folioType() != null ? dto.folioType() : FolioType.MASTER);
         folio.setNotes(dto.notes());
         folio.setStatus(FolioStatus.OPEN);
 
@@ -60,7 +62,6 @@ public class FolioMapper {
                 folio.getGuest().getFullName(),
                 folio.getProperty().getCode(),
                 folio.getStatus(),
-                folio.getFolioType(),
                 folio.getSubtotal(),
                 folio.getTaxAmount(),
                 folio.getDiscountAmount(),
@@ -71,7 +72,6 @@ public class FolioMapper {
                 folio.getNotes(),
                 folio.getCreatedAt(),
                 folio.getClosedAt(),
-                folio.getRoutedToFolio() != null ? folio.getRoutedToFolio().getId() : null,
                 checkInDate,
                 checkOutDate,
                 roomNumber,
@@ -100,11 +100,10 @@ public class FolioMapper {
                 ? folio.getCharges().stream().map(this::toChargeDto).toList()
                 : List.of();
 
-        List<PaymentDto> paymentDtos = folio.getPayments() != null
-                ? folio.getPayments().stream().map(this::toPaymentDto).toList()
-                : List.of();
-
         Booking booking = folio.getBooking();
+        List<PaymentDto> paymentDtos = booking != null
+                ? paymentRepository.findByBookingId(booking.getId()).stream().map(this::toPaymentDto).toList()
+                : List.of();
         LocalDate checkInDate = booking != null ? booking.getCheckIn() : null;
         LocalDate checkOutDate = booking != null ? booking.getCheckOut() : null;
         String roomNumber = extractRoomNumber(booking);
@@ -117,14 +116,12 @@ public class FolioMapper {
                 folio.getGuest().getFullName(),
                 folio.getProperty().getCode(),
                 folio.getStatus(),
-                folio.getFolioType(),
                 folio.getSubtotal(),
                 folio.getTaxAmount(),
                 folio.getDiscountAmount(),
                 folio.getTotalAmount(),
                 folio.getPaidAmount(),
                 folio.getBalanceDue(),
-                folio.getRoutedToFolio() != null ? folio.getRoutedToFolio().getId() : null,
                 folio.getCurrency(),
                 folio.getCreatedAt(),
                 folio.getClosedAt(),

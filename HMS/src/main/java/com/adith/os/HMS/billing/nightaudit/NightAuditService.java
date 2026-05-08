@@ -134,7 +134,7 @@ public class NightAuditService {
             try {
                 Booking booking = assignment.getBooking();
                 Room room = assignment.getRoom();
-                Folio masterFolio = booking.getMasterFolio();
+                Folio masterFolio = booking.getFolio();
 
                 if (masterFolio == null) {
                     log.warn("Night Audit: No master folio found for booking {}. Skipping.", booking.getId());

@@ -1,7 +1,6 @@
 package com.adith.os.HMS.billing.payment;
 
 import com.adith.os.HMS.billing.folio.ChargeCategory;
-import com.adith.os.HMS.billing.folio.Folio;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -17,10 +16,6 @@ public class Payment {
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
     private UUID id;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "folio_id")
-    private Folio folio;
 
     @Column(name = "reservation_id")
     private UUID reservationId;
@@ -127,15 +122,6 @@ public class Payment {
 
     // Default constructor
     public Payment() {
-    }
-
-    // Constructor for creating a new payment
-    public Payment(Folio folio, BigDecimal amount, PaymentMethod paymentMethod) {
-        this.folio = folio;
-        this.amount = amount;
-        this.paymentMethod = paymentMethod;
-        this.paymentStatus = PaymentStatus.PENDING;
-        this.currency = folio.getCurrency();
     }
 
     // Business logic methods
@@ -250,14 +236,6 @@ public class Payment {
 
     public void setId(UUID id) {
         this.id = id;
-    }
-
-    public Folio getFolio() {
-        return folio;
-    }
-
-    public void setFolio(Folio folio) {
-        this.folio = folio;
     }
 
     public UUID getReservationId() {

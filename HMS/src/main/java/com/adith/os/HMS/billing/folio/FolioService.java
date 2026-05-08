@@ -5,6 +5,7 @@ import com.adith.os.HMS.billing.folio.dto.ChargeCreationDto;
 import com.adith.os.HMS.billing.folio.dto.FolioCreationDto;
 import com.adith.os.HMS.billing.folio.dto.FolioDetailDto;
 import com.adith.os.HMS.billing.folio.dto.FolioDto;
+import com.adith.os.HMS.billing.payment.PaymentRepository;
 import com.adith.os.HMS.booking.Booking;
 import com.adith.os.HMS.booking.BookingRepository;
 import com.adith.os.HMS.guest.Guest;
@@ -32,6 +33,7 @@ public class FolioService {
     private final GuestRepository guestRepository;
     private final BookingRepository bookingRepository;
     private final FolioMapper folioMapper;
+    private final PaymentRepository paymentRepository;
 
     public FolioService(
             FolioRepository folioRepository,
@@ -39,13 +41,37 @@ public class FolioService {
             PropertyRepository propertyRepository,
             GuestRepository guestRepository,
             BookingRepository bookingRepository,
-            FolioMapper folioMapper) {
+            FolioMapper folioMapper,
+            PaymentRepository paymentRepository) {
         this.folioRepository = folioRepository;
         this.folioChargeRepository = folioChargeRepository;
         this.propertyRepository = propertyRepository;
         this.guestRepository = guestRepository;
         this.bookingRepository = bookingRepository;
         this.folioMapper = folioMapper;
+        this.paymentRepository = paymentRepository;
+    }
+
+    /**
+     * Recompute folio totals end-to-end:
+     *  1. Charge-side math (folio.recalculateTotals()) — sums non-voided charges.
+     *  2. paidAmount — sum of completed payments for this folio's booking, queried via
+     *     PaymentRepository.sumCompletedByBookingId. Reservation-level payments are NOT
+     *     included here (they appear on the master bill, not a booking folio).
+     *  3. balanceDue — settleable charges (own non-routed) minus paidAmount.
+     *  Saves and returns the folio.
+     */
+    @Transactional
+    public Folio recomputeFolioTotals(Folio folio) {
+        folio.recalculateTotals();
+        BigDecimal paid = folio.getBooking() != null
+                ? paymentRepository.sumCompletedByBookingId(folio.getBooking().getId())
+                : BigDecimal.ZERO;
+        if (paid == null) paid = BigDecimal.ZERO;
+        BigDecimal balance = folio.getSettleableTotal().subtract(paid).max(BigDecimal.ZERO);
+        folio.setPaidAmount(paid);
+        folio.setBalanceDue(balance);
+        return folioRepository.save(folio);
     }
 
     /**
@@ -80,26 +106,10 @@ public class FolioService {
             }
         }
 
-        Folio routedToFolio = null;
-        if (dto.routedToFolioId() != null) {
-            routedToFolio = folioRepository.findById(dto.routedToFolioId())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Routing target folio not found"));
-            if (!routedToFolio.getProperty().getId().equals(propertyId)) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Routing target folio does not belong to this property");
-            }
-            if (routedToFolio.isRouted()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Cannot route to a folio that is itself routed to another folio (routing chains are not supported)");
-            }
-        }
-
         try {
             Folio folio = folioMapper.toEntity(dto, property, guest, booking);
             folio.setFolioNumber(generateFolioNumber(property));
             folio.setCreatedBy(dto.createdBy() != null ? dto.createdBy() : "SYSTEM");
-            if (routedToFolio != null) {
-                folio.setRoutedToFolio(routedToFolio);
-            }
 
             Folio savedFolio = folioRepository.save(folio);
             return folioMapper.toDto(savedFolio);
@@ -171,10 +181,10 @@ public class FolioService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Property not found");
         }
 
-        // Get master folio for booking
-        Folio folio = folioRepository.findByBookingAndType(bookingId, FolioType.MASTER)
+        // Each booking has exactly one folio
+        Folio folio = folioRepository.findByBookingId(bookingId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Master folio not found for booking"));
+                        "Folio not found for booking"));
 
         if (!folio.getProperty().getId().equals(propertyId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -300,9 +310,8 @@ public class FolioService {
                 folio.getCharges().add(charge);
             }
 
-            // Recalculate folio totals (self-only in Phase B; master rollups happen at bill generation)
-            folio.recalculateTotals();
-            Folio savedFolio = folioRepository.save(folio);
+            // Recompute totals (charge-side math + paidAmount via PaymentRepository)
+            Folio savedFolio = recomputeFolioTotals(folio);
 
             return folioMapper.toDto(savedFolio);
         } catch (Exception e) {
@@ -351,8 +360,7 @@ public class FolioService {
         charge.setRouteToMaster(routeToMaster);
         folioChargeRepository.save(charge);
 
-        folio.recalculateTotals();
-        Folio savedFolio = folioRepository.save(folio);
+        Folio savedFolio = recomputeFolioTotals(folio);
         return folioMapper.toDto(savedFolio);
     }
 
@@ -404,17 +412,7 @@ public class FolioService {
             charge.voidCharge(voidedBy != null ? voidedBy : "SYSTEM", reason);
             folioChargeRepository.save(charge);
 
-            // Recalculate folio totals
-            folio.recalculateTotals();
-            Folio savedFolio = folioRepository.save(folio);
-
-            // Bubble up recalculation to the Parent if this folio is routed
-            if (savedFolio.isRouted()) {
-                Folio parentFolio = savedFolio.getRoutedToFolio();
-                parentFolio.recalculateTotals();
-                folioRepository.save(parentFolio);
-            }
-
+            Folio savedFolio = recomputeFolioTotals(folio);
             return folioMapper.toDto(savedFolio);
         } catch (IllegalStateException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
@@ -444,27 +442,10 @@ public class FolioService {
                     "Folio does not belong to the specified property");
         }
 
-        // Prevent closing a parent folio while routed children are still open
-        if (folio.getRoutedFolios() != null && !folio.getRoutedFolios().isEmpty()) {
-            boolean hasOpenChildren = folio.getRoutedFolios().stream()
-                    .anyMatch(child -> child.getStatus() == FolioStatus.OPEN);
-            if (hasOpenChildren) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Cannot close this folio while routed child folios are still open");
-            }
-        }
-
         try {
             folio.close();
             folio.setUpdatedBy(closedBy != null ? closedBy : "SYSTEM");
             Folio savedFolio = folioRepository.save(folio);
-
-            // Bubble up recalculation to the Parent if this folio is routed
-            if (savedFolio.isRouted()) {
-                Folio parentFolio = savedFolio.getRoutedToFolio();
-                parentFolio.recalculateTotals();
-                folioRepository.save(parentFolio);
-            }
 
             return folioMapper.toDto(savedFolio);
         } catch (IllegalStateException e) {
@@ -498,13 +479,6 @@ public class FolioService {
         try {
             folio.post();
             Folio savedFolio = folioRepository.save(folio);
-
-            // Bubble up recalculation to the Parent if this folio is routed
-            if (savedFolio.isRouted()) {
-                Folio parentFolio = savedFolio.getRoutedToFolio();
-                parentFolio.recalculateTotals();
-                folioRepository.save(parentFolio);
-            }
 
             return folioMapper.toDto(savedFolio);
         } catch (IllegalStateException e) {
@@ -547,13 +521,6 @@ public class FolioService {
 
             Folio savedFolio = folioRepository.save(folio);
 
-            // Bubble up recalculation to the Parent if this folio is routed
-            if (savedFolio.isRouted()) {
-                Folio parentFolio = savedFolio.getRoutedToFolio();
-                parentFolio.recalculateTotals();
-                folioRepository.save(parentFolio);
-            }
-
             return folioMapper.toDto(savedFolio);
         } catch (Exception e) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
@@ -584,131 +551,13 @@ public class FolioService {
     }
 
     /**
-     * Route a charge to another folio or the parent booking's master folio
-     */
-    @Transactional
-    public FolioDto routeCharge(UUID propertyId, UUID sourceFolioId, UUID chargeId, UUID targetFolioId) {
-        if (propertyId == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Property ID is required");
-        }
-        if (sourceFolioId == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Source Folio ID is required");
-        }
-        if (chargeId == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Charge ID is required");
-        }
-
-        // 1. Validate Source Folio
-        Folio sourceFolio = folioRepository.findById(sourceFolioId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Source folio not found"));
-
-        if (!sourceFolio.getProperty().getId().equals(propertyId)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Source folio does not belong to the specified property");
-        }
-        if (sourceFolio.getStatus() != FolioStatus.OPEN) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot route charges from a closed or posted folio");
-        }
-
-        // 2. Validate Charge
-        FolioCharge charge = folioChargeRepository.findById(chargeId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Charge not found"));
-
-        if (!charge.getFolio().getId().equals(sourceFolioId)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Charge does not belong to the specified source folio");
-        }
-        if (charge.isVoided()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot route a voided charge");
-        }
-
-        if (charge.getBill() != null || charge.getGroupBill() != null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Cannot route a charge that has already been finalized on a bill/invoice");
-        }
-
-        // 3. Determine and Validate Target Folio
-        Folio targetFolio;
-        if (targetFolioId != null) {
-            targetFolio = folioRepository.findById(targetFolioId)
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Target folio not found"));
-        } else {
-            // Fallback to parent booking's master folio
-            Booking booking = sourceFolio.getBooking();
-            if (booking == null || booking.getParentBooking() == null) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "No target folio provided and the booking is not part of a group");
-            }
-
-            UUID parentBookingId = booking.getParentBooking().getId();
-            targetFolio = folioRepository.findByBookingAndType(parentBookingId, FolioType.MASTER)
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                            "Master folio not found for parent group booking"));
-        }
-
-        if (!targetFolio.getProperty().getId().equals(propertyId)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Target folio does not belong to the specified property");
-        }
-        if (targetFolio.getStatus() != FolioStatus.OPEN) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot route charges to a closed or posted folio");
-        }
-        if (targetFolio.getId().equals(sourceFolio.getId())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Source and target folios cannot be the same");
-        }
-        if (targetFolio.isRouted()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Cannot route charges to a folio that is itself routed to another folio (routing chains are not supported)");
-        }
-
-        try {
-            // 4. Move the charge
-            charge.setFolio(targetFolio);
-            folioChargeRepository.save(charge);
-
-            // Update local collections for immediate recalculation
-            if (sourceFolio.getCharges() != null) {
-                sourceFolio.getCharges().remove(charge);
-            }
-            if (targetFolio.getCharges() != null) {
-                targetFolio.getCharges().add(charge);
-            }
-
-            // 5. Recalculate totals for Source Folio
-            sourceFolio.recalculateTotals();
-            Folio savedSourceFolio = folioRepository.save(sourceFolio);
-
-            // 6. Recalculate totals for Target Folio
-            targetFolio.recalculateTotals();
-            folioRepository.save(targetFolio);
-
-            // 7. Handle parent recalculations if either folio is routed entirely to another folio
-            if (savedSourceFolio.isRouted()) {
-                Folio parent = savedSourceFolio.getRoutedToFolio();
-                parent.recalculateTotals();
-                folioRepository.save(parent);
-            }
-            if (targetFolio.isRouted()) {
-                Folio parent = targetFolio.getRoutedToFolio();
-                parent.recalculateTotals();
-                folioRepository.save(parent);
-            }
-
-            // Return the updated source folio
-            return folioMapper.toDto(savedSourceFolio);
-
-        } catch (Exception e) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
-                    "Failed to route charge: " + e.getMessage());
-        }
-    }
-
-    /**
      * Close all OPEN folios for a booking at checkout time.
-     * Routed child folios are skipped — their balance is absorbed by the parent.
      */
     @Transactional
     public void closeOpenFoliosForBooking(UUID bookingId) {
         List<Folio> folios = folioRepository.findAllByBookingId(bookingId);
         for (Folio folio : folios) {
-            if (folio.getStatus() == FolioStatus.OPEN && !folio.isRouted()) {
+            if (folio.getStatus() == FolioStatus.OPEN) {
                 folio.close();
                 folioRepository.save(folio);
             }

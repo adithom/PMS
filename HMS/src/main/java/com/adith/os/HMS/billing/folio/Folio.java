@@ -1,8 +1,6 @@
 package com.adith.os.HMS.billing.folio;
 
 import com.adith.os.HMS.billing.bills.Bill;
-import com.adith.os.HMS.billing.payment.Payment;
-import com.adith.os.HMS.billing.payment.PaymentStatus;
 import com.adith.os.HMS.booking.Booking;
 import com.adith.os.HMS.guest.Guest;
 import com.adith.os.HMS.property.Property;
@@ -46,10 +44,6 @@ public class Folio {
     @Column(nullable = false)
     private FolioStatus status = FolioStatus.OPEN;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "folio_type", nullable = false)
-    private FolioType folioType = FolioType.MASTER;
-
     @Column(precision = 10, scale = 2, nullable = false)
     private BigDecimal subtotal = BigDecimal.ZERO;
 
@@ -92,19 +86,8 @@ public class Folio {
     @OneToMany(mappedBy = "folio", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<FolioCharge> charges = new ArrayList<>();
 
-    @OneToMany(mappedBy = "folio", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<Payment> payments = new ArrayList<>();
-
     @OneToMany(mappedBy = "folio")
     private List<Bill> bills = new ArrayList<>();
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "routed_to_folio_id")
-    private Folio routedToFolio;
-
-    // Inverse side: child folios routed TO this folio
-    @OneToMany(mappedBy = "routedToFolio", fetch = FetchType.LAZY)
-    private List<Folio> routedFolios = new ArrayList<>();
 
     public Folio() {
     }
@@ -126,21 +109,16 @@ public class Folio {
 
     // Business methods
     /**
-     * Recompute self-only totals.
-     *
-     * Phase B: routing is at the charge level (FolioCharge.routeToMaster), not the folio level,
-     * and reservation-level master rollups happen at bill-generation time — not here.
-     * - subtotal/tax/total/discount: sum of all non-voided charges physically on this folio.
-     * - paidAmount: sum of completed payments on this folio's collection (Payment is dual-written
-     *   with folio FK + bookingId; bill generation uses the bookingId/reservationId queries).
-     * - balanceDue: own non-routed charges minus own payments (the booking-bill view).
+     * Recompute charge-side totals only (subtotal/tax/discount/total).
+     * paidAmount and balanceDue are owned by FolioService.recomputeFolioTotals,
+     * which queries PaymentRepository by bookingId — Payment.folio FK and
+     * Folio.payments collection are gone.
      */
     public void recalculateTotals() {
         BigDecimal selfSubtotal  = BigDecimal.ZERO;
         BigDecimal selfTax       = BigDecimal.ZERO;
         BigDecimal selfDiscount  = BigDecimal.ZERO;
         BigDecimal selfTotal     = BigDecimal.ZERO;
-        BigDecimal settleable    = BigDecimal.ZERO;
 
         if (charges != null) {
             for (FolioCharge c : charges) {
@@ -149,9 +127,6 @@ public class Folio {
                 selfTax      = selfTax.add(c.getTaxAmount());
                 selfDiscount = selfDiscount.add(c.getDiscountAmount());
                 selfTotal    = selfTotal.add(c.getTotalAmount());
-                if (!c.isRouteToMaster()) {
-                    settleable = settleable.add(c.getTotalAmount());
-                }
             }
         }
 
@@ -159,16 +134,21 @@ public class Folio {
         this.taxAmount      = selfTax;
         this.discountAmount = selfDiscount;
         this.totalAmount    = selfTotal;
+    }
 
-        BigDecimal selfPaid = payments != null
-                ? payments.stream()
-                .filter(p -> p.getPaymentStatus() == PaymentStatus.COMPLETED)
-                .map(p -> p.getAmount().subtract(p.getRefundedAmount() != null ? p.getRefundedAmount() : BigDecimal.ZERO))
-                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                : BigDecimal.ZERO;
-
-        this.paidAmount = selfPaid;
-        this.balanceDue = settleable.subtract(selfPaid).max(BigDecimal.ZERO);
+    /**
+     * Sum of own non-voided, non-routed charges. This is what should be settled at this
+     * folio's bill (charges with routeToMaster=true land on the master bill instead).
+     * Used by FolioService to compute balanceDue.
+     */
+    public BigDecimal getSettleableTotal() {
+        if (charges == null) return BigDecimal.ZERO;
+        BigDecimal sum = BigDecimal.ZERO;
+        for (FolioCharge c : charges) {
+            if (c.isVoided() || c.isRouteToMaster()) continue;
+            sum = sum.add(c.getTotalAmount());
+        }
+        return sum;
     }
 
     public boolean isFullyPaid() {
@@ -239,14 +219,6 @@ public class Folio {
 
     public void setStatus(FolioStatus status) {
         this.status = status;
-    }
-
-    public FolioType getFolioType() {
-        return folioType;
-    }
-
-    public void setFolioType(FolioType folioType) {
-        this.folioType = folioType;
     }
 
     public BigDecimal getSubtotal() {
@@ -361,23 +333,7 @@ public class Folio {
         this.charges = charges;
     }
 
-    public List<Payment> getPayments() {
-        return payments;
-    }
-
-    public void setPayments(List<Payment> payments) {
-        this.payments = payments;
-    }
-
     public java.util.List<com.adith.os.HMS.billing.bills.Bill> getBills() { return bills; }
 
     public void setBills(java.util.List<com.adith.os.HMS.billing.bills.Bill> bills) { this.bills = bills; }
-
-    public Folio getRoutedToFolio() { return routedToFolio; }
-    public void setRoutedToFolio(Folio routedToFolio) { this.routedToFolio = routedToFolio; }
-
-    public boolean isRouted() { return routedToFolio != null; }
-
-    public List<Folio> getRoutedFolios() { return routedFolios; }
-    public void setRoutedFolios(List<Folio> routedFolios) { this.routedFolios = routedFolios; }
 }

@@ -1,6 +1,5 @@
 package com.adith.os.HMS.billing.payment;
 
-import com.adith.os.HMS.billing.folio.Folio;
 import com.adith.os.HMS.billing.payment.dto.PaymentCreationDto;
 import com.adith.os.HMS.billing.payment.dto.PaymentDto;
 import jakarta.validation.Valid;
@@ -12,24 +11,26 @@ import java.util.stream.Collectors;
 @Component
 public class PaymentMapper {
 
-    public Payment toEntity(@Valid PaymentCreationDto dto, Folio folio) {
+    /**
+     * Build a Payment from a creation DTO. The caller is responsible for setting
+     * the routing pointer (bookingId or reservationId) and invoking save.
+     *
+     * @param currency currency code from the owning folio or reservation.
+     */
+    public Payment toEntity(@Valid PaymentCreationDto dto, String currency) {
         if (dto == null) return null;
-        if (folio == null) throw new IllegalArgumentException("Folio is required");
 
         Payment payment = new Payment();
-        payment.setFolio(folio);
         payment.setAmount(dto.amount());
-        payment.setCurrency(folio.getCurrency());
+        payment.setCurrency(currency);
         payment.setPaymentMethod(dto.paymentMethod());
-        // Updated to default to COMPLETED for the 1-step payment flow
+        // Default to COMPLETED for the 1-step payment flow
         payment.setPaymentStatus(PaymentStatus.COMPLETED);
 
-        // Map Target Category
         if (dto.targetCategory() != null) {
             payment.setTargetCategory(dto.targetCategory());
         }
 
-        // Card payment details
         if (dto.transactionId() != null && !dto.transactionId().isBlank()) {
             payment.setTransactionId(dto.transactionId().trim());
         }
@@ -40,7 +41,6 @@ public class PaymentMapper {
             payment.setCardType(dto.cardType().trim().toUpperCase());
         }
 
-        // Bank transfer details
         if (dto.bankName() != null && !dto.bankName().isBlank()) {
             payment.setBankName(dto.bankName().trim());
         }
@@ -51,16 +51,13 @@ public class PaymentMapper {
             payment.setReferenceNumber(dto.referenceNumber().trim());
         }
 
-        // UPI details
         if (dto.upiId() != null && !dto.upiId().isBlank()) {
             payment.setUpiId(dto.upiId().trim());
         }
 
-        // General
         payment.setNotes(dto.notes());
         payment.setProcessedBy(dto.processedBy());
 
-        // Travel agent billing
         if (dto.travelAgentId() != null) {
             payment.setTravelAgentId(dto.travelAgentId());
         }
@@ -74,13 +71,13 @@ public class PaymentMapper {
         return new PaymentDto(
                 payment.getId(),
                 payment.getPaymentNumber(),
-                payment.getFolio().getId(),
-                payment.getFolio().getFolioNumber(),
+                payment.getBookingId(),
+                payment.getReservationId(),
                 payment.getAmount(),
                 payment.getCurrency(),
                 payment.getPaymentMethod(),
                 payment.getPaymentStatus(),
-                payment.getTargetCategory(), // Added missing field
+                payment.getTargetCategory(),
                 payment.getTransactionId(),
                 payment.getCardLastFour(),
                 payment.getCardType(),

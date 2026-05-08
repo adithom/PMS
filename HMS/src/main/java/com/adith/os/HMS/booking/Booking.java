@@ -2,7 +2,6 @@ package com.adith.os.HMS.booking;
 
 import com.adith.os.HMS.billing.folio.ChargeCode;
 import com.adith.os.HMS.billing.folio.Folio;
-import com.adith.os.HMS.billing.folio.FolioType;
 import com.adith.os.HMS.guest.Guest;
 import com.adith.os.HMS.property.Property;
 import com.adith.os.HMS.property.mealplan.MealPlanType;
@@ -87,32 +86,15 @@ public class Booking {
     @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL)
     private List<Folio> folios;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "parent_booking_id")
-    private Booking parentBooking;
-
-    @OneToMany(mappedBy = "parentBooking", cascade = CascadeType.ALL, orphanRemoval = false)
-    private List<Booking> childBookings = new ArrayList<>();
-
-    @Column(name = "is_group_master", nullable = false, columnDefinition = "boolean default false")
-    private boolean isGroupMaster = false;
-
-    @Column(name = "group_reference", length = 100)
-    private String groupReference;
-
     @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL)
     private List<RoomAssignment> roomAssignments = new ArrayList<>();
 
-    public Folio getMasterFolio() {
+    /**
+     * Each booking has exactly one folio. Returns it if present.
+     */
+    public Folio getFolio() {
         if (folios == null || folios.isEmpty()) return null;
-        return folios.stream()
-                .filter(f -> f.getFolioType() == FolioType.MASTER)
-                .findFirst()
-                .orElse(null);
-    }
-
-    public boolean isGroupChild() {
-        return parentBooking != null;
+        return folios.get(0);
     }
 
     @Column(name = "is_twin_bed", nullable = false, columnDefinition = "boolean default false")
@@ -314,18 +296,6 @@ public class Booking {
     public void setCreatedAt(OffsetDateTime createdAt) {
         this.createdAt = createdAt;
     }
-
-    public Booking getParentBooking() { return parentBooking; }
-    public void setParentBooking(Booking parentBooking) { this.parentBooking = parentBooking; }
-
-    public List<Booking> getChildBookings() { return childBookings; }
-    public void setChildBookings(List<Booking> childBookings) { this.childBookings = childBookings; }
-
-    public boolean isGroupMaster() { return isGroupMaster; }
-    public void setGroupMaster(boolean groupMaster) { isGroupMaster = groupMaster; }
-
-    public String getGroupReference() { return groupReference; }
-    public void setGroupReference(String groupReference) { this.groupReference = groupReference; }
 
     public List<RoomAssignment> getRoomAssignments() { return roomAssignments; }
     public void setRoomAssignments(List<RoomAssignment> roomAssignments) { this.roomAssignments = roomAssignments; }

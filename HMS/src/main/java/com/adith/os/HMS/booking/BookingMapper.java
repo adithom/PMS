@@ -95,9 +95,7 @@ public class BookingMapper {
                 booking.getSpecialRequests(), // ADDED: Special requests in DTO
                 booking.getCreatedAt(),
                 booking.getPaymentProgress(),
-                booking.getParentBooking() != null ? booking.getParentBooking().getId() : null,
-                booking.isGroupMaster(),
-                booking.getChildBookings() != null ? booking.getChildBookings().size() : 0,
+                booking.getReservation() != null ? booking.getReservation().getId() : null,
                 booking.isTwinBed(),
                 booking.getReferenceNumber(),
                 booking.getTravelAgent() != null ? booking.getTravelAgent().getId() : null,

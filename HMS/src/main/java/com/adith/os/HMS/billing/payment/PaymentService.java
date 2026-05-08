@@ -2,19 +2,21 @@ package com.adith.os.HMS.billing.payment;
 
 import com.adith.os.HMS.billing.folio.Folio;
 import com.adith.os.HMS.billing.folio.FolioRepository;
+import com.adith.os.HMS.billing.folio.FolioService;
 import com.adith.os.HMS.billing.payment.dto.PaymentCreationDto;
 import com.adith.os.HMS.billing.payment.dto.PaymentDto;
 import com.adith.os.HMS.billing.payment.dto.PaymentUpdateDto;
 import com.adith.os.HMS.billing.payment.dto.RefundDto;
 import com.adith.os.HMS.property.Property;
 import com.adith.os.HMS.property.PropertyRepository;
+import com.adith.os.HMS.reservation.Reservation;
+import com.adith.os.HMS.reservation.ReservationRepository;
 import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
@@ -26,22 +28,29 @@ public class PaymentService {
 
     private final PaymentRepository paymentRepository;
     private final FolioRepository folioRepository;
+    private final FolioService folioService;
     private final PropertyRepository propertyRepository;
+    private final ReservationRepository reservationRepository;
     private final PaymentMapper paymentMapper;
 
     public PaymentService(
             PaymentRepository paymentRepository,
             FolioRepository folioRepository,
+            FolioService folioService,
             PropertyRepository propertyRepository,
+            ReservationRepository reservationRepository,
             PaymentMapper paymentMapper) {
         this.paymentRepository = paymentRepository;
         this.folioRepository = folioRepository;
+        this.folioService = folioService;
         this.propertyRepository = propertyRepository;
+        this.reservationRepository = reservationRepository;
         this.paymentMapper = paymentMapper;
     }
 
     /**
-     * Instantly record a completed payment and update the folio
+     * Record a folio (booking-level) payment.
+     * Tags the payment with bookingId derived from the folio's booking.
      */
     @Transactional
     public PaymentDto recordPayment(UUID propertyId, UUID folioId, @Valid PaymentCreationDto dto, String username) {
@@ -53,41 +62,62 @@ public class PaymentService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Folio does not belong to the specified property");
         }
 
-        // Create the instantly completed payment
-        Payment payment = paymentMapper.toEntity(dto, folio);
+        Payment payment = paymentMapper.toEntity(dto, folio.getCurrency());
         payment.setPaymentNumber(generatePaymentNumber(folio.getProperty()));
         payment.setPaymentStatus(PaymentStatus.COMPLETED);
         payment.setProcessedBy(username != null ? username : "SYSTEM");
 
-        // NEW: Set the target category (Room vs Ancillary)
         if (dto.targetCategory() != null) {
             payment.setTargetCategory(dto.targetCategory());
         }
 
-        // Phase B: derive routing target — reservationId for master folios, bookingId otherwise
+        // Folio payments tag the booking they settle. Reservation-level (master) payments
+        // come through recordReservationPayment().
         com.adith.os.HMS.booking.Booking b = folio.getBooking();
         if (b != null) {
-            if (b.isGroupMaster() && b.getReservation() != null) {
-                payment.setReservationId(b.getReservation().getId());
-            } else {
-                payment.setBookingId(b.getId());
-            }
+            payment.setBookingId(b.getId());
         }
 
         Payment savedPayment = paymentRepository.save(payment);
 
-        // Instantly recalculate the folio (self-only in Phase B)
-        folio.getPayments().add(savedPayment);
-        folio.recalculateTotals();
-
-        // Folios are closed at checkout, not at payment time.
-        folioRepository.save(folio);
+        // Recompute folio totals (paidAmount queried from PaymentRepository).
+        folioService.recomputeFolioTotals(folio);
 
         return paymentMapper.toDto(savedPayment);
     }
 
     /**
-     * Process a refund
+     * Record a reservation-level (master) payment.
+     * Tags the payment with reservationId. Bookings under the reservation see this
+     * money as an applied credit at bill-generation time when the reservation is in
+     * SEPARATE billing mode (read-time split — no Payment row movement).
+     */
+    @Transactional
+    public PaymentDto recordReservationPayment(UUID propertyId, UUID reservationId,
+                                               @Valid PaymentCreationDto dto, String username) {
+        Reservation reservation = reservationRepository.findById(reservationId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Reservation not found"));
+
+        if (!reservation.getProperty().getId().equals(propertyId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Reservation does not belong to the specified property");
+        }
+
+        Payment payment = paymentMapper.toEntity(dto, reservation.getCurrency());
+        payment.setPaymentNumber(generatePaymentNumber(reservation.getProperty()));
+        payment.setPaymentStatus(PaymentStatus.COMPLETED);
+        payment.setProcessedBy(username != null ? username : "SYSTEM");
+
+        payment.setReservationId(reservationId);
+
+        Payment savedPayment = paymentRepository.save(payment);
+        return paymentMapper.toDto(savedPayment);
+    }
+
+    /**
+     * Process a refund. The legacy URL is folio-keyed, so we resolve the folio for ownership
+     * checks via the payment's bookingId. (Refunds will be replaced by Payment edit/delete in
+     * a future phase — don't extend this flow.)
      */
     @Transactional
     public PaymentDto refundPayment(UUID propertyId, UUID folioId, UUID paymentId, @Valid RefundDto dto) {
@@ -107,24 +137,13 @@ public class PaymentService {
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment not found"));
 
-        if (!payment.getFolio().getId().equals(folioId)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Payment does not belong to the specified folio");
-        }
-
-        if (!payment.getFolio().getProperty().getId().equals(propertyId)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Payment does not belong to the specified property");
-        }
+        Folio folio = resolveAndValidateFolioForPayment(propertyId, folioId, payment);
 
         try {
             payment.refund(dto.amount(), dto.reason());
             Payment savedPayment = paymentRepository.save(payment);
 
-            // Update folio totals
-            Folio folio = payment.getFolio();
-            folio.recalculateTotals();
-            folioRepository.save(folio);
+            folioService.recomputeFolioTotals(folio);
 
             return paymentMapper.toDto(savedPayment);
         } catch (IllegalStateException | IllegalArgumentException e) {
@@ -156,18 +175,9 @@ public class PaymentService {
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment not found"));
 
-        if (!payment.getFolio().getId().equals(folioId)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Payment does not belong to the specified folio");
-        }
-
-        if (!payment.getFolio().getProperty().getId().equals(propertyId)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Payment does not belong to the specified property");
-        }
+        Folio folio = resolveAndValidateFolioForPayment(propertyId, folioId, payment);
 
         try {
-            // Update only provided fields
             if (dto.paymentStatus() != null) {
                 payment.setPaymentStatus(dto.paymentStatus());
             }
@@ -182,11 +192,8 @@ public class PaymentService {
 
             Payment savedPayment = paymentRepository.save(payment);
 
-            // Update folio totals if status changed to COMPLETED
             if (dto.paymentStatus() == PaymentStatus.COMPLETED) {
-                Folio folio = payment.getFolio();
-                folio.recalculateTotals();
-                folioRepository.save(folio);
+                folioService.recomputeFolioTotals(folio);
             }
 
             return paymentMapper.toDto(savedPayment);
@@ -213,21 +220,14 @@ public class PaymentService {
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment not found"));
 
-        if (!payment.getFolio().getId().equals(folioId)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Payment does not belong to the specified folio");
-        }
-
-        if (!payment.getFolio().getProperty().getId().equals(propertyId)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Payment does not belong to the specified property");
-        }
+        resolveAndValidateFolioForPayment(propertyId, folioId, payment);
 
         return paymentMapper.toDto(payment);
     }
 
     /**
-     * Get all payments for a folio
+     * Get all booking-level payments for a folio (i.e., payments tagged with the folio's bookingId).
+     * Reservation-level (master) payments are NOT included here.
      */
     public List<PaymentDto> getPaymentsByFolio(UUID propertyId, UUID folioId) {
         if (propertyId == null) {
@@ -245,13 +245,27 @@ public class PaymentService {
                     "Folio does not belong to the specified property");
         }
 
-        try {
-            List<Payment> payments = paymentRepository.findByFolioId(folioId);
-            return paymentMapper.toDtoList(payments);
-        } catch (Exception e) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
-                    "Failed to fetch payments: " + e.getMessage());
+        if (folio.getBooking() == null) {
+            return List.of();
         }
+
+        List<Payment> payments = paymentRepository.findByBookingId(folio.getBooking().getId());
+        return paymentMapper.toDtoList(payments);
+    }
+
+    /**
+     * Get all payments for a reservation (master/reservation-level only).
+     */
+    public List<PaymentDto> getPaymentsByReservation(UUID propertyId, UUID reservationId) {
+        Reservation reservation = reservationRepository.findById(reservationId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Reservation not found"));
+
+        if (!reservation.getProperty().getId().equals(propertyId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Reservation does not belong to the specified property");
+        }
+
+        return paymentMapper.toDtoList(paymentRepository.findByReservationId(reservationId));
     }
 
     /**
@@ -299,15 +313,7 @@ public class PaymentService {
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment not found"));
 
-        if (!payment.getFolio().getId().equals(folioId)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Payment does not belong to the specified folio");
-        }
-
-        if (!payment.getFolio().getProperty().getId().equals(propertyId)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Payment does not belong to the specified property");
-        }
+        resolveAndValidateFolioForPayment(propertyId, folioId, payment);
 
         if (payment.getPaymentStatus() != PaymentStatus.PENDING) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -321,6 +327,28 @@ public class PaymentService {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
                     "Failed to cancel payment: " + e.getMessage());
         }
+    }
+
+    /**
+     * Resolve a folio by id and validate the payment belongs to it (via bookingId)
+     * and the folio belongs to the property. Replaces the old `payment.getFolio()`
+     * ownership check with a `bookingId → Booking → Folio` lookup.
+     */
+    private Folio resolveAndValidateFolioForPayment(UUID propertyId, UUID folioId, Payment payment) {
+        Folio folio = folioRepository.findById(folioId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Folio not found"));
+
+        if (!folio.getProperty().getId().equals(propertyId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Folio does not belong to the specified property");
+        }
+        if (folio.getBooking() == null
+                || payment.getBookingId() == null
+                || !folio.getBooking().getId().equals(payment.getBookingId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Payment does not belong to the specified folio");
+        }
+        return folio;
     }
 
     /**

@@ -72,12 +72,8 @@ public record BookingDto(
 
         Double paymentProgress,
 
-        UUID parentBookingId, // null if not a child booking
+        UUID reservationId,
 
-        Boolean isGroupMaster,
-
-        int childBookingCount, // 0 for regular/child bookings
-        
         Boolean isTwinBed,
 
         String referenceNumber,

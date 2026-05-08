@@ -92,21 +92,9 @@ public class FolioController {
         return ResponseEntity.ok(updatedFolio);
     }
 
-    @PostMapping("/{id}/charges/{chargeId}/route")
-    public ResponseEntity<FolioDto> routeCharge(
-            @PathVariable UUID propertyId,
-            @PathVariable UUID id,
-            @PathVariable UUID chargeId,
-            @RequestParam(required = false) UUID targetFolioId) {
-
-        FolioDto updatedFolio = folioService.routeCharge(propertyId, id, chargeId, targetFolioId);
-        return ResponseEntity.ok(updatedFolio);
-    }
-
     /**
-     * Phase B: per-charge route-to-master flag (the new charge-level routing). Replaces the legacy
-     * folio-level POST /route endpoint above for the new model. The PATCH endpoint sets the
-     * routeToMaster flag on a single charge; bill generation honors it on the next invoice.
+     * Per-charge route-to-master flag. Sets the routeToMaster flag on a single charge;
+     * bill generation honors it on the next invoice.
      */
     @PatchMapping("/{id}/charges/{chargeId}/route")
     public ResponseEntity<FolioDto> setChargeRoute(

@@ -269,9 +269,9 @@ public class RoomAssignmentService {
                                          Room newRoom,
                                          LocalDate shiftDate,
                                          BigDecimal newRate) {
-        Folio masterFolio = booking.getMasterFolio();
+        Folio masterFolio = booking.getFolio();
         if (masterFolio == null) {
-            log.warn("No master folio for booking {} — skipping rate adjustment", booking.getId());
+            log.warn("No folio for booking {} — skipping rate adjustment", booking.getId());
             return;
         }
 

@@ -262,16 +262,9 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
             @Param("statuses") List<BookingStatus> statuses
     );
 
-    //Group Bookings
+    // Reservation queries
 
-    @Query("SELECT b FROM Booking b WHERE b.parentBooking.id = :parentBookingId ORDER BY b.createdAt ASC")
-    List<Booking> findByParentBookingId(@Param("parentBookingId") UUID parentBookingId);
-
-    // Fetch all group master bookings for a property
-    @Query("SELECT b FROM Booking b WHERE b.property.id = :propertyId AND b.isGroupMaster = true ORDER BY b.checkIn DESC")
-    List<Booking> findGroupMastersByPropertyId(@Param("propertyId") UUID propertyId);
-
-    @Query("SELECT b FROM Booking b WHERE b.property.id = :propertyId AND b.room IS NULL AND b.isGroupMaster = false AND b.status IN :statuses AND b.checkIn BETWEEN :startDate AND :endDate ORDER BY b.checkIn ASC")
+    @Query("SELECT b FROM Booking b WHERE b.property.id = :propertyId AND b.room IS NULL AND b.status IN :statuses AND b.checkIn BETWEEN :startDate AND :endDate ORDER BY b.checkIn ASC")
     List<Booking> findUnassignedUpcomingBookings(
             @Param("propertyId") UUID propertyId,
             @Param("statuses") List<BookingStatus> statuses,
@@ -279,12 +272,8 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
             @Param("endDate") java.time.LocalDate endDate
     );
 
-    // Phase B: count of non-master child bookings for a reservation (for master-credit equal split)
-    @Query("SELECT COUNT(b) FROM Booking b WHERE b.reservation.id = :reservationId AND b.isGroupMaster = false")
-    long countNonMasterByReservationId(@Param("reservationId") UUID reservationId);
-
-    @Query("SELECT b FROM Booking b WHERE b.reservation.id = :reservationId AND b.isGroupMaster = false")
-    List<Booking> findNonMasterByReservationId(@Param("reservationId") UUID reservationId);
+    @Query("SELECT COUNT(b) FROM Booking b WHERE b.reservation.id = :reservationId")
+    long countByReservationId(@Param("reservationId") UUID reservationId);
 
     @Query("SELECT b FROM Booking b WHERE b.reservation.id = :reservationId")
     List<Booking> findByReservationId(@Param("reservationId") UUID reservationId);

@@ -50,6 +50,7 @@ public class BillService {
     private final R2StorageService r2StorageService;
     private final PaymentRepository paymentRepository;
     private final BookingRepository bookingRepository;
+    private final BillMapper billMapper;
 
     public BillService(FolioRepository folioRepository,
                        FolioChargeRepository folioChargeRepository,
@@ -59,7 +60,8 @@ public class BillService {
                        PdfGenerationService pdfGenerationService,
                        R2StorageService r2StorageService,
                        PaymentRepository paymentRepository,
-                       BookingRepository bookingRepository) {
+                       BookingRepository bookingRepository,
+                       BillMapper billMapper) {
         this.folioRepository = folioRepository;
         this.folioChargeRepository = folioChargeRepository;
         this.billRepository = billRepository;
@@ -69,6 +71,7 @@ public class BillService {
         this.r2StorageService = r2StorageService;
         this.paymentRepository = paymentRepository;
         this.bookingRepository = bookingRepository;
+        this.billMapper = billMapper;
     }
 
     /**
@@ -84,7 +87,7 @@ public class BillService {
         if (totalReservationPayments == null || totalReservationPayments.compareTo(BigDecimal.ZERO) <= 0) {
             return BigDecimal.ZERO;
         }
-        long shareCount = bookingRepository.countNonMasterByReservationId(r.getId());
+        long shareCount = bookingRepository.countByReservationId(r.getId());
         if (shareCount <= 0) return BigDecimal.ZERO;
         return totalReservationPayments.divide(
                 BigDecimal.valueOf(shareCount), 2, java.math.RoundingMode.HALF_DOWN);
@@ -139,13 +142,13 @@ public class BillService {
             Bill bill = createAndSaveBill(folio, charges, bt, invoiceNumber, guestGstNumber, batchId);
 
             List<ChargeDto> chargeDtos = chargeMapper.toDtos(charges);
-            BillDto dtoForPdf = BillMapper.toBillDto(bill, folio, chargeDtos, guestGstNumber, null, creditForThisBill);
+            BillDto dtoForPdf = billMapper.toBillDto(bill, folio, chargeDtos, guestGstNumber, null, creditForThisBill);
             String localPath = pdfGenerationService.generateInvoicePdf(dtoForPdf);
             String objectKey = "invoices/" + bill.getInvoiceNumber() + ".pdf";
             String signedUrl = uploadToR2WithFallback(localPath, objectKey, "INV_" + bill.getInvoiceNumber() + ".pdf");
             bill.setPdfFilePath(objectKey);
             billRepository.save(bill);
-            generatedBills.add(BillMapper.toBillDto(bill, folio, chargeDtos, guestGstNumber, signedUrl, creditForThisBill));
+            generatedBills.add(billMapper.toBillDto(bill, folio, chargeDtos, guestGstNumber, signedUrl, creditForThisBill));
         }
 
         return new MultiBillDto(generatedBills);
@@ -155,7 +158,7 @@ public class BillService {
         Folio folio = folioRepository.findById(folioId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Folio not found"));
         return billRepository.findByFolioId(folioId).stream()
-                .map(bill -> BillMapper.toBillDto(bill, folio, chargeMapper.toDtos(
+                .map(bill -> billMapper.toBillDto(bill, folio, chargeMapper.toDtos(
                         folioChargeRepository.findByBillId(bill.getId())), bill.getGuestGstNumber()))
                 .toList();
     }
@@ -196,7 +199,7 @@ public class BillService {
         folio.recalculateTotals();
         folioRepository.save(folio);
 
-        return BillMapper.toBillDto(savedBill, folio, chargeMapper.toDtos(charges), savedBill.getGuestGstNumber());
+        return billMapper.toBillDto(savedBill, folio, chargeMapper.toDtos(charges), savedBill.getGuestGstNumber());
     }
 
     @Transactional
@@ -224,7 +227,7 @@ public class BillService {
                         b.getGenerationBatchId() != null ? b.getGenerationBatchId() : b.getId()));
 
         List<BillBatchRowDto> batchRows = grouped.values().stream()
-                .map(BillMapper::toBatchRowDto)
+                .map(billMapper::toBatchRowDto)
                 .sorted(Comparator.comparing(BillBatchRowDto::billDate).reversed()
                         .thenComparing(BillBatchRowDto::mainInvoiceNumber))
                 .toList();
