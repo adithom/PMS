@@ -4,6 +4,7 @@ import propertyApi from '../api/propertyApi';
 import folioApi from '../api/folioApi';
 import type { Property } from '../types';
 import type { FolioDto } from '../api/folioApi';
+import { fmtDate } from '../utils/dateHelpers';
 
 import LoadingSpinner from '../components/LoadingSpinner';
 import FolioDetailModal from '../components/Billing/FolioDetailModal';
@@ -393,7 +394,7 @@ export default function AdminBillingDashboard() {
                         <td className="p-4">
                           <span className="block font-bold text-slate-900">{f.roomNumber ? `Room ${f.roomNumber}` : '—'}</span>
                           <span className="block text-xs text-slate-500">
-                            {f.checkInDate && f.checkOutDate ? `${f.checkInDate.split('-').reverse().join('-')} → ${f.checkOutDate.split('-').reverse().join('-')}` : f.folioNumber ? `#${f.folioNumber}` : '—'}
+                            {f.checkInDate && f.checkOutDate ? `${fmtDate(f.checkInDate)} → ${fmtDate(f.checkOutDate)}` : f.folioNumber ? `#${f.folioNumber}` : '—'}
                           </span>
                           <div className="mt-1 flex items-center gap-2">
                             <span className={cn('rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider',

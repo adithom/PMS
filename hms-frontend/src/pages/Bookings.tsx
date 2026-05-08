@@ -470,10 +470,11 @@ export default function Bookings() {
 
   const getFiltered = useCallback((): Booking[] => {
     const ds = toDS(selectedDate);
+    const active = (b: Booking) => b.status !== 'CANCELLED' && b.status !== 'NO_SHOW';
     switch (listType) {
-      case 'incoming': return dayBookings.filter(b => dateStr(b.checkIn) === ds && b.status === 'CONFIRMED');
-      case 'inhouse': return dayBookings.filter(b => b.status === 'CHECKED_IN' && ds >= dateStr(b.checkIn) && ds < dateStr(b.checkOut));
-      case 'checkouts': return dayBookings.filter(b => dateStr(b.checkOut) === ds && (b.status === 'CHECKED_IN' || b.status === 'CHECKED_OUT'));
+      case 'incoming': return dayBookings.filter(b => dateStr(b.checkIn) === ds && active(b));
+      case 'inhouse': return dayBookings.filter(b => active(b) && b.status !== 'CHECKED_OUT' && ds >= dateStr(b.checkIn) && ds < dateStr(b.checkOut));
+      case 'checkouts': return dayBookings.filter(b => dateStr(b.checkOut) === ds && active(b));
       default: return dayBookings;
     }
   }, [selectedDate, listType, dayBookings]);
@@ -535,6 +536,15 @@ export default function Bookings() {
                 Next
                 <ChevronRight className="h-4 w-4" />
               </button>
+              <input
+                type="date"
+                value={winStartStr}
+                onChange={e => {
+                  if (!e.target.value) return;
+                  setWinStart(new Date(e.target.value + 'T00:00:00'));
+                }}
+                className={btnSecondary + ' cursor-pointer'}
+              />
             </div>
             <span className="text-sm font-semibold text-slate-600">{shortDate(winStart)} — {shortDate(addDays(winStart, numDays - 1))}</span>
             {loading && <span className="text-xs text-slate-400 animate-pulse">Refreshing…</span>}
@@ -660,7 +670,7 @@ export default function Bookings() {
                               const unClampedStartOff = diffDays(winStartStr, ci);
                               const unClampedEndOff = diffDays(winStartStr, co);
                               
-                              const unClampedTotalEndOff = unClampedEndOff + 1;
+                              const unClampedTotalEndOff = unClampedEndOff;
 
                               // Visual start/end constrained to the visible 0..numDays window
                               const visStartOff = Math.max(0, unClampedStartOff);
@@ -676,7 +686,7 @@ export default function Bookings() {
 
                               const bleedsLeft = unClampedStartOff < 0;
                               const bleedsRight = isNoShow ? false : (unClampedTotalEndOff > numDays);
-                              const bookingBleedsRight = unClampedEndOff + 1 > numDays;
+                              const bookingBleedsRight = unClampedEndOff > numDays;
 
                               const sc = STATUS_COLORS[bk.status] ?? STATUS_COLORS.PENDING;
                               const guestName = bk.guestName || 'Guest';

@@ -18,12 +18,12 @@ public interface RoomAssignmentRepository extends JpaRepository<RoomAssignment, 
 
     /**
      * Find overlapping assignments for a specific room (for availability checks).
-     * Overlap: ra.startDate <= endDate AND ra.endDate >= startDate (Enforces 1-day buffer)
+     * Overlap: ra.startDate < endDate AND ra.endDate > startDate (checkout day is free)
      */
     @Query("SELECT ra FROM RoomAssignment ra " +
             "WHERE ra.room.id = :roomId " +
-            "AND ra.startDate <= :endDate " +
-            "AND ra.endDate >= :startDate " +
+            "AND ra.startDate < :endDate " +
+            "AND ra.endDate > :startDate " +
             "AND ra.status NOT IN :excludedStatuses")
     List<RoomAssignment> findOverlappingAssignments(
             @Param("roomId") UUID roomId,
@@ -36,8 +36,8 @@ public interface RoomAssignmentRepository extends JpaRepository<RoomAssignment, 
      */
     @Query("SELECT CASE WHEN COUNT(ra) > 0 THEN true ELSE false END FROM RoomAssignment ra " +
             "WHERE ra.room.id = :roomId " +
-            "AND ra.startDate <= :endDate " +
-            "AND ra.endDate >= :startDate " +
+            "AND ra.startDate < :endDate " +
+            "AND ra.endDate > :startDate " +
             "AND ra.status NOT IN :excludedStatuses")
     boolean existsOverlappingAssignment(
             @Param("roomId") UUID roomId,
@@ -51,8 +51,8 @@ public interface RoomAssignmentRepository extends JpaRepository<RoomAssignment, 
     @Query("SELECT CASE WHEN COUNT(ra) > 0 THEN true ELSE false END FROM RoomAssignment ra " +
             "WHERE ra.room.id = :roomId " +
             "AND ra.booking.id != :bookingId " +
-            "AND ra.startDate <= :endDate " +
-            "AND ra.endDate >= :startDate " +
+            "AND ra.startDate < :endDate " +
+            "AND ra.endDate > :startDate " +
             "AND ra.status NOT IN :excludedStatuses")
     boolean existsOverlappingAssignmentExcludingBooking(
             @Param("roomId") UUID roomId,
@@ -67,8 +67,8 @@ public interface RoomAssignmentRepository extends JpaRepository<RoomAssignment, 
     @Query("SELECT ra FROM RoomAssignment ra " +
             "WHERE ra.room.unit.id = :unitId " +
             "AND ra.booking.id != :bookingId " +
-            "AND ra.startDate <= :endDate " +
-            "AND ra.endDate >= :startDate " +
+            "AND ra.startDate < :endDate " +
+            "AND ra.endDate > :startDate " +
             "AND ra.status IN :statuses")
     List<RoomAssignment> findConflictingAssignmentsForUnitExcludingBooking(
             @Param("unitId") UUID unitId,
@@ -83,8 +83,8 @@ public interface RoomAssignmentRepository extends JpaRepository<RoomAssignment, 
      */
     @Query("SELECT ra FROM RoomAssignment ra " +
             "WHERE ra.room.property.id = :propertyId " +
-            "AND ra.startDate <= :endDate " +
-            "AND ra.endDate >= :startDate " +
+            "AND ra.startDate < :endDate " +
+            "AND ra.endDate > :startDate " +
             "AND ra.status IN :statuses")
     List<RoomAssignment> findConflictingAssignments(
             @Param("propertyId") UUID propertyId,
@@ -97,8 +97,8 @@ public interface RoomAssignmentRepository extends JpaRepository<RoomAssignment, 
      */
     @Query("SELECT ra FROM RoomAssignment ra " +
             "WHERE ra.room.id = :roomId " +
-            "AND ra.startDate <= :endDate " +
-            "AND ra.endDate >= :startDate " +
+            "AND ra.startDate < :endDate " +
+            "AND ra.endDate > :startDate " +
             "AND ra.status IN :statuses")
     List<RoomAssignment> findConflictingAssignmentsForRoom(
             @Param("roomId") UUID roomId,
@@ -111,8 +111,8 @@ public interface RoomAssignmentRepository extends JpaRepository<RoomAssignment, 
      */
     @Query("SELECT ra FROM RoomAssignment ra " +
             "WHERE ra.room.unit.id = :unitId " +
-            "AND ra.startDate <= :endDate " +
-            "AND ra.endDate >= :startDate " +
+            "AND ra.startDate < :endDate " +
+            "AND ra.endDate > :startDate " +
             "AND ra.status IN :statuses")
     List<RoomAssignment> findConflictingAssignmentsForUnit(
             @Param("unitId") UUID unitId,
@@ -125,8 +125,8 @@ public interface RoomAssignmentRepository extends JpaRepository<RoomAssignment, 
      */
     @Query("SELECT COUNT(DISTINCT ra.room.id) FROM RoomAssignment ra " +
             "WHERE ra.room.unit.id = :unitId " +
-            "AND ra.startDate <= :endDate " +
-            "AND ra.endDate >= :startDate " +
+            "AND ra.startDate < :endDate " +
+            "AND ra.endDate > :startDate " +
             "AND ra.status IN :statuses")
     long countDistinctOccupiedRoomsForUnit(
             @Param("unitId") UUID unitId,
@@ -140,8 +140,8 @@ public interface RoomAssignmentRepository extends JpaRepository<RoomAssignment, 
     @Query("SELECT COUNT(DISTINCT ra.room.id) FROM RoomAssignment ra " +
             "WHERE ra.room.unit.id = :unitId " +
             "AND ra.booking.id != :bookingId " +
-            "AND ra.startDate <= :endDate " +
-            "AND ra.endDate >= :startDate " +
+            "AND ra.startDate < :endDate " +
+            "AND ra.endDate > :startDate " +
             "AND ra.status IN :statuses")
     long countDistinctOccupiedRoomsForUnitExcludingBooking(
             @Param("unitId") UUID unitId,
