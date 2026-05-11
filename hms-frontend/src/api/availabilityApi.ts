@@ -176,6 +176,16 @@ const availabilityApi = {
       `/availability/units/${unitId}/occupancy`,
       { date }
     ),
+
+  /**
+   * 8. Tape chart: rooms + real assignments + (optional) ghost-fill assignments
+   * GET /api/availability/properties/{propertyId}/tape-chart?from=...&to=...&includeGhosts=...
+   */
+  getTapeChart: (propertyId: string, from: string, to: string, includeGhosts: boolean) =>
+    api.get<import('../types').TapeChartDto>(
+      `/availability/properties/${propertyId}/tape-chart`,
+      { from, to, includeGhosts: String(includeGhosts) }
+    ),
 };
 
 export default availabilityApi;

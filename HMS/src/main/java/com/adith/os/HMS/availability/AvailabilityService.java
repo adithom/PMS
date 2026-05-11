@@ -440,4 +440,151 @@ public class AvailabilityService {
                                 booking.getStatus().toString());
         }
 
+        // ---------------------------------------------------------------------
+        //  Tape chart
+        // ---------------------------------------------------------------------
+
+        /**
+         * Tape-chart view: rooms + real assignments + ghost-fill assignments for
+         * unassigned bookings. Ghost-fill is deterministic first-fit:
+         *   1. Unassigned bookings sorted by checkIn asc, id asc.
+         *   2. Within each booking's unit, candidate rooms sorted by number ascending
+         *      (numeric-aware), inactive/maintenance rooms excluded.
+         *   3. First room with no real and no already-placed-ghost overlap on the
+         *      booking's full date range wins. If none fits, the booking is omitted
+         *      (logged) — the existing capacity checks should normally prevent this.
+         */
+        public TapeChartDto getTapeChart(UUID propertyId, LocalDate from, LocalDate to, boolean includeGhosts) {
+                if (from == null || to == null || !to.isAfter(from)) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                        "Tape-chart window requires from < to");
+                }
+                if (!propertyRepository.existsById(propertyId)) {
+                        throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Property not found");
+                }
+
+                List<Room> rooms = roomRepository.findByPropertyIdOrderByNumber(propertyId);
+
+                List<TapeChartDto.TapeChartRoomDto> roomDtos = rooms.stream()
+                                .map(r -> new TapeChartDto.TapeChartRoomDto(
+                                                r.getId(),
+                                                r.getNumber(),
+                                                r.getUnit() != null ? r.getUnit().getId() : null,
+                                                r.getUnit() != null ? r.getUnit().getName() : null,
+                                                r.getBaseRate(),
+                                                r.getStatus() != null ? r.getStatus().name() : null))
+                                .toList();
+
+                List<RoomAssignment> realAssignments = roomAssignmentRepository.findConflictingAssignments(
+                                propertyId, from, to, ACTIVE_ASSIGNMENT_STATUSES);
+
+                List<com.adith.os.HMS.roomassignment.dto.RoomAssignmentDto> realAssignmentDtos = realAssignments.stream()
+                                .map(this::toRoomAssignmentDto)
+                                .toList();
+
+                List<TapeChartDto.GhostAssignmentDto> ghostDtos = includeGhosts
+                                ? buildGhostAssignments(propertyId, from, to, realAssignments)
+                                : List.of();
+
+                return new TapeChartDto(roomDtos, realAssignmentDtos, ghostDtos);
+        }
+
+        /**
+         * Compute deterministic first-fit ghost assignments.
+         *
+         * @param realAssignments already-fetched real assignments overlapping the window;
+         *                        ghost-placement uses these to reject occupied rooms.
+         */
+        private List<TapeChartDto.GhostAssignmentDto> buildGhostAssignments(
+                        UUID propertyId,
+                        LocalDate from,
+                        LocalDate to,
+                        List<RoomAssignment> realAssignments) {
+                List<Booking> unassigned = bookingRepository.findUnassignedOverlapping(
+                                propertyId, CAPACITY_HOLD_BOOKING_STATUSES, from, to);
+                if (unassigned.isEmpty()) return List.of();
+
+                // Pre-bucket real assignments by room id for cheap overlap checks.
+                Map<UUID, List<RoomAssignment>> realByRoom = realAssignments.stream()
+                                .collect(Collectors.groupingBy(ra -> ra.getRoom().getId()));
+
+                // Track ghost placements as we go (so two ghosts don't claim the same slot).
+                Map<UUID, List<TapeChartDto.GhostAssignmentDto>> ghostsByRoom = new HashMap<>();
+                List<TapeChartDto.GhostAssignmentDto> result = new ArrayList<>();
+
+                for (Booking booking : unassigned) {
+                        Unit unit = booking.getUnit();
+                        if (unit == null) continue; // can't ghost-fill a booking with no unit; skip silently
+                        LocalDate bStart = booking.getCheckIn();
+                        LocalDate bEnd = booking.getCheckOut();
+
+                        List<Room> unitRooms = roomRepository.findByUnitId(unit.getId()).stream()
+                                        .filter(r -> r.getStatus() == RoomStatus.ACTIVE)
+                                        .sorted(Comparator.comparing(Room::getNumber, String.CASE_INSENSITIVE_ORDER))
+                                        .toList();
+
+                        Room placedIn = null;
+                        for (Room candidate : unitRooms) {
+                                if (roomHasOverlap(candidate.getId(), bStart, bEnd, realByRoom, ghostsByRoom)) continue;
+                                placedIn = candidate;
+                                break;
+                        }
+                        if (placedIn == null) continue; // no fit — defensive skip
+
+                        TapeChartDto.GhostAssignmentDto ghost = new TapeChartDto.GhostAssignmentDto(
+                                        booking.getId(),
+                                        booking.getGuest().getId(),
+                                        booking.getGuest().getFullName(),
+                                        placedIn.getId(),
+                                        placedIn.getNumber(),
+                                        unit.getId(),
+                                        unit.getName(),
+                                        booking.getReservation() != null ? booking.getReservation().getId() : null,
+                                        booking.getReservation() != null ? booking.getReservation().getGroupReference() : null,
+                                        booking.getStatus(),
+                                        bStart,
+                                        bEnd,
+                                        RoomAssignmentStatus.SCHEDULED);
+                        result.add(ghost);
+                        ghostsByRoom.computeIfAbsent(placedIn.getId(), k -> new ArrayList<>()).add(ghost);
+                }
+                return result;
+        }
+
+        private boolean roomHasOverlap(
+                        UUID roomId,
+                        LocalDate start,
+                        LocalDate end,
+                        Map<UUID, List<RoomAssignment>> realByRoom,
+                        Map<UUID, List<TapeChartDto.GhostAssignmentDto>> ghostsByRoom) {
+                List<RoomAssignment> reals = realByRoom.get(roomId);
+                if (reals != null) {
+                        for (RoomAssignment ra : reals) {
+                                if (ra.getStartDate().isBefore(end) && ra.getEndDate().isAfter(start)) return true;
+                        }
+                }
+                List<TapeChartDto.GhostAssignmentDto> ghosts = ghostsByRoom.get(roomId);
+                if (ghosts != null) {
+                        for (TapeChartDto.GhostAssignmentDto g : ghosts) {
+                                if (g.startDate().isBefore(end) && g.endDate().isAfter(start)) return true;
+                        }
+                }
+                return false;
+        }
+
+        private com.adith.os.HMS.roomassignment.dto.RoomAssignmentDto toRoomAssignmentDto(RoomAssignment ra) {
+                Room room = ra.getRoom();
+                return new com.adith.os.HMS.roomassignment.dto.RoomAssignmentDto(
+                                ra.getId(),
+                                ra.getBooking() != null ? ra.getBooking().getId() : null,
+                                room.getId(),
+                                room.getNumber(),
+                                room.getUnit() != null ? room.getUnit().getName() : null,
+                                ra.getStartDate(),
+                                ra.getEndDate(),
+                                ra.getStatus(),
+                                ra.getCreatedAt(),
+                                ra.getNotes());
+        }
+
 }

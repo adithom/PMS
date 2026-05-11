@@ -16,6 +16,12 @@ export const routes: RouteConfig[] = [
     allowedRoles: ['ADMIN', 'MANAGER', 'FRONTDESK', 'AGENCY']
   },
   {
+    path: '/reservations',
+    label: 'Reservations',
+    component: 'Reservations',
+    allowedRoles: ['ADMIN', 'MANAGER', 'FRONTDESK', 'AGENCY']
+  },
+  {
     path: '/rooms',
     label: 'Inventory',
     component: 'Rooms',

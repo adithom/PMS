@@ -13,11 +13,12 @@ import RoomShiftModal from '../components/Booking/RoomShiftModal';
 import TaskListModal from '../components/Booking/TaskListModal';
 import BookingFoliosModal from '../components/Booking/BookingFoliosModal';
 import BookingDetailModal from '../components/Booking/BookingDetailModal';
+import AssignRoomModal from '../components/Booking/AssignRoomModal';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ModalShell from '../components/ModalShell';
 import ConfirmModal from '../components/ConfirmModal';
 import { PlaneLanding, FileText, List, Users, ChevronLeft, ChevronRight } from 'lucide-react';
-import type { Property, Room, Booking, RoomAssignmentDto } from '../types';
+import type { Property, Room, Booking, RoomAssignmentDto, GhostAssignmentDto } from '../types';
 import { toDS, addDays, diffDays, shortDate, dayLabel, dateStr, fmtDate } from '../utils/dateHelpers';
 import { getRoomId } from '../utils/roomHelpers';
 import {
@@ -28,7 +29,7 @@ import {
 //todo: fix occupancy rate status bars
 
 type StatType = 'incoming' | 'inhouse' | 'checkouts' | 'all';
-type AssignmentSlot = { booking: Booking; assignment: RoomAssignmentDto };
+type AssignmentSlot = { booking: Booking; assignment: RoomAssignmentDto; isGhost?: boolean };
 
 type PendingAction = {
   title: string;
@@ -42,7 +43,7 @@ type PendingAction = {
 /* Context Menu                                                  */
 /* ────────────────────────────────────────────────────────────── */
 
-function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout, onEditBooking, onShiftRoom, onShowFolio, onViewBooking }: {
+function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout, onEditBooking, onShiftRoom, onShowFolio, onViewBooking, onAssignRoom }: {
   state: { x: number; y: number; booking: Booking } | null;
   propertyId: string;
   onClose: () => void;
@@ -52,6 +53,7 @@ function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout, onEdit
   onShiftRoom: (booking: Booking) => void;
   onShowFolio: (bookingId: string, guestName: string) => void;
   onViewBooking: (booking: Booking) => void;
+  onAssignRoom: (booking: Booking) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
@@ -83,6 +85,13 @@ function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout, onEdit
     }
 
     acts.push({ label: '⊞ Show Folio', doFn: async () => { onShowFolio(booking.id!, guestName); onClose(); } });
+
+    // Assign Room — surfaced when the booking has no specific room pinned (ghost bar
+    // on the chart, or unassigned booking opened from elsewhere). Pins via PATCH.
+    const assignableStatuses: Booking['status'][] = ['PENDING', 'CONFIRMED'];
+    if (!booking.roomId && booking.unitId && assignableStatuses.includes(booking.status)) {
+      acts.push({ label: '⊕ Assign Room…', doFn: async () => { onAssignRoom(booking); onClose(); } });
+    }
 
     switch (booking.status) {
       case 'PENDING':
@@ -269,6 +278,9 @@ export default function Bookings() {
   const [viewFolioBooking, setViewFolioBooking] = useState<{ id: string; guestName: string } | null>(null);
   const [showList, setShowList] = useState(false);
   const [showTasksModal, setShowTasksModal] = useState(false);
+  const [showUnassigned, setShowUnassigned] = useState(false);
+  const [ghosts, setGhosts] = useState<GhostAssignmentDto[]>([]);
+  const [assignRoomBooking, setAssignRoomBooking] = useState<Booking | null>(null);
   
   const [listType, setListType] = useState<StatType>('all');
   const [pfRoom, setPfRoom] = useState<Room | null>(null);
@@ -371,6 +383,24 @@ export default function Bookings() {
     fetchBuffer(selectedPropId, winStartStr, winEndStr);
   }, [selectedPropId, winStartStr, winEndStr, fetchBuffer]);
 
+  // Ghost fetch: pull deterministic first-fit placements for unassigned bookings.
+  // Only runs when the toggle is on; tape-chart endpoint omits ghosts otherwise.
+  useEffect(() => {
+    if (!selectedPropId) return;
+    if (!showUnassigned) { setGhosts([]); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const tc = await availabilityApi.getTapeChart(selectedPropId, winStartStr, winEndStr, true);
+        if (!cancelled) setGhosts(tc.ghostAssignments || []);
+      } catch (e) {
+        console.error('[ghost] fetch failed', e);
+        if (!cancelled) setGhosts([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedPropId, winStartStr, winEndStr, showUnassigned]);
+
   useEffect(() => { setBufferRange(null); setBookingBuffer([]); }, [selectedPropId]);
   useEffect(() => { assignmentCacheRef.current.clear(); setAssignmentMap(new Map()); }, [selectedPropId]);
 
@@ -424,8 +454,46 @@ export default function Bookings() {
         });
       }
     }
+    // Ghost-fill: server-side first-fit placements for unassigned bookings.
+    // Synthesised slots get isGhost=true so the bar render can apply dashed border + 80% opacity.
+    if (showUnassigned) {
+      for (const g of ghosts) {
+        const synthBooking: Booking = {
+          id: g.bookingId,
+          propertyId: selectedPropId || '',
+          guestId: g.guestId,
+          guestName: g.guestName,
+          unitId: g.unitId,
+          unitName: g.unitName,
+          status: g.bookingStatus,
+          checkIn: g.startDate,
+          checkOut: g.endDate,
+          adults: 0,
+          children: 0,
+          currency: 'INR',
+          totalPrice: 0,
+          paidAmount: 0,
+          isTwinBed: false,
+          reservationId: g.reservationId,
+        };
+        (m[g.roomNumber] ??= []).push({
+          booking: synthBooking,
+          assignment: {
+            id: `ghost-${g.bookingId}-${g.roomId}`,
+            bookingId: g.bookingId,
+            roomId: g.roomId,
+            roomNumber: g.roomNumber,
+            unitName: g.unitName,
+            startDate: g.startDate,
+            endDate: g.endDate,
+            status: g.status,
+          },
+          isGhost: true,
+        });
+      }
+    }
     return m;
-  }, [rangeBookings, assignmentMap]);
+  }, [rangeBookings, assignmentMap, showUnassigned, ghosts, selectedPropId]);
 
   const toggle = useCallback((t: string) => setCollapsed(p => { const n = new Set(p); n.has(t) ? n.delete(t) : n.add(t); return n; }), []);
   const openForm = useCallback((room: Room | null, ci: string, co: string) => {
@@ -510,6 +578,15 @@ export default function Bookings() {
                 {properties.map(p => <option key={p.id} value={p.id}>{p.name} ({p.code})</option>)}
               </select>
             </div>
+            <label className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showUnassigned}
+                onChange={e => setShowUnassigned(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-600">Show unassigned</span>
+            </label>
             <button type="button" className={btnSecondary} onClick={() => setShowTasksModal(true)}>
               <List className="h-4 w-4 text-emerald-500" />
               Daily Tasks
@@ -658,7 +735,7 @@ export default function Bookings() {
                             })}
 
                             {rSlots.map(slot => {
-                              const { booking: bk, assignment } = slot;
+                              const { booking: bk, assignment, isGhost } = slot;
                               const ci = dateStr(assignment.startDate);
                               const co = dateStr(assignment.endDate);
                               const isNoShow = bk.status === 'NO_SHOW';
@@ -694,7 +771,9 @@ export default function Bookings() {
                               return (
                                 <div key={assignment.id}
                                   className={cn(
-                                    'absolute flex overflow-hidden shadow-sm cursor-pointer transition-all hover:shadow-md hover:brightness-95 border',
+                                    'absolute flex overflow-hidden shadow-sm cursor-pointer transition-all hover:shadow-md hover:brightness-95',
+                                    // Ghost (unassigned) bars get a dashed border and reduced opacity.
+                                    isGhost ? 'border-2 border-dashed opacity-80' : 'border',
                                     isNoShow ? 'bg-rose-100 border-rose-300' : 'bg-white',
                                     bk.status === 'CHECKED_IN' ? 'border-green-300' :
                                     bk.status === 'CONFIRMED' ? 'border-blue-300' :
@@ -876,7 +955,8 @@ export default function Bookings() {
           onAction={refresh} onEarlyCheckout={setEarlyCheckoutBookingId}
           onEditBooking={setEditBooking} onShiftRoom={setShiftRoomBooking}
           onShowFolio={(id, name) => setViewFolioBooking({ id, guestName: name })}
-          onViewBooking={setViewBooking} />
+          onViewBooking={setViewBooking}
+          onAssignRoom={setAssignRoomBooking} />
       )}
       {viewBooking && selectedPropId && (
         <BookingDetailModal
@@ -885,6 +965,17 @@ export default function Bookings() {
           onClose={() => setViewBooking(null)}
           onEditBooking={(b) => { setViewBooking(null); setEditBooking(b); }}
           onOpenFolio={(id, name) => { setViewBooking(null); setViewFolioBooking({ id, guestName: name }); }}
+        />
+      )}
+      {assignRoomBooking && selectedPropId && assignRoomBooking.id && assignRoomBooking.unitId && (
+        <AssignRoomModal
+          propertyId={selectedPropId}
+          bookingId={assignRoomBooking.id}
+          unitId={assignRoomBooking.unitId}
+          checkIn={dateStr(assignRoomBooking.checkIn)}
+          checkOut={dateStr(assignRoomBooking.checkOut)}
+          onClose={() => setAssignRoomBooking(null)}
+          onAssigned={() => { setAssignRoomBooking(null); refresh(); }}
         />
       )}
     </div>

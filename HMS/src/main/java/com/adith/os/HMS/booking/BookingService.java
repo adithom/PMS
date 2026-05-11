@@ -863,6 +863,11 @@ public class BookingService {
 
     @Transactional
     public BookingDto updateBookingStatus(UUID propertyId, UUID bookingId, BookingStatus status) {
+        return updateBookingStatus(propertyId, bookingId, status, null);
+    }
+
+    @Transactional
+    public BookingDto updateBookingStatus(UUID propertyId, UUID bookingId, BookingStatus status, String reason) {
         if (propertyId == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Property ID is required");
         }
@@ -887,6 +892,9 @@ public class BookingService {
 
         try {
             booking.setStatus(status);
+            if (status == BookingStatus.CANCELLED && reason != null && !reason.isBlank()) {
+                booking.setCancellationReason(reason.trim());
+            }
 
             if (status == BookingStatus.CANCELLED || status == BookingStatus.NO_SHOW) {
                 roomAssignmentService.cancelAssignmentsForBooking(bookingId);

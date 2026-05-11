@@ -109,7 +109,11 @@ public class BookingMapper {
                 booking.getExtraBedRatePerNight(),
                 booking.getExtraBedChargeCode(),
                 resolveNightlyRate(booking),
-                resolveNightlyRateExTax(booking)
+                resolveNightlyRateExTax(booking),
+                booking.getCancellationReason(),
+                booking.getRescheduleReason(),
+                booking.getOriginalCheckIn(),
+                booking.getOriginalCheckOut()
         );
     }
 

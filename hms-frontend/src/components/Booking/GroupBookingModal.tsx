@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, Building2 } from 'lucide-react';
-import groupBookingApi from '../../api/groupBookingApi';
-import type { GroupBookingCreationDto, GroupRoomRequestDto } from '../../api/groupBookingApi';
+import reservationApi from '../../api/reservationApi';
+import type { GroupBookingCreationDto, GroupRoomRequestDto } from '../../api/reservationApi';
 import guestApi from '../../api/guestApi';
 import unitApi from '../../api/unitApi';
 import roomApi from '../../api/roomApi';
@@ -161,7 +161,7 @@ export default function GroupBookingModal({ propertyId, onClose, onSuccess }: Gr
         }))
       };
 
-      await groupBookingApi.createGroupBooking(propertyId, payload);
+      await reservationApi.createReservation(propertyId, payload);
       onSuccess();
     } catch (err: any) {
       setError(err.message || 'Failed to create group booking.');

@@ -159,7 +159,7 @@ public interface RoomAssignmentRepository extends JpaRepository<RoomAssignment, 
     @Query("SELECT DISTINCT ra FROM RoomAssignment ra " +
             "JOIN FETCH ra.booking b " +
             "JOIN FETCH b.property " +
-            "LEFT JOIN FETCH b.folios " +
+            "LEFT JOIN FETCH b.folio " +
             "JOIN FETCH ra.room " +
             "WHERE ra.startDate <= :date " +
             "AND ra.endDate > :date " +

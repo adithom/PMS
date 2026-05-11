@@ -119,24 +119,24 @@ const billingApi = {
   },
 
   // Group Booking Bills
-  getGroupBills: async (propertyId: string, parentBookingId: string): Promise<GroupBill[]> => {
-    return apiClient.get(`/properties/${propertyId}/group-bookings/${parentBookingId}/bills`);
+  getGroupBills: async (propertyId: string, reservationId: string): Promise<GroupBill[]> => {
+    return apiClient.get(`/properties/${propertyId}/reservations/${reservationId}/bills`);
   },
 
-  generateGroupBills: async (propertyId: string, parentBookingId: string, guestGstNumber?: string): Promise<GroupMultiBillDto> => {
+  generateGroupBills: async (propertyId: string, reservationId: string, guestGstNumber?: string): Promise<GroupMultiBillDto> => {
     const params = new URLSearchParams();
     if (guestGstNumber) params.append('guestGstNumber', guestGstNumber);
-    return apiClient.post(`/properties/${propertyId}/group-bookings/${parentBookingId}/bills/generate?${params.toString()}`);
+    return apiClient.post(`/properties/${propertyId}/reservations/${reservationId}/bills/generate?${params.toString()}`);
   },
 
-  voidGroupBill: async (propertyId: string, parentBookingId: string, groupBillId: string, reason: string): Promise<GroupBill> => {
+  voidGroupBill: async (propertyId: string, reservationId: string, groupBillId: string, reason: string): Promise<GroupBill> => {
     const params = new URLSearchParams({ reason });
-    return apiClient.post(`/properties/${propertyId}/group-bookings/${parentBookingId}/bills/${groupBillId}/void?${params.toString()}`);
+    return apiClient.post(`/properties/${propertyId}/reservations/${reservationId}/bills/${groupBillId}/void?${params.toString()}`);
   },
 
-  voidAllGroupBills: async (propertyId: string, parentBookingId: string, reason: string): Promise<GroupBill[]> => {
+  voidAllGroupBills: async (propertyId: string, reservationId: string, reason: string): Promise<GroupBill[]> => {
     const params = new URLSearchParams({ reason });
-    return apiClient.post(`/properties/${propertyId}/group-bookings/${parentBookingId}/bills/void-all?${params.toString()}`);
+    return apiClient.post(`/properties/${propertyId}/reservations/${reservationId}/bills/void-all?${params.toString()}`);
   },
 
   // Get all bills (including voided) for a folio
@@ -150,8 +150,8 @@ const billingApi = {
   },
 
   // Get a fresh pre-signed download URL for an existing group bill
-  getGroupBillDownloadUrl: async (propertyId: string, parentBookingId: string, groupBillId: string): Promise<string> => {
-    return apiClient.get(`/properties/${propertyId}/group-bookings/${parentBookingId}/bills/${groupBillId}/download-url`);
+  getGroupBillDownloadUrl: async (propertyId: string, reservationId: string, groupBillId: string): Promise<string> => {
+    return apiClient.get(`/properties/${propertyId}/reservations/${reservationId}/bills/${groupBillId}/download-url`);
   },
 
   // Global bill ledger — returns one row per generation batch

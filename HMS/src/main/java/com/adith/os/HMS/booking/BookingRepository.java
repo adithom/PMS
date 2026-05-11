@@ -272,6 +272,19 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
             @Param("endDate") java.time.LocalDate endDate
     );
 
+    // Unassigned bookings whose [checkIn, checkOut) overlaps the [from, to) window.
+    // Used by the tape-chart ghost-fill.
+    @Query("SELECT b FROM Booking b WHERE b.property.id = :propertyId AND b.room IS NULL " +
+            "AND b.status IN :statuses " +
+            "AND b.checkIn < :to AND b.checkOut > :from " +
+            "ORDER BY b.checkIn ASC, b.id ASC")
+    List<Booking> findUnassignedOverlapping(
+            @Param("propertyId") UUID propertyId,
+            @Param("statuses") List<BookingStatus> statuses,
+            @Param("from") java.time.LocalDate from,
+            @Param("to") java.time.LocalDate to
+    );
+
     @Query("SELECT COUNT(b) FROM Booking b WHERE b.reservation.id = :reservationId")
     long countByReservationId(@Param("reservationId") UUID reservationId);
 

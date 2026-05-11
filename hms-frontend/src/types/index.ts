@@ -92,6 +92,7 @@ export interface Booking {
   isFullyPaid?: boolean;
   specialRequests?: string;
   createdAt?: string;
+  reservationId?: string;
   isTwinBed: boolean;
   referenceNumber?: string;
   travelAgentId?: string;
@@ -106,6 +107,45 @@ export interface Booking {
   extraBedChargeCode?: 'ROOM_RENT' | 'MISC';
   nightlyRate?: number;
   nightlyRateExTax?: number;
+  // Audit fields surfaced in the Reservations Detail modal.
+  cancellationReason?: string;
+  rescheduleReason?: string;
+  originalCheckIn?: string;
+  originalCheckOut?: string;
+}
+
+// Ghost (deterministic first-fit, server-computed) bar on the tape chart for an
+// unassigned booking. Rendered with dashed border + 80% opacity. Booking.roomId
+// stays null in the DB; ghosts are pure presentation, recomputed every fetch.
+export interface GhostAssignmentDto {
+  bookingId: string;
+  guestId: string;
+  guestName: string;
+  roomId: string;
+  roomNumber: string;
+  unitId: string;
+  unitName: string;
+  reservationId?: string;
+  groupReference?: string;
+  bookingStatus: BookingStatus;
+  startDate: string;
+  endDate: string;
+  status: 'SCHEDULED' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+}
+
+export interface TapeChartRoomDto {
+  id: string;
+  number: string;
+  unitId: string | null;
+  unitName: string | null;
+  baseRate: number;
+  status: RoomStatus;
+}
+
+export interface TapeChartDto {
+  rooms: TapeChartRoomDto[];
+  realAssignments: RoomAssignmentDto[];
+  ghostAssignments: GhostAssignmentDto[];
 }
 
 export interface TravelAgent {

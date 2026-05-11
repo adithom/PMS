@@ -92,7 +92,13 @@ public record BookingDto(
         ChargeCode extraBedChargeCode,
 
         BigDecimal nightlyRate,
-        BigDecimal nightlyRateExTax
+        BigDecimal nightlyRateExTax,
+
+        // Audit fields surfaced in the Reservations Detail modal.
+        String cancellationReason,
+        String rescheduleReason,
+        @JsonFormat(pattern = "yyyy-MM-dd") LocalDate originalCheckIn,
+        @JsonFormat(pattern = "yyyy-MM-dd") LocalDate originalCheckOut
 ) {
     // Compact constructor for validation and defaults
     public BookingDto {

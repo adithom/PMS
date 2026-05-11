@@ -10,6 +10,7 @@ import { getRoutesForRole, getDefaultRouteForRole } from './config/roleConfig';
 // Import your page components
 import Rooms from './pages/Rooms';
 import Bookings from './pages/Bookings';
+import Reservations from './pages/Reservations';
 import Guests from './pages/Guests';
 import PosInterface from './pages/PosInterface';
 import PosManagement from './pages/PosManagement';
@@ -72,6 +73,18 @@ function AppRoutes() {
             <>
               <Navigation allowedRoutes={allowedRoutes} />
               <Bookings />
+            </>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/reservations"
+        element={
+          <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER', 'FRONTDESK', 'AGENCY']}>
+            <>
+              <Navigation allowedRoutes={allowedRoutes} />
+              <Reservations />
             </>
           </ProtectedRoute>
         }

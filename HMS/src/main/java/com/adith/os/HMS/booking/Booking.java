@@ -130,6 +130,19 @@ public class Booking {
     @Column(name = "extra_bed_charge_code")
     private ChargeCode extraBedChargeCode;
 
+    // Audit fields populated when status flips to CANCELLED / on a future reschedule.
+    @Column(name = "cancellation_reason", length = 500)
+    private String cancellationReason;
+
+    @Column(name = "reschedule_reason", length = 500)
+    private String rescheduleReason;
+
+    @Column(name = "original_check_in")
+    private LocalDate originalCheckIn;
+
+    @Column(name = "original_check_out")
+    private LocalDate originalCheckOut;
+
     @PrePersist
     protected void onCreate() {
         if (createdAt == null) {
@@ -328,6 +341,18 @@ public class Booking {
 
     public ChargeCode getExtraBedChargeCode() { return extraBedChargeCode; }
     public void setExtraBedChargeCode(ChargeCode extraBedChargeCode) { this.extraBedChargeCode = extraBedChargeCode; }
+
+    public String getCancellationReason() { return cancellationReason; }
+    public void setCancellationReason(String cancellationReason) { this.cancellationReason = cancellationReason; }
+
+    public String getRescheduleReason() { return rescheduleReason; }
+    public void setRescheduleReason(String rescheduleReason) { this.rescheduleReason = rescheduleReason; }
+
+    public LocalDate getOriginalCheckIn() { return originalCheckIn; }
+    public void setOriginalCheckIn(LocalDate originalCheckIn) { this.originalCheckIn = originalCheckIn; }
+
+    public LocalDate getOriginalCheckOut() { return originalCheckOut; }
+    public void setOriginalCheckOut(LocalDate originalCheckOut) { this.originalCheckOut = originalCheckOut; }
 
     // Calculated fields - these compute values dynamically
 
