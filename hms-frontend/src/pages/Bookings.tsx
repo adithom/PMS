@@ -17,7 +17,7 @@ import AssignRoomModal from '../components/Booking/AssignRoomModal';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ModalShell from '../components/ModalShell';
 import ConfirmModal from '../components/ConfirmModal';
-import { PlaneLanding, FileText, List, Users, ChevronLeft, ChevronRight } from 'lucide-react';
+import { PlaneLanding, FileText, List, Users, ChevronLeft, ChevronRight, BedSingle } from 'lucide-react';
 import type { Property, Room, Booking, RoomAssignmentDto, GhostAssignmentDto } from '../types';
 import { toDS, addDays, diffDays, shortDate, dayLabel, dateStr, fmtDate } from '../utils/dateHelpers';
 import { getRoomId } from '../utils/roomHelpers';
@@ -830,6 +830,9 @@ export default function Bookings() {
                                       <span className="text-[11px] font-bold truncate flex-1 min-w-0">{guestName}</span>
                                       {bk.specialRequests && (
                                         <FileText className="w-[10px] h-[10px] shrink-0 opacity-75" title={bk.specialRequests} />
+                                      )}
+                                      {bk.isTwinBed && (
+                                        <BedSingle className="w-[10px] h-[10px] shrink-0 opacity-75" title="Twin Bed" />
                                       )}
                                       {bookingBleedsRight && <span className="text-[10px] opacity-70 shrink-0">▸</span>}
                                       {isShifted && isCompleted && !bookingBleedsRight && (

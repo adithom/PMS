@@ -5,9 +5,23 @@ import propertyApi from '../api/propertyApi';
 import type { Property } from '../types';
 import ReservationsList from '../components/Reservation/ReservationsList';
 import ReservationCalendar from '../components/Reservation/ReservationCalendar';
+import MobileReservationsView from '../components/Reservation/MobileReservationsView';
 import ReservationDetailModal from '../components/Reservation/ReservationDetailModal';
 import GroupBookingModal from '../components/Booking/GroupBookingModal';
 import AssignRoomModal from '../components/Booking/AssignRoomModal';
+import BookingForm from '../components/Booking/BookingForm';
+import ModalShell from '../components/ModalShell';
+
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 639px)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 639px)');
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+  return isMobile;
+}
 
 function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(' ');
@@ -19,12 +33,14 @@ const btnSecondary = 'inline-flex items-center gap-2 rounded-lg border border-sl
 type Mode = 'calendar' | 'list';
 
 export default function Reservations() {
+  const isMobile = useIsMobile();
   const { user } = useAuth();
   const [properties, setProperties] = useState<Property[]>([]);
   const [selectedPropId, setSelectedPropId] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>('calendar');
   const [openReservationId, setOpenReservationId] = useState<string | null>(null);
-  const [showCreate, setShowCreate] = useState(false);
+  const [showGroupModal, setShowGroupModal] = useState(false);
+  const [showForm, setShowForm] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [assignRoomCtx, setAssignRoomCtx] = useState<{ id: string; unitId: string; checkIn: string; checkOut: string } | null>(null);
 
@@ -44,41 +60,40 @@ export default function Reservations() {
 
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-slate-50 pb-20">
-      <div className="mx-auto max-w-[1800px] px-8 pt-8 sm:px-12 lg:px-16">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-indigo-600">Reservations Desk</p>
-            <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">Reservations</h1>
+      <div className={cn('mx-auto max-w-[1800px] pt-6 sm:pt-8', isMobile ? 'px-3' : 'px-8 sm:px-12 lg:px-16')}>
+        {/* Header */}
+        {isMobile ? (
+          <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Property</span>
+            <select value={selectedPropId ?? ''} onChange={e => setSelectedPropId(e.target.value || null)}
+              className="border-none bg-transparent text-sm font-semibold text-slate-900 outline-none">
+              {properties.map(p => <option key={p.id} value={p.id}>{p.name} ({p.code})</option>)}
+            </select>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Property</span>
-              <select value={selectedPropId ?? ''} onChange={e => setSelectedPropId(e.target.value || null)}
-                className="border-none bg-transparent text-sm font-semibold text-slate-900 outline-none">
-                {properties.map(p => <option key={p.id} value={p.id}>{p.name} ({p.code})</option>)}
-              </select>
+        ) : (
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-indigo-600">Reservations Desk</p>
+              <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">Reservations</h1>
             </div>
-            <button type="button" className={btnPrimary} onClick={() => setShowCreate(true)}>
-              <Users className="h-4 w-4" />New Reservation
-            </button>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Property</span>
+                <select value={selectedPropId ?? ''} onChange={e => setSelectedPropId(e.target.value || null)}
+                  className="border-none bg-transparent text-sm font-semibold text-slate-900 outline-none">
+                  {properties.map(p => <option key={p.id} value={p.id}>{p.name} ({p.code})</option>)}
+                </select>
+              </div>
+              <button type="button" className={btnSecondary} onClick={() => setShowGroupModal(true)}>
+                <Users className="h-4 w-4 text-indigo-500" />
+                New Group Booking
+              </button>
+              <button type="button" className={btnPrimary} onClick={() => setShowForm(true)}>
+                + New Booking
+              </button>
+            </div>
           </div>
-        </div>
-
-        {/* Mode switcher */}
-        <div className="mt-6 flex items-center gap-0.5 rounded-xl border border-slate-200 bg-white p-1 shadow-sm w-fit">
-          <button type="button"
-            className={cn('flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all',
-              mode === 'calendar' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100')}
-            onClick={() => setMode('calendar')}>
-            <Calendar className="h-3.5 w-3.5" />Calendar
-          </button>
-          <button type="button"
-            className={cn('flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all',
-              mode === 'list' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100')}
-            onClick={() => setMode('list')}>
-            <List className="h-3.5 w-3.5" />List
-          </button>
-        </div>
+        )}
 
         <div className="mt-6">
           {!selectedPropId && (
@@ -86,20 +101,50 @@ export default function Reservations() {
               Select a property to view reservations.
             </div>
           )}
-          {selectedPropId && mode === 'calendar' && (
-            <ReservationCalendar
-              key={`cal-${selectedPropId}-${refreshKey}`}
-              propertyId={selectedPropId}
-              onOpenReservation={id => setOpenReservationId(id)}
-              onAssignRoom={ctx => setAssignRoomCtx(ctx)}
-            />
-          )}
-          {selectedPropId && mode === 'list' && (
-            <ReservationsList
-              key={`list-${selectedPropId}-${refreshKey}`}
+
+          {/* Mobile view */}
+          {selectedPropId && isMobile && (
+            <MobileReservationsView
+              key={`mobile-${selectedPropId}-${refreshKey}`}
               propertyId={selectedPropId}
               onOpen={id => setOpenReservationId(id)}
+              onNewBooking={() => setShowForm(true)}
             />
+          )}
+
+          {/* Desktop view */}
+          {selectedPropId && !isMobile && (
+            <>
+              <div className="mb-6 flex items-center gap-0.5 rounded-xl border border-slate-200 bg-white p-1 shadow-sm w-fit">
+                <button type="button"
+                  className={cn('flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all',
+                    mode === 'calendar' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100')}
+                  onClick={() => setMode('calendar')}>
+                  <Calendar className="h-3.5 w-3.5" />Calendar
+                </button>
+                <button type="button"
+                  className={cn('flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all',
+                    mode === 'list' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100')}
+                  onClick={() => setMode('list')}>
+                  <List className="h-3.5 w-3.5" />List
+                </button>
+              </div>
+              {mode === 'calendar' && (
+                <ReservationCalendar
+                  key={`cal-${selectedPropId}-${refreshKey}`}
+                  propertyId={selectedPropId}
+                  onOpenReservation={id => setOpenReservationId(id)}
+                  onAssignRoom={ctx => setAssignRoomCtx(ctx)}
+                />
+              )}
+              {mode === 'list' && (
+                <ReservationsList
+                  key={`list-${selectedPropId}-${refreshKey}`}
+                  propertyId={selectedPropId}
+                  onOpen={id => setOpenReservationId(id)}
+                />
+              )}
+            </>
           )}
         </div>
       </div>
@@ -112,12 +157,21 @@ export default function Reservations() {
           onUpdated={() => setRefreshKey(k => k + 1)}
         />
       )}
-      {showCreate && selectedPropId && (
+      {showGroupModal && selectedPropId && (
         <GroupBookingModal
           propertyId={selectedPropId}
-          onClose={() => setShowCreate(false)}
-          onSuccess={() => { setShowCreate(false); setRefreshKey(k => k + 1); }}
+          onClose={() => setShowGroupModal(false)}
+          onSuccess={() => { setShowGroupModal(false); setRefreshKey(k => k + 1); }}
         />
+      )}
+      {showForm && selectedPropId && (
+        <ModalShell title="Create Booking" size="wide" onClose={() => setShowForm(false)}>
+          <BookingForm
+            propertyId={selectedPropId}
+            onSuccess={() => { setShowForm(false); setRefreshKey(k => k + 1); }}
+            onCancel={() => setShowForm(false)}
+          />
+        </ModalShell>
       )}
       {assignRoomCtx && selectedPropId && (
         <AssignRoomModal
