@@ -9,7 +9,6 @@ export interface PosLocation {
   openingTime?: string;
   closingTime?: string;
   isActive: boolean;
-  currentWalkInFolioId?: string;
 }
 
 export interface PosItemCategory {
@@ -188,6 +187,21 @@ export interface OrderSummary {
   orderCount: number;
   totalRevenue: number;
   avgOrderValue: number;
+}
+
+export interface PosTicketHistory {
+  id: string;
+  invoiceNumber: string | null;
+  guestName: string;
+  roomNumber: string | null;
+  mealType: MealType;
+  mealPlanCovered: boolean;
+  closedAt: string;
+  subtotal: number;
+  taxAmount: number;
+  totalAmount: number;
+  createdBy: string;
+  items: PosOrderItem[];
 }
 
 // Local cart state — not sent to API directly

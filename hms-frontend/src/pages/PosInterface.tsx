@@ -1,14 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import posApi from '../api/posApi';
-import folioApi from '../api/folioApi';
 import ProductCard from '../components/Pos/ProductCard';
-import GuestSearchModal from '../components/Pos/GuestSearchModal';
 import OpenTicketModal from '../components/Pos/OpenTicketModal';
 import ConfirmModal from '../components/ConfirmModal';
-import type { PosLocation, PosProduct, CartEntry, PosSettleDto, PosTicket, MealType } from '../types/pos';
-import type { Booking } from '../types';
-import type { FolioDto } from '../api/folioApi';
+import type { PosLocation, PosProduct, CartEntry, PosTicket } from '../types/pos';
 
 // ─── SettleNowModal ──────────────────────────────────────────────────────────
 
@@ -22,70 +18,36 @@ interface SettleNowModalProps {
   onSuccess: () => void;
 }
 
-function SettleNowModal({ isOpen, onClose, cart, location, propertyId, orderDiscountRate, onSuccess }: SettleNowModalProps) {
-  const [tab, setTab] = useState<'walk-in' | 'hotel-guest'>('walk-in');
-  const [showGuestPicker, setShowGuestPicker] = useState(false);
-  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
-  const [openFolios, setOpenFolios] = useState<FolioDto[]>([]);
-  const [selectedFolioId, setSelectedFolioId] = useState<string>('');
-  const [paymentMethod, setPaymentMethod] = useState<PosSettleDto['paymentMethod']>('CASH');
-  const [transactionId, setTransactionId] = useState('');
-  const [cardLastFour, setCardLastFour] = useState('');
-  const [upiId, setUpiId] = useState('');
-  const [notes, setNotes] = useState('');
+function SettleNowModal({ isOpen, onClose, cart, location, propertyId: _propertyId, orderDiscountRate, onSuccess }: SettleNowModalProps) {
+  const [paymentMethod, setPaymentMethod] = useState('CASH');
+  const [transactionReference, setTransactionReference] = useState('');
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
-      setTab('walk-in');
-      setSelectedBooking(null);
-      setOpenFolios([]);
-      setSelectedFolioId('');
       setPaymentMethod('CASH');
-      setTransactionId('');
-      setCardLastFour('');
-      setUpiId('');
-      setNotes('');
+      setTransactionReference('');
       setError(null);
     }
   }, [isOpen]);
 
-  const handleSelectBooking = async (booking: Booking) => {
-    setShowGuestPicker(false);
-    setSelectedBooking(booking);
-    setError(null);
-    try {
-      const folios = await folioApi.getAllFoliosByBooking(propertyId, booking.id!);
-      const open = folios.filter(f => f.status === 'OPEN');
-      setOpenFolios(open);
-      setSelectedFolioId(open[0]?.id ?? '');
-    } catch {
-      setError('Failed to load folios for this booking');
-    }
-  };
-
   const handleConfirm = async () => {
-    if (tab === 'hotel-guest' && !selectedFolioId) {
-      setError('Please select a guest and folio');
-      return;
-    }
     setProcessing(true);
     setError(null);
     try {
-      const order = await posApi.createOrder({
+      const ticket = await posApi.openTicket({
         posLocationId: location.id,
+        guestName: 'Walk-in',
+        mealType: (() => { const h = new Date().getHours(); return h < 11 ? 'BREAKFAST' : h < 15 ? 'LUNCH' : 'DINNER'; })() as import('../types/pos').MealType,
+      });
+      await posApi.addOrderToTicket(ticket.id, {
         items: cart.map(e => ({ posProductId: e.product.id, quantity: e.quantity })),
         discountRate: orderDiscountRate > 0 ? orderDiscountRate : undefined,
       });
-      await posApi.settleOrder(order.id, {
-        walkIn: tab === 'walk-in',
-        folioId: tab === 'hotel-guest' ? selectedFolioId : undefined,
+      await posApi.closeTicket(ticket.id, {
         paymentMethod,
-        transactionId: transactionId || undefined,
-        cardLastFour: cardLastFour || undefined,
-        upiId: upiId || undefined,
-        notes: notes || undefined,
+        transactionReference: transactionReference || undefined,
       });
       onSuccess();
     } catch {
@@ -103,13 +65,13 @@ function SettleNowModal({ isOpen, onClose, cart, location, propertyId, orderDisc
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-          <h3 className="text-lg font-semibold text-gray-900">Settle Order</h3>
+          <h3 className="text-lg font-semibold text-gray-900">Settle — Walk-in</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-xl leading-none">&times;</button>
         </div>
 
-        <div className="px-6 py-5 space-y-5 max-h-[70vh] overflow-y-auto">
+        <div className="px-6 py-5 space-y-5">
           <div className="bg-gray-50 rounded-xl p-4 flex justify-between items-center">
             <div>
               <div className="text-xs text-gray-500 mb-0.5">{cart.reduce((s, e) => s + e.quantity, 0)} items</div>
@@ -118,53 +80,9 @@ function SettleNowModal({ isOpen, onClose, cart, location, propertyId, orderDisc
             <div className="text-xs text-gray-400 uppercase tracking-wide font-medium">Order Total</div>
           </div>
 
-          <div className="flex rounded-xl border border-gray-200 p-1 bg-gray-50 gap-1">
-            <button
-              className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${tab === 'walk-in' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-              onClick={() => setTab('walk-in')}
-            >Walk-in</button>
-            <button
-              className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${tab === 'hotel-guest' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-              onClick={() => setTab('hotel-guest')}
-            >Hotel Guest</button>
-          </div>
-
-          {tab === 'hotel-guest' && (
-            <div className="space-y-3">
-              {selectedBooking ? (
-                <div className="border border-emerald-200 rounded-xl p-3.5 bg-emerald-50 flex justify-between items-center">
-                  <div>
-                    <div className="font-medium text-sm text-emerald-900">{selectedBooking.guestName}</div>
-                    <div className="text-xs text-emerald-600 mt-0.5">Room {selectedBooking.roomNumber || 'Unassigned'}</div>
-                  </div>
-                  <button onClick={() => { setSelectedBooking(null); setOpenFolios([]); setSelectedFolioId(''); }}
-                    className="text-xs text-emerald-700 hover:text-emerald-900 font-medium underline transition-colors">Change</button>
-                </div>
-              ) : (
-                <button onClick={() => setShowGuestPicker(true)}
-                  className="w-full py-3 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-500 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50/50 transition-all font-medium">
-                  + Select Hotel Guest
-                </button>
-              )}
-              {openFolios.length > 1 && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Select Folio</label>
-                  <select value={selectedFolioId} onChange={e => setSelectedFolioId(e.target.value)} className={inputCls}>
-                    {openFolios.map(f => (
-                      <option key={f.id} value={f.id}>{f.folioNumber || f.id.slice(0, 8)} — {f.folioType}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              {selectedBooking && openFolios.length === 0 && (
-                <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg p-3">No open folios found for this booking.</div>
-              )}
-            </div>
-          )}
-
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Payment Method</label>
-            <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value as PosSettleDto['paymentMethod'])} className={inputCls}>
+            <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} className={inputCls}>
               <option value="CASH">Cash</option>
               <option value="CREDIT_CARD">Credit Card</option>
               <option value="DEBIT_CARD">Debit Card</option>
@@ -173,32 +91,15 @@ function SettleNowModal({ isOpen, onClose, cart, location, propertyId, orderDisc
             </select>
           </div>
 
-          {(paymentMethod === 'CREDIT_CARD' || paymentMethod === 'DEBIT_CARD') && (
+          {paymentMethod !== 'CASH' && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Card Last 4 Digits</label>
-              <input type="text" maxLength={4} placeholder="1234" value={cardLastFour}
-                onChange={e => setCardLastFour(e.target.value.replace(/\D/g, ''))} className={inputCls} />
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                {paymentMethod === 'UPI' ? 'UPI Reference' : 'Transaction Reference'}
+              </label>
+              <input type="text" placeholder={paymentMethod === 'UPI' ? 'guest@upi or txn ref' : 'TXN123456'}
+                value={transactionReference} onChange={e => setTransactionReference(e.target.value)} className={inputCls} />
             </div>
           )}
-          {paymentMethod === 'UPI' && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">UPI ID / Reference</label>
-              <input type="text" placeholder="guest@upi" value={upiId} onChange={e => setUpiId(e.target.value)} className={inputCls} />
-            </div>
-          )}
-          {paymentMethod !== 'CASH' && paymentMethod !== 'UPI' && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Transaction ID</label>
-              <input type="text" placeholder="TXN123456" value={transactionId} onChange={e => setTransactionId(e.target.value)} className={inputCls} />
-            </div>
-          )}
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Notes <span className="text-gray-400 font-normal">(optional)</span>
-            </label>
-            <input type="text" placeholder="Any payment notes..." value={notes} onChange={e => setNotes(e.target.value)} className={inputCls} />
-          </div>
 
           {error && <div className="bg-red-50 border border-red-100 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>}
         </div>
@@ -208,27 +109,17 @@ function SettleNowModal({ isOpen, onClose, cart, location, propertyId, orderDisc
             className="px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors">
             Cancel
           </button>
-          <button onClick={handleConfirm} disabled={processing || (tab === 'hotel-guest' && !selectedFolioId)}
+          <button onClick={handleConfirm} disabled={processing}
             className="px-5 py-2.5 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm">
             {processing ? 'Processing...' : 'Confirm Payment'}
           </button>
         </div>
       </div>
-
-      <GuestSearchModal isOpen={showGuestPicker} onClose={() => setShowGuestPicker(false)}
-        onSelectBooking={handleSelectBooking} propertyId={propertyId} />
     </div>
   );
 }
 
 // ─── Main PosInterface ───────────────────────────────────────────────────────
-
-function defaultMealType(): MealType {
-  const h = new Date().getHours();
-  if (h < 11) return 'BREAKFAST';
-  if (h < 15) return 'LUNCH';
-  return 'DINNER';
-}
 
 export default function PosInterface() {
   const { user } = useAuth();
@@ -245,13 +136,9 @@ export default function PosInterface() {
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [orderDiscountRate, setOrderDiscountRate] = useState(0);
 
-  const [showGuestModal, setShowGuestModal] = useState(false);
   const [showSettleModal, setShowSettleModal] = useState(false);
-
-  const [pendingBooking, setPendingBooking] = useState<Booking | null>(null);
-  const [showChargeConfirm, setShowChargeConfirm] = useState(false);
-  const [addToRoomError, setAddToRoomError] = useState<string | null>(null);
-  const [addingToRoom, setAddingToRoom] = useState(false);
+  const [orderError, setOrderError] = useState<string | null>(null);
+  const [addingOrder, setAddingOrder] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [pageError, setPageError] = useState<string | null>(null);
   const [showCartSheet, setShowCartSheet] = useState(false);
@@ -336,8 +223,8 @@ export default function PosInterface() {
 
   const handleAddToTicket = async () => {
     if (!activeTicketId || !location || cart.length === 0) return;
-    setAddingToRoom(true);
-    setAddToRoomError(null);
+    setAddingOrder(true);
+    setOrderError(null);
     try {
       await posApi.addOrderToTicket(activeTicketId, {
         posLocationId: location.id,
@@ -349,15 +236,15 @@ export default function PosInterface() {
       setTimeout(() => setSuccessMessage(null), 3000);
       loadOpenTickets();
     } catch {
-      setAddToRoomError('Failed to add order to ticket');
+      setOrderError('Failed to add order to ticket');
     } finally {
-      setAddingToRoom(false);
+      setAddingOrder(false);
     }
   };
 
   const handleCloseTicket = async (ticketId: string) => {
     setClosingTicketId(ticketId);
-    setAddToRoomError(null);
+    setOrderError(null);
     try {
       const closed = await posApi.closeTicket(ticketId);
       setOpenTickets(prev => prev.filter(t => t.id !== ticketId));
@@ -368,7 +255,7 @@ export default function PosInterface() {
       setSuccessMessage(msg);
       setTimeout(() => setSuccessMessage(null), 4000);
     } catch {
-      setAddToRoomError('Failed to close ticket');
+      setOrderError('Failed to close ticket');
     } finally {
       setClosingTicketId(null);
     }
@@ -396,40 +283,6 @@ export default function PosInterface() {
   const discountAmount = orderDiscountRate > 0 ? (cartSubtotal * orderDiscountRate) / 100 : 0;
   const cartTotal = cartSubtotal + cartTax - discountAmount;
   const cartItemCount = cart.reduce((s, e) => s + e.quantity, 0);
-
-  const handleAddToRoomSelectGuest = (booking: Booking) => {
-    setShowGuestModal(false);
-    setAddToRoomError(null);
-    if (!booking.id) return;
-    setPendingBooking(booking);
-    setShowChargeConfirm(true);
-  };
-
-  const chargeToFolio = async (booking: Booking) => {
-    if (!location) return;
-    setAddingToRoom(true);
-    setAddToRoomError(null);
-    try {
-      const ticket = await posApi.openTicket({
-        posLocationId: location.id,
-        bookingId: booking.id,
-        mealType: defaultMealType(),
-      });
-      await posApi.addOrderToTicket(ticket.id, {
-        items: cart.map(e => ({ posProductId: e.product.id, quantity: e.quantity })),
-        discountRate: orderDiscountRate > 0 ? orderDiscountRate : undefined,
-      });
-      await posApi.closeTicket(ticket.id);
-      clearCart();
-      setPendingBooking(null);
-      setSuccessMessage(`Charged to ${booking.guestName}'s folio`);
-      setTimeout(() => setSuccessMessage(null), 3000);
-    } catch {
-      setAddToRoomError('Failed to charge order to room');
-    } finally {
-      setAddingToRoom(false);
-    }
-  };
 
   const handleSettleSuccess = () => {
     setShowSettleModal(false);
@@ -486,9 +339,9 @@ export default function PosInterface() {
           <span className="text-emerald-500 font-bold">✓</span> {successMessage}
         </div>
       )}
-      {(pageError || addToRoomError) && (
+      {(pageError || orderError) && (
         <div className="bg-red-50 border-b border-red-100 text-red-700 px-4 py-2 sm:px-6 sm:py-2.5 text-xs sm:text-sm flex items-center gap-2 flex-shrink-0">
-          <span>⚠</span> {pageError || addToRoomError}
+          <span>⚠</span> {pageError || orderError}
         </div>
       )}
 
@@ -673,9 +526,9 @@ export default function PosInterface() {
                   <div className="space-y-2 pt-1">
                     {activeTicketId ? (
                       <>
-                        <button onClick={handleAddToTicket} disabled={addingToRoom}
+                        <button onClick={handleAddToTicket} disabled={addingOrder}
                           className="w-full py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm shadow-sm">
-                          {addingToRoom ? 'Adding...' : `Add to Ticket`}
+                          {addingOrder ? 'Adding...' : `Add to Ticket`}
                         </button>
                         <button onClick={() => setActiveTicketId(null)}
                           className="w-full py-2 text-xs text-gray-500 hover:text-gray-700 transition-colors">
@@ -683,16 +536,10 @@ export default function PosInterface() {
                         </button>
                       </>
                     ) : (
-                      <>
-                        <button onClick={() => { setAddToRoomError(null); setShowGuestModal(true); }} disabled={addingToRoom}
-                          className="w-full py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm shadow-sm">
-                          {addingToRoom ? 'Charging...' : 'Add to Room'}
-                        </button>
-                        <button onClick={() => setShowSettleModal(true)}
-                          className="w-full py-3 bg-emerald-600 text-white rounded-xl font-semibold hover:bg-emerald-700 transition-colors text-sm shadow-sm">
-                          Settle Now
-                        </button>
-                      </>
+                      <button onClick={() => setShowSettleModal(true)}
+                        className="w-full py-3 bg-emerald-600 text-white rounded-xl font-semibold hover:bg-emerald-700 transition-colors text-sm shadow-sm">
+                        Settle Now
+                      </button>
                     )}
                   </div>
                 </div>
@@ -848,9 +695,9 @@ export default function PosInterface() {
                 <div className="px-5 pt-3 pb-6 border-t border-gray-100 flex-shrink-0 space-y-2">
                   {activeTicketId ? (
                     <>
-                      <button onClick={() => { setShowCartSheet(false); handleAddToTicket(); }} disabled={addingToRoom}
+                      <button onClick={() => { setShowCartSheet(false); handleAddToTicket(); }} disabled={addingOrder}
                         className="w-full py-3.5 bg-blue-600 text-white rounded-xl font-semibold active:bg-blue-700 disabled:opacity-50 transition-colors text-sm shadow-sm">
-                        {addingToRoom ? 'Adding...' : 'Add to Ticket'}
+                        {addingOrder ? 'Adding...' : 'Add to Ticket'}
                       </button>
                       <button onClick={() => setActiveTicketId(null)} className="w-full py-2 text-xs text-gray-400">
                         switch to direct checkout
@@ -862,16 +709,10 @@ export default function PosInterface() {
                         className="w-full py-3.5 bg-blue-600 text-white rounded-xl font-semibold active:bg-blue-700 transition-colors text-sm shadow-sm">
                         Open Ticket
                       </button>
-                      <div className="flex gap-2">
-                        <button onClick={() => { setShowCartSheet(false); setAddToRoomError(null); setShowGuestModal(true); }} disabled={addingToRoom}
-                          className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold active:bg-gray-200 disabled:opacity-50 transition-colors text-sm">
-                          {addingToRoom ? 'Charging...' : 'Add to Room'}
-                        </button>
-                        <button onClick={() => { setShowCartSheet(false); setShowSettleModal(true); }}
-                          className="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-semibold active:bg-emerald-700 transition-colors text-sm shadow-sm">
-                          Settle Now
-                        </button>
-                      </div>
+                      <button onClick={() => { setShowCartSheet(false); setShowSettleModal(true); }}
+                        className="w-full py-3.5 bg-emerald-600 text-white rounded-xl font-semibold active:bg-emerald-700 transition-colors text-sm shadow-sm">
+                        Settle Now
+                      </button>
                     </>
                   )}
                 </div>
@@ -882,13 +723,6 @@ export default function PosInterface() {
       )}
 
       {/* Modals */}
-      <GuestSearchModal
-        isOpen={showGuestModal}
-        onClose={() => setShowGuestModal(false)}
-        onSelectBooking={handleAddToRoomSelectGuest}
-        propertyId={selectedPropertyId}
-      />
-
       {showSettleModal && location && (
         <SettleNowModal
           isOpen={showSettleModal}
@@ -898,18 +732,6 @@ export default function PosInterface() {
           propertyId={selectedPropertyId}
           orderDiscountRate={orderDiscountRate}
           onSuccess={handleSettleSuccess}
-        />
-      )}
-
-      {showChargeConfirm && pendingBooking && (
-        <ConfirmModal
-          title="Charge to Room"
-          message={`Add ${fmt(cartTotal)} to ${pendingBooking.guestName}'s folio (Room ${pendingBooking.roomNumber || 'Unassigned'})?`}
-          confirmLabel="Charge"
-          variant="primary"
-          loading={addingToRoom}
-          onConfirm={() => { setShowChargeConfirm(false); chargeToFolio(pendingBooking!); }}
-          onCancel={() => { setShowChargeConfirm(false); setPendingBooking(null); }}
         />
       )}
 

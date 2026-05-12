@@ -772,16 +772,15 @@ export default function Bookings() {
                                 <div key={assignment.id}
                                   className={cn(
                                     'absolute flex overflow-hidden shadow-sm cursor-pointer transition-all hover:shadow-md hover:brightness-95',
-                                    // Ghost (unassigned) bars get a dashed border and reduced opacity.
                                     isGhost ? 'border-2 border-dashed opacity-80' : 'border',
                                     isNoShow ? 'bg-rose-100 border-rose-300' : 'bg-white',
                                     bk.status === 'CHECKED_IN' ? 'border-green-300' :
-                                    bk.status === 'CONFIRMED' ? 'border-blue-300' :
-                                    bk.status === 'PENDING' ? 'border-amber-300' :
-                                    bk.status === 'CANCELLED' ? 'border-gray-300' :
+                                    bk.status === 'CONFIRMED'  ? 'border-blue-300'  :
+                                    bk.status === 'PENDING'    ? 'border-amber-300' :
+                                    bk.status === 'CANCELLED'  ? 'border-gray-300'  :
                                     'border-slate-300',
                                     bleedsLeft && bleedsRight ? 'rounded-none' :
-                                    bleedsLeft ? 'rounded-r-md rounded-l-none' :
+                                    bleedsLeft  ? 'rounded-r-md rounded-l-none' :
                                     bleedsRight ? 'rounded-l-md rounded-r-none' :
                                     'rounded-md',
                                     isShifted && isCompleted && 'opacity-75',
@@ -791,7 +790,7 @@ export default function Bookings() {
                                     width: widthPx,
                                     height: isNoShow ? CELL_H - 16 : CELL_H - 8,
                                     top: isNoShow ? 8 : 4,
-                                    zIndex: isNoShow ? 4 : 5
+                                    zIndex: isNoShow ? 4 : 5,
                                   }}
                                   title={(() => {
                                     const base = `${guestName} • ${bk.status.replace('_', ' ')} • ${ci} → ${co}`;

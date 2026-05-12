@@ -55,6 +55,15 @@ public class PosTicket {
     @Column(name = "receipt_url", length = 500)
     private String receiptUrl;
 
+    @Column(name = "payment_method", length = 50)
+    private String paymentMethod;
+
+    @Column(name = "payment_amount", precision = 10, scale = 2)
+    private java.math.BigDecimal paymentAmount;
+
+    @Column(name = "transaction_reference", length = 200)
+    private String transactionReference;
+
     @Column(name = "created_by", length = 100)
     private String createdBy;
 
@@ -111,6 +120,15 @@ public class PosTicket {
 
     public String getReceiptUrl() { return receiptUrl; }
     public void setReceiptUrl(String receiptUrl) { this.receiptUrl = receiptUrl; }
+
+    public String getPaymentMethod() { return paymentMethod; }
+    public void setPaymentMethod(String paymentMethod) { this.paymentMethod = paymentMethod; }
+
+    public java.math.BigDecimal getPaymentAmount() { return paymentAmount; }
+    public void setPaymentAmount(java.math.BigDecimal paymentAmount) { this.paymentAmount = paymentAmount; }
+
+    public String getTransactionReference() { return transactionReference; }
+    public void setTransactionReference(String transactionReference) { this.transactionReference = transactionReference; }
 
     public String getCreatedBy() { return createdBy; }
     public void setCreatedBy(String createdBy) { this.createdBy = createdBy; }

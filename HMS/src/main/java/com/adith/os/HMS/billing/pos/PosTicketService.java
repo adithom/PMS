@@ -3,10 +3,14 @@ package com.adith.os.HMS.billing.pos;
 import com.adith.os.HMS.billing.folio.ChargeCode;
 import com.adith.os.HMS.billing.folio.FolioService;
 import com.adith.os.HMS.billing.folio.dto.ChargeCreationDto;
+import com.adith.os.HMS.billing.pos.dto.CloseTicketDto;
+import com.adith.os.HMS.billing.pos.dto.OrderSummaryDto;
 import com.adith.os.HMS.billing.pos.dto.PosOrderCreationDto;
 import com.adith.os.HMS.billing.pos.dto.PosOrderDto;
+import com.adith.os.HMS.billing.pos.dto.PosOrderItemDto;
 import com.adith.os.HMS.billing.pos.dto.PosTicketCreationDto;
 import com.adith.os.HMS.billing.pos.dto.PosTicketDto;
+import com.adith.os.HMS.billing.pos.dto.PosTicketHistoryDto;
 import com.adith.os.HMS.booking.Booking;
 import com.adith.os.HMS.booking.BookingRepository;
 import com.adith.os.HMS.property.mealplan.MealPlanType;
@@ -164,7 +168,7 @@ public class PosTicketService {
     // ──────────────── Close ticket ────────────────
 
     @Transactional
-    public PosTicketDto closeTicket(UUID ticketId, String closedBy) {
+    public PosTicketDto closeTicket(UUID ticketId, CloseTicketDto paymentDto, String closedBy) {
         PosTicket ticket = ticketRepository.findById(ticketId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ticket not found"));
 
@@ -178,6 +182,7 @@ public class PosTicketService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot close an empty ticket");
         }
 
+        boolean isWalkIn = ticket.getBooking() == null;
         boolean covered = isMealPlanCovered(ticket);
 
         if (covered) {
@@ -189,19 +194,51 @@ public class PosTicketService {
             orderRepository.saveAll(orders);
             ticket.setMealPlanCovered(true);
 
-        } else {
-            // Assign invoice number
+        } else if (isWalkIn) {
+            // Walk-in: payment required, no folio involved
+            if (paymentDto == null || paymentDto.paymentMethod() == null || paymentDto.paymentMethod().isBlank()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payment method is required for walk-in tickets");
+            }
+
             String invoiceNumber = receiptService.getNextInvoiceNumber(ticket.getPosLocation());
             ticket.setInvoiceNumber(invoiceNumber);
 
-            // Compute ticket total
             BigDecimal ticketTotal = orders.stream()
                     .map(PosOrder::getTotalAmount)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-            // Resolve folio
-            UUID folioId = resolveFolioId(ticket, closedBy);
+            ticket.setPaymentMethod(paymentDto.paymentMethod());
+            ticket.setPaymentAmount(ticketTotal);
+            ticket.setTransactionReference(paymentDto.transactionReference());
 
+            orders.forEach(o -> {
+                o.setStatus(PosOrderStatus.CLOSED);
+                o.setPaymentStatus("SETTLED");
+                o.setCompletedAt(OffsetDateTime.now());
+            });
+            orderRepository.saveAll(orders);
+
+            ticket.setStatus(PosTicketStatus.CLOSED);
+            ticket.setClosedAt(OffsetDateTime.now());
+            PosTicket saved = ticketRepository.save(ticket);
+            saved.setOrders(orders);
+
+            String receiptPath = receiptService.generateReceipt(saved);
+            saved.setReceiptUrl(receiptPath);
+            ticketRepository.save(saved);
+
+            return toDto(saved, orders);
+
+        } else {
+            // Hotel guest: charge to folio, no payment on ticket
+            String invoiceNumber = receiptService.getNextInvoiceNumber(ticket.getPosLocation());
+            ticket.setInvoiceNumber(invoiceNumber);
+
+            BigDecimal ticketTotal = orders.stream()
+                    .map(PosOrder::getTotalAmount)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            UUID folioId = resolveFolioId(ticket);
             UUID propertyId = ticket.getProperty().getId();
             ChargeCode chargeCode = ticket.getPosLocation().getLocationType().toChargeCode();
 
@@ -223,7 +260,6 @@ public class PosTicketService {
             );
             folioService.addCharge(propertyId, folioId, chargeDto);
 
-            // Update orders
             orders.forEach(o -> {
                 o.setStatus(PosOrderStatus.CHARGED);
                 o.setPaymentStatus("CHARGED_TO_FOLIO");
@@ -231,11 +267,10 @@ public class PosTicketService {
             });
             orderRepository.saveAll(orders);
 
-            // Generate receipt — ticket must be saved first so receipt can reference invoice number
             ticket.setStatus(PosTicketStatus.CLOSED);
             ticket.setClosedAt(OffsetDateTime.now());
             PosTicket saved = ticketRepository.save(ticket);
-            saved.setOrders(orders); // attach for PDF rendering
+            saved.setOrders(orders);
 
             String receiptPath = receiptService.generateReceipt(saved);
             saved.setReceiptUrl(receiptPath);
@@ -279,16 +314,61 @@ public class PosTicketService {
         };
     }
 
-    private UUID resolveFolioId(PosTicket ticket, String username) {
-        if (ticket.getBooking() != null) {
-            return folioService.getFolioByBooking(
-                    ticket.getProperty().getId(),
-                    ticket.getBooking().getId()).id();
-        }
-        return posService.getOrCreateWalkInFolio(
-                ticket.getProperty(),
-                ticket.getPosLocation(),
-                username);
+    private UUID resolveFolioId(PosTicket ticket) {
+        return folioService.getFolioByBooking(
+                ticket.getProperty().getId(),
+                ticket.getBooking().getId()).id();
+    }
+
+    // ──────────────── Ticket history ────────────────
+
+    public List<PosTicketHistoryDto> getTicketHistory(UUID locationId, OffsetDateTime from, OffsetDateTime to) {
+        List<PosTicket> tickets = ticketRepository.findClosedByLocationAndDateRange(locationId, from, to);
+        return tickets.stream().map(ticket -> {
+            List<PosOrder> orders = orderRepository.findByTicketIdWithItems(ticket.getId());
+
+            BigDecimal subtotal   = orders.stream().map(PosOrder::getSubtotal).reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal taxAmount  = orders.stream().map(PosOrder::getTaxAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal totalAmount = orders.stream().map(PosOrder::getTotalAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            List<PosOrderItemDto> items = orders.stream()
+                    .flatMap(o -> o.getItems().stream())
+                    .map(i -> new PosOrderItemDto(
+                            i.getId(), i.getPosProduct().getId(), i.getItemName(),
+                            i.getQuantity(), i.getUnitPrice(), i.getSubtotal(),
+                            i.getTaxRate(), i.getTaxAmount(), i.getTotalAmount(),
+                            null, null))
+                    .collect(Collectors.toList());
+
+            return new PosTicketHistoryDto(
+                    ticket.getId(),
+                    ticket.getInvoiceNumber(),
+                    ticket.getGuestName(),
+                    ticket.getRoomNumber(),
+                    ticket.getMealType(),
+                    ticket.isMealPlanCovered(),
+                    ticket.getClosedAt(),
+                    subtotal,
+                    taxAmount,
+                    totalAmount,
+                    ticket.getCreatedBy(),
+                    items,
+                    ticket.getPaymentMethod(),
+                    ticket.getTransactionReference()
+            );
+        }).collect(Collectors.toList());
+    }
+
+    public OrderSummaryDto getTicketSummary(UUID locationId, OffsetDateTime from, OffsetDateTime to) {
+        List<Object[]> results = ticketRepository.getTicketSummary(locationId, from, to);
+        if (results.isEmpty()) return new OrderSummaryDto(0, BigDecimal.ZERO, BigDecimal.ZERO);
+        Object[] row = results.get(0);
+        long count         = ((Number) row[0]).longValue();
+        BigDecimal revenue = row[1] != null ? new BigDecimal(row[1].toString()) : BigDecimal.ZERO;
+        BigDecimal avg     = count > 0
+                           ? revenue.divide(BigDecimal.valueOf(count), 2, RoundingMode.HALF_UP)
+                           : BigDecimal.ZERO;
+        return new OrderSummaryDto(count, revenue, avg);
     }
 
     // ──────────────── DTO mapper ────────────────
@@ -314,7 +394,10 @@ public class PosTicketService {
                 ticket.getCreatedBy(),
                 ticket.getCreatedAt(),
                 ticket.getClosedAt(),
-                orderDtos
+                orderDtos,
+                ticket.getPaymentMethod(),
+                ticket.getPaymentAmount(),
+                ticket.getTransactionReference()
         );
     }
 }
