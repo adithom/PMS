@@ -13,6 +13,8 @@ import type {
   PosProductUpdateDto,
   PosSettleDto,
   OrderSummary,
+  PosTicket,
+  PosTicketCreationDto,
 } from '../types/pos';
 import type { FolioDto } from './folioApi';
 
@@ -60,9 +62,6 @@ const posApi = {
   createOrder: (data: PosOrderCreationDto) =>
     api.post<PosOrder>('/pos/orders', data),
 
-  chargeOrder: (orderId: string, folioId: string) =>
-    api.post<PosOrder>(`/pos/orders/${orderId}/charge?folioId=${folioId}`, null),
-
   settleOrder: (orderId: string, data: PosSettleDto) =>
     api.post<PosOrder>(`/pos/orders/${orderId}/settle`, data),
 
@@ -77,6 +76,19 @@ const posApi = {
 
   getOrderSummary: (locationId: string, from: string, to: string) =>
     api.get<OrderSummary>('/pos/orders/summary', { locationId, from, to }),
+
+  // Tickets
+  openTicket: (data: PosTicketCreationDto) =>
+    api.post<PosTicket>('/pos/tickets', data),
+
+  addOrderToTicket: (ticketId: string, data: PosOrderCreationDto) =>
+    api.post<PosOrder>(`/pos/tickets/${ticketId}/orders`, data),
+
+  closeTicket: (ticketId: string) =>
+    api.post<PosTicket>(`/pos/tickets/${ticketId}/close`, null),
+
+  getOpenTickets: (locationId: string) =>
+    api.get<PosTicket[]>('/pos/tickets', { locationId }),
 };
 
 export default posApi;

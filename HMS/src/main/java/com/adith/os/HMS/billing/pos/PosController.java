@@ -123,14 +123,6 @@ public class PosController {
         return ResponseEntity.ok(posService.createOrder(dto, principal.getUsername()));
     }
 
-    @PostMapping("/orders/{orderId}/charge")
-    @PreAuthorize("hasAnyRole('MANAGER', 'POS')")
-    public ResponseEntity<PosOrderDto> chargeOrderToFolio(
-            @PathVariable UUID orderId,
-            @RequestParam UUID folioId) {
-        return ResponseEntity.ok(posService.chargeOrderToFolio(orderId, folioId));
-    }
-
     @PostMapping("/orders/{orderId}/settle")
     @PreAuthorize("hasAnyRole('MANAGER', 'POS')")
     public ResponseEntity<PosOrderDto> settleOrder(

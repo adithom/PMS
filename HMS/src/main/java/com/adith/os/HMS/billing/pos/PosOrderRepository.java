@@ -13,6 +13,9 @@ import java.util.UUID;
 public interface PosOrderRepository extends JpaRepository<PosOrder, UUID> {
     List<PosOrder> findByPosLocationId(UUID posLocationId);
 
+    @Query("SELECT o FROM PosOrder o JOIN FETCH o.items i JOIN FETCH i.posProduct WHERE o.ticket.id = :ticketId")
+    List<PosOrder> findByTicketIdWithItems(@Param("ticketId") UUID ticketId);
+
     List<PosOrder> findByFolioId(UUID folioId);
 
     List<PosOrder> findByStatus(PosOrderStatus status);

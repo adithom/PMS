@@ -4,5 +4,6 @@ public enum PosOrderStatus {
     OPEN,
     CLOSED,
     CHARGED,
-    CANCELLED
+    CANCELLED,
+    MEAL_PLAN_COVERED
 }

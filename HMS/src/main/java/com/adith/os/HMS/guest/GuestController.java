@@ -8,7 +8,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.UUID;
@@ -26,12 +25,8 @@ public class GuestController {
     @PostMapping()
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
     public ResponseEntity<GuestDto> createGuest(@Valid @RequestBody GuestCreationDto guestCreationDto) {
-        try {
-            GuestDto createdGuest = guestService.createGuest(guestCreationDto);
-            return new ResponseEntity<>(createdGuest, HttpStatus.CREATED);
-        } catch (Exception e) {
-            throw new RuntimeException(e.getMessage());
-        }
+        GuestDto createdGuest = guestService.createGuest(guestCreationDto);
+        return new ResponseEntity<>(createdGuest, HttpStatus.CREATED);
     }
 
     // READ

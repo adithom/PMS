@@ -4,8 +4,9 @@ import posApi from '../api/posApi';
 import folioApi from '../api/folioApi';
 import ProductCard from '../components/Pos/ProductCard';
 import GuestSearchModal from '../components/Pos/GuestSearchModal';
+import OpenTicketModal from '../components/Pos/OpenTicketModal';
 import ConfirmModal from '../components/ConfirmModal';
-import type { PosLocation, PosProduct, CartEntry, PosSettleDto } from '../types/pos';
+import type { PosLocation, PosProduct, CartEntry, PosSettleDto, PosTicket, MealType } from '../types/pos';
 import type { Booking } from '../types';
 import type { FolioDto } from '../api/folioApi';
 
@@ -220,41 +221,14 @@ function SettleNowModal({ isOpen, onClose, cart, location, propertyId, orderDisc
   );
 }
 
-// ─── FolioPickerModal ────────────────────────────────────────────────────────
-
-interface FolioPickerModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  folios: FolioDto[];
-  onSelect: (folio: FolioDto) => void;
-}
-
-function FolioPickerModal({ isOpen, onClose, folios, onSelect }: FolioPickerModalProps) {
-  if (!isOpen) return null;
-  const fmt = (n: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(n);
-  return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-          <h3 className="text-lg font-semibold text-gray-900">Select Folio</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-xl leading-none">&times;</button>
-        </div>
-        <div className="px-6 py-5 space-y-3">
-          <p className="text-sm text-gray-500">Multiple open folios found. Select which one to charge:</p>
-          {folios.map(folio => (
-            <button key={folio.id} onClick={() => onSelect(folio)}
-              className="w-full text-left border border-gray-200 rounded-xl p-4 hover:bg-blue-50 hover:border-blue-300 transition-all group">
-              <div className="font-medium text-sm text-gray-900 group-hover:text-blue-700">{folio.folioNumber || folio.id.slice(0, 8)}</div>
-              <div className="text-xs text-gray-500 mt-0.5">{folio.folioType} — Balance: {fmt(folio.balanceDue ?? 0)}</div>
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Main PosInterface ───────────────────────────────────────────────────────
+
+function defaultMealType(): MealType {
+  const h = new Date().getHours();
+  if (h < 11) return 'BREAKFAST';
+  if (h < 15) return 'LUNCH';
+  return 'DINNER';
+}
 
 export default function PosInterface() {
   const { user } = useAuth();
@@ -273,17 +247,21 @@ export default function PosInterface() {
 
   const [showGuestModal, setShowGuestModal] = useState(false);
   const [showSettleModal, setShowSettleModal] = useState(false);
-  const [showFolioPickerModal, setShowFolioPickerModal] = useState(false);
 
   const [pendingBooking, setPendingBooking] = useState<Booking | null>(null);
-  const [pendingFolios, setPendingFolios] = useState<FolioDto[]>([]);
-  const [pendingFolioId, setPendingFolioId] = useState<string | null>(null);
   const [showChargeConfirm, setShowChargeConfirm] = useState(false);
   const [addToRoomError, setAddToRoomError] = useState<string | null>(null);
   const [addingToRoom, setAddingToRoom] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [pageError, setPageError] = useState<string | null>(null);
   const [showCartSheet, setShowCartSheet] = useState(false);
+
+  // Ticket state
+  const [openTickets, setOpenTickets] = useState<PosTicket[]>([]);
+  const [activeTicketId, setActiveTicketId] = useState<string | null>(null);
+  const [showOpenTicketModal, setShowOpenTicketModal] = useState(false);
+  const [showTicketSheet, setShowTicketSheet] = useState(false);
+  const [closingTicketId, setClosingTicketId] = useState<string | null>(null);
 
   const fmt = (n: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(n);
 
@@ -330,9 +308,71 @@ export default function PosInterface() {
       setCategoryFilter('All');
       setCart([]);
       setOrderDiscountRate(0);
+      setOpenTickets([]);
+      setActiveTicketId(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location?.id]);
+
+  const loadOpenTickets = useCallback(async () => {
+    if (!location) return;
+    try {
+      const tickets = await posApi.getOpenTickets(location.id);
+      setOpenTickets(tickets);
+    } catch {
+      // non-fatal — ticket list is supplementary
+    }
+  }, [location]);
+
+  useEffect(() => {
+    if (location) loadOpenTickets();
+  }, [location?.id, loadOpenTickets]);
+
+  const handleTicketCreated = (ticket: PosTicket) => {
+    setOpenTickets(prev => [ticket, ...prev]);
+    setActiveTicketId(ticket.id);
+    setShowOpenTicketModal(false);
+  };
+
+  const handleAddToTicket = async () => {
+    if (!activeTicketId || !location || cart.length === 0) return;
+    setAddingToRoom(true);
+    setAddToRoomError(null);
+    try {
+      await posApi.addOrderToTicket(activeTicketId, {
+        posLocationId: location.id,
+        items: cart.map(e => ({ posProductId: e.product.id, quantity: e.quantity })),
+        discountRate: orderDiscountRate > 0 ? orderDiscountRate : undefined,
+      });
+      clearCart();
+      setSuccessMessage('Order added to ticket');
+      setTimeout(() => setSuccessMessage(null), 3000);
+      loadOpenTickets();
+    } catch {
+      setAddToRoomError('Failed to add order to ticket');
+    } finally {
+      setAddingToRoom(false);
+    }
+  };
+
+  const handleCloseTicket = async (ticketId: string) => {
+    setClosingTicketId(ticketId);
+    setAddToRoomError(null);
+    try {
+      const closed = await posApi.closeTicket(ticketId);
+      setOpenTickets(prev => prev.filter(t => t.id !== ticketId));
+      if (activeTicketId === ticketId) setActiveTicketId(null);
+      const msg = closed.mealPlanCovered
+        ? `Ticket ${closed.ticketNumber} closed — covered by meal plan`
+        : `Receipt ${closed.invoiceNumber} generated`;
+      setSuccessMessage(msg);
+      setTimeout(() => setSuccessMessage(null), 4000);
+    } catch {
+      setAddToRoomError('Failed to close ticket');
+    } finally {
+      setClosingTicketId(null);
+    }
+  };
 
   const addToCart = (product: PosProduct) => {
     setCart(prev => {
@@ -357,50 +397,35 @@ export default function PosInterface() {
   const cartTotal = cartSubtotal + cartTax - discountAmount;
   const cartItemCount = cart.reduce((s, e) => s + e.quantity, 0);
 
-  const handleAddToRoomSelectGuest = async (booking: Booking) => {
+  const handleAddToRoomSelectGuest = (booking: Booking) => {
     setShowGuestModal(false);
     setAddToRoomError(null);
     if (!booking.id) return;
-    try {
-      const folios = await folioApi.getAllFoliosByBooking(selectedPropertyId, booking.id);
-      const openFolios = folios.filter(f => f.status === 'OPEN');
-      if (openFolios.length === 0) {
-        setAddToRoomError(`No open folio found for ${booking.guestName}`);
-        return;
-      }
-      setPendingBooking(booking);
-      setPendingFolios(openFolios);
-      if (openFolios.length === 1) {
-        setPendingFolioId(openFolios[0].id!);
-        setShowChargeConfirm(true);
-      } else {
-        setShowFolioPickerModal(true);
-      }
-    } catch {
-      setAddToRoomError('Failed to fetch folios for this booking');
-    }
+    setPendingBooking(booking);
+    setShowChargeConfirm(true);
   };
 
-  const chargeToFolio = async (folioId: string, booking?: Booking) => {
+  const chargeToFolio = async (booking: Booking) => {
     if (!location) return;
-    setShowFolioPickerModal(false);
     setAddingToRoom(true);
     setAddToRoomError(null);
-    const guestName = booking?.guestName ?? pendingBooking?.guestName ?? 'guest';
     try {
-      const order = await posApi.createOrder({
+      const ticket = await posApi.openTicket({
         posLocationId: location.id,
+        bookingId: booking.id,
+        mealType: defaultMealType(),
+      });
+      await posApi.addOrderToTicket(ticket.id, {
         items: cart.map(e => ({ posProductId: e.product.id, quantity: e.quantity })),
         discountRate: orderDiscountRate > 0 ? orderDiscountRate : undefined,
       });
-      await posApi.chargeOrder(order.id, folioId);
+      await posApi.closeTicket(ticket.id);
       clearCart();
       setPendingBooking(null);
-      setPendingFolios([]);
-      setSuccessMessage(`Charged to ${guestName}'s folio`);
+      setSuccessMessage(`Charged to ${booking.guestName}'s folio`);
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch {
-      setAddToRoomError('Failed to charge order to folio');
+      setAddToRoomError('Failed to charge order to room');
     } finally {
       setAddingToRoom(false);
     }
@@ -468,11 +493,8 @@ export default function PosInterface() {
       )}
 
       {!location ? (
-        <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center px-6">
-          <div className="w-14 h-14 sm:w-16 sm:h-16 bg-white border border-gray-200 rounded-2xl flex items-center justify-center text-2xl sm:text-3xl shadow-sm">
-            🏪
-          </div>
-          <p className="text-gray-500 text-sm max-w-xs">
+        <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-6">
+          <p className="text-gray-400 text-sm max-w-xs">
             {loadingLocations
               ? 'Loading locations...'
               : isManager
@@ -503,7 +525,7 @@ export default function PosInterface() {
               </div>
 
               {/* Product grid — bottom padding on mobile to clear the cart bar */}
-              <div className="flex-1 overflow-y-auto px-3 py-4 pb-24 sm:px-4 sm:py-5 md:pb-5 md:px-6">
+              <div className="flex-1 overflow-y-auto px-3 py-4 pb-28 sm:px-4 sm:py-5 md:pb-5 md:px-6">
                 {loadingProducts ? (
                   <div className="text-center py-16 text-gray-400 text-sm">Loading products...</div>
                 ) : filteredProducts.length === 0 ? (
@@ -522,6 +544,7 @@ export default function PosInterface() {
 
             {/* ── Desktop cart sidebar (hidden on mobile) ── */}
             <div className="hidden md:flex md:w-80 lg:w-96 bg-white border-l border-gray-200 flex-col flex-shrink-0">
+              {/* Sidebar header */}
               <div className="px-4 py-3 lg:px-5 lg:py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
                 <div className="flex items-center gap-2">
                   <h2 className="font-semibold text-gray-900">Order</h2>
@@ -531,17 +554,67 @@ export default function PosInterface() {
                     </span>
                   )}
                 </div>
-                {cart.length > 0 && (
-                  <button onClick={clearCart} className="text-xs text-red-400 hover:text-red-600 font-medium transition-colors">
-                    Clear all
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setShowOpenTicketModal(true)}
+                    className="text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg">
+                    + Ticket
                   </button>
-                )}
+                  {cart.length > 0 && (
+                    <button onClick={clearCart} className="text-xs text-red-400 hover:text-red-600 font-medium transition-colors">
+                      Clear
+                    </button>
+                  )}
+                </div>
               </div>
+
+              {/* ── Open Tickets list (only when tickets exist) ── */}
+              {openTickets.length > 0 && (
+                <div className="border-b border-gray-100 px-4 lg:px-5 py-2 space-y-1.5 flex-shrink-0">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Tickets</span>
+                    <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-1.5 py-0.5 rounded-full">{openTickets.length}</span>
+                  </div>
+                  <div className="space-y-1.5 max-h-44 overflow-y-auto">
+                    {openTickets.map(ticket => (
+                      <div
+                        key={ticket.id}
+                        onClick={() => setActiveTicketId(activeTicketId === ticket.id ? null : ticket.id)}
+                        className={`flex items-center justify-between rounded-xl px-3 py-2 cursor-pointer border transition-all ${
+                          activeTicketId === ticket.id
+                            ? 'border-blue-400 bg-blue-50 ring-1 ring-blue-400'
+                            : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-gray-900 truncate">
+                            {ticket.roomNumber ? `Room ${ticket.roomNumber}` : ticket.guestName}
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-xs text-gray-500">{ticket.mealType.charAt(0) + ticket.mealType.slice(1).toLowerCase()}</span>
+                            {ticket.orders.length > 0 && (
+                              <>
+                                <span className="w-1 h-1 rounded-full bg-gray-300" />
+                                <span className="text-xs text-gray-400">{ticket.orders.length} order{ticket.orders.length !== 1 ? 's' : ''}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        <button
+                          onClick={e => { e.stopPropagation(); handleCloseTicket(ticket.id); }}
+                          disabled={closingTicketId === ticket.id}
+                          className="ml-2 text-xs font-medium text-gray-400 hover:text-red-600 hover:bg-red-50 px-2 py-1 rounded-lg transition-colors flex-shrink-0 disabled:opacity-50"
+                        >
+                          {closingTicketId === ticket.id ? '...' : 'Close'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="flex-1 overflow-y-auto px-4 lg:px-5">
                 {cart.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-16 gap-3 text-gray-400">
-                    <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center text-2xl">🛒</div>
+                  <div className="flex flex-col items-center justify-center py-12 gap-2 text-gray-400">
                     <p className="text-sm">Add items to start an order</p>
                   </div>
                 ) : (
@@ -598,41 +671,80 @@ export default function PosInterface() {
                     </div>
                   </div>
                   <div className="space-y-2 pt-1">
-                    <button onClick={() => { setAddToRoomError(null); setShowGuestModal(true); }} disabled={addingToRoom}
-                      className="w-full py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm shadow-sm">
-                      {addingToRoom ? 'Charging...' : 'Add to Room'}
-                    </button>
-                    <button onClick={() => setShowSettleModal(true)}
-                      className="w-full py-3 bg-emerald-600 text-white rounded-xl font-semibold hover:bg-emerald-700 transition-colors text-sm shadow-sm">
-                      Settle Now
-                    </button>
+                    {activeTicketId ? (
+                      <>
+                        <button onClick={handleAddToTicket} disabled={addingToRoom}
+                          className="w-full py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm shadow-sm">
+                          {addingToRoom ? 'Adding...' : `Add to Ticket`}
+                        </button>
+                        <button onClick={() => setActiveTicketId(null)}
+                          className="w-full py-2 text-xs text-gray-500 hover:text-gray-700 transition-colors">
+                          or switch to direct checkout
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button onClick={() => { setAddToRoomError(null); setShowGuestModal(true); }} disabled={addingToRoom}
+                          className="w-full py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm shadow-sm">
+                          {addingToRoom ? 'Charging...' : 'Add to Room'}
+                        </button>
+                        <button onClick={() => setShowSettleModal(true)}
+                          className="w-full py-3 bg-emerald-600 text-white rounded-xl font-semibold hover:bg-emerald-700 transition-colors text-sm shadow-sm">
+                          Settle Now
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               )}
             </div>
           </div>
 
-          {/* ── Mobile cart bar (hidden on desktop) ── */}
-          {cart.length > 0 && (
-            <div className="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-gray-200 px-4 py-3 shadow-lg z-30">
-              <button
-                onClick={() => setShowCartSheet(true)}
-                className="w-full bg-blue-600 text-white rounded-xl py-3.5 flex items-center justify-between px-5 shadow-sm active:bg-blue-700 transition-colors"
-              >
-                <span className="bg-blue-500 text-white text-xs font-bold px-2 py-0.5 rounded-full min-w-[1.5rem] text-center">
-                  {cartItemCount}
-                </span>
-                <span className="font-semibold text-sm">View Order</span>
-                <span className="font-bold text-sm">{fmt(cartTotal)}</span>
-              </button>
-            </div>
-          )}
+          {/* ── Mobile bottom bar — always visible ── */}
+          <div className="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-gray-200 px-3 py-2.5 shadow-lg z-30 flex gap-2">
+            {/* Ticket button */}
+            <button
+              onClick={() => openTickets.length > 0 ? setShowTicketSheet(true) : setShowOpenTicketModal(true)}
+              className={`flex-1 rounded-xl py-3 flex flex-col items-center justify-center transition-colors active:scale-95 ${
+                activeTicketId
+                  ? 'bg-blue-600 text-white'
+                  : openTickets.length > 0
+                  ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                  : 'bg-gray-100 text-gray-600'
+              }`}
+            >
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/>
+                <line x1="13" y1="5" x2="13" y2="7"/><line x1="13" y1="11" x2="13" y2="13"/><line x1="13" y1="17" x2="13" y2="19"/>
+              </svg>
+              <span className="text-xs font-semibold mt-0.5">
+                {activeTicketId
+                  ? (() => { const t = openTickets.find(t => t.id === activeTicketId); return t ? (t.roomNumber ? `Rm ${t.roomNumber}` : t.guestName.split(' ')[0]) : 'Ticket'; })()
+                  : openTickets.length > 0
+                  ? `${openTickets.length} open`
+                  : 'New Ticket'}
+              </span>
+            </button>
+
+            {/* Cart button */}
+            <button
+              onClick={() => cart.length > 0 ? setShowCartSheet(true) : undefined}
+              disabled={cart.length === 0}
+              className="flex-[2] bg-blue-600 text-white rounded-xl py-3 flex items-center justify-between px-4 shadow-sm active:bg-blue-700 disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none transition-colors"
+            >
+              <span className={`text-xs font-bold px-2 py-0.5 rounded-full min-w-[1.5rem] text-center ${cart.length > 0 ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-400'}`}>
+                {cartItemCount}
+              </span>
+              <span className="font-semibold text-sm">{cart.length === 0 ? 'Add items' : 'View Order'}</span>
+              <span className="font-bold text-sm">{cart.length > 0 ? fmt(cartTotal) : ''}</span>
+            </button>
+          </div>
 
           {/* ── Mobile cart bottom sheet ── */}
           {showCartSheet && (
             <div className="md:hidden fixed inset-0 z-40 flex flex-col justify-end">
               <div className="absolute inset-0 bg-black/40" onClick={() => setShowCartSheet(false)} />
-              <div className="relative bg-white rounded-t-2xl shadow-2xl flex flex-col max-h-[80vh] sm:max-h-[75vh]">
+              <div className="relative bg-white rounded-t-2xl shadow-2xl flex flex-col max-h-[95vh]">
                 {/* Handle */}
                 <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
                   <div className="w-10 h-1 bg-gray-300 rounded-full" />
@@ -645,11 +757,13 @@ export default function PosInterface() {
                   </div>
                   <button onClick={clearCart} className="text-xs text-red-400 font-medium">Clear all</button>
                 </div>
-                {/* Cart items */}
-                <div className="flex-1 overflow-y-auto px-5">
-                  <div className="divide-y divide-gray-50">
+
+                {/* Scrollable body: items + tickets + totals */}
+                <div className="flex-1 overflow-y-auto">
+                  {/* Cart items — no inner scroll, list all */}
+                  <div className="px-5 divide-y divide-gray-50">
                     {cart.map(entry => (
-                      <div key={entry.product.id} className="flex items-center gap-3 py-3 sm:py-4">
+                      <div key={entry.product.id} className="flex items-center gap-3 py-3.5">
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-medium text-gray-800 truncate">{entry.product.name}</div>
                           <div className="text-xs text-gray-400 mt-0.5">
@@ -672,41 +786,94 @@ export default function PosInterface() {
                       </div>
                     ))}
                   </div>
-                </div>
-                {/* Totals + actions */}
-                <div className="border-t border-gray-200 px-5 py-4 space-y-4 flex-shrink-0 bg-gray-50/50">
-                  <div className="flex items-center justify-between gap-3">
-                    <label className="text-sm text-gray-600 whitespace-nowrap">Order Discount</label>
-                    <div className="relative">
-                      <input type="number" min="0" max="100" step="0.5"
-                        value={orderDiscountRate || ''} onChange={e => setOrderDiscountRate(parseFloat(e.target.value) || 0)}
-                        placeholder="0"
-                        className="w-24 border border-gray-200 rounded-lg px-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-7" />
-                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">%</span>
-                    </div>
-                  </div>
-                  <div className="space-y-1.5 text-sm">
-                    <div className="flex justify-between text-gray-500"><span>Subtotal</span><span>{fmt(cartSubtotal)}</span></div>
-                    <div className="flex justify-between text-gray-500"><span>Tax</span><span>{fmt(cartTax)}</span></div>
-                    {discountAmount > 0 && (
-                      <div className="flex justify-between text-emerald-600">
-                        <span>Discount ({orderDiscountRate}%)</span><span>−{fmt(discountAmount)}</span>
+
+                  {/* Tickets strip — only when tickets exist */}
+                  {openTickets.length > 0 && (
+                    <div className="border-t border-gray-100 px-5 pt-3 pb-1">
+                      <div className="flex gap-2 overflow-x-auto pb-2">
+                        {openTickets.map(ticket => (
+                          <button
+                            key={ticket.id}
+                            onClick={() => setActiveTicketId(activeTicketId === ticket.id ? null : ticket.id)}
+                            className={`flex-shrink-0 px-3 py-2 rounded-xl border text-left transition-all ${
+                              activeTicketId === ticket.id
+                                ? 'border-blue-400 bg-blue-50 ring-1 ring-blue-400'
+                                : 'border-gray-200 bg-white'
+                            }`}
+                          >
+                            <div className="text-xs font-semibold text-gray-900">
+                              {ticket.roomNumber ? `Rm ${ticket.roomNumber}` : ticket.guestName.split(' ')[0]}
+                            </div>
+                            <div className="text-xs text-gray-400">{ticket.mealType.charAt(0) + ticket.mealType.slice(1).toLowerCase()}</div>
+                          </button>
+                        ))}
+                        <button
+                          onClick={() => { setShowCartSheet(false); setShowOpenTicketModal(true); }}
+                          className="flex-shrink-0 px-3 py-2 rounded-xl border border-dashed border-blue-300 text-blue-600 text-xs font-medium"
+                        >
+                          + New
+                        </button>
                       </div>
-                    )}
-                    <div className="flex justify-between font-bold text-gray-900 text-base pt-2 border-t border-gray-200">
-                      <span>Total</span><span>{fmt(cartTotal)}</span>
+                    </div>
+                  )}
+
+                  {/* Discount + totals */}
+                  <div className="px-5 pt-4 pb-2 space-y-3 border-t border-gray-100">
+                    <div className="flex items-center justify-between gap-3">
+                      <label className="text-sm text-gray-600 whitespace-nowrap">Order Discount</label>
+                      <div className="relative">
+                        <input type="number" min="0" max="100" step="0.5"
+                          value={orderDiscountRate || ''} onChange={e => setOrderDiscountRate(parseFloat(e.target.value) || 0)}
+                          placeholder="0"
+                          className="w-24 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-7" />
+                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">%</span>
+                      </div>
+                    </div>
+                    <div className="space-y-1.5 text-sm">
+                      <div className="flex justify-between text-gray-500"><span>Subtotal</span><span>{fmt(cartSubtotal)}</span></div>
+                      <div className="flex justify-between text-gray-500"><span>Tax</span><span>{fmt(cartTax)}</span></div>
+                      {discountAmount > 0 && (
+                        <div className="flex justify-between text-emerald-600">
+                          <span>Discount ({orderDiscountRate}%)</span><span>−{fmt(discountAmount)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between font-bold text-gray-900 text-base pt-2 border-t border-gray-200">
+                        <span>Total</span><span>{fmt(cartTotal)}</span>
+                      </div>
                     </div>
                   </div>
-                  <div className="space-y-2 pt-1">
-                    <button onClick={() => { setShowCartSheet(false); setAddToRoomError(null); setShowGuestModal(true); }} disabled={addingToRoom}
-                      className="w-full py-3.5 bg-blue-600 text-white rounded-xl font-semibold active:bg-blue-700 disabled:opacity-50 transition-colors text-sm shadow-sm">
-                      {addingToRoom ? 'Charging...' : 'Add to Room'}
-                    </button>
-                    <button onClick={() => { setShowCartSheet(false); setShowSettleModal(true); }}
-                      className="w-full py-3.5 bg-emerald-600 text-white rounded-xl font-semibold active:bg-emerald-700 transition-colors text-sm shadow-sm">
-                      Settle Now
-                    </button>
-                  </div>
+                </div>
+
+                {/* Action buttons — sticky at bottom */}
+                <div className="px-5 pt-3 pb-6 border-t border-gray-100 flex-shrink-0 space-y-2">
+                  {activeTicketId ? (
+                    <>
+                      <button onClick={() => { setShowCartSheet(false); handleAddToTicket(); }} disabled={addingToRoom}
+                        className="w-full py-3.5 bg-blue-600 text-white rounded-xl font-semibold active:bg-blue-700 disabled:opacity-50 transition-colors text-sm shadow-sm">
+                        {addingToRoom ? 'Adding...' : 'Add to Ticket'}
+                      </button>
+                      <button onClick={() => setActiveTicketId(null)} className="w-full py-2 text-xs text-gray-400">
+                        switch to direct checkout
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button onClick={() => { setShowCartSheet(false); setShowOpenTicketModal(true); }}
+                        className="w-full py-3.5 bg-blue-600 text-white rounded-xl font-semibold active:bg-blue-700 transition-colors text-sm shadow-sm">
+                        Open Ticket
+                      </button>
+                      <div className="flex gap-2">
+                        <button onClick={() => { setShowCartSheet(false); setAddToRoomError(null); setShowGuestModal(true); }} disabled={addingToRoom}
+                          className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold active:bg-gray-200 disabled:opacity-50 transition-colors text-sm">
+                          {addingToRoom ? 'Charging...' : 'Add to Room'}
+                        </button>
+                        <button onClick={() => { setShowCartSheet(false); setShowSettleModal(true); }}
+                          className="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-semibold active:bg-emerald-700 transition-colors text-sm shadow-sm">
+                          Settle Now
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -722,13 +889,6 @@ export default function PosInterface() {
         propertyId={selectedPropertyId}
       />
 
-      <FolioPickerModal
-        isOpen={showFolioPickerModal}
-        onClose={() => { setShowFolioPickerModal(false); setPendingBooking(null); setPendingFolios([]); }}
-        folios={pendingFolios}
-        onSelect={folio => { setShowFolioPickerModal(false); setPendingFolioId(folio.id!); setShowChargeConfirm(true); }}
-      />
-
       {showSettleModal && location && (
         <SettleNowModal
           isOpen={showSettleModal}
@@ -741,15 +901,100 @@ export default function PosInterface() {
         />
       )}
 
-      {showChargeConfirm && pendingBooking && pendingFolioId && (
+      {showChargeConfirm && pendingBooking && (
         <ConfirmModal
           title="Charge to Room"
           message={`Add ${fmt(cartTotal)} to ${pendingBooking.guestName}'s folio (Room ${pendingBooking.roomNumber || 'Unassigned'})?`}
           confirmLabel="Charge"
           variant="primary"
           loading={addingToRoom}
-          onConfirm={() => { setShowChargeConfirm(false); chargeToFolio(pendingFolioId); }}
-          onCancel={() => { setShowChargeConfirm(false); setPendingFolioId(null); setPendingBooking(null); setPendingFolios([]); }}
+          onConfirm={() => { setShowChargeConfirm(false); chargeToFolio(pendingBooking!); }}
+          onCancel={() => { setShowChargeConfirm(false); setPendingBooking(null); }}
+        />
+      )}
+
+      {/* ── Mobile ticket sheet ── */}
+      {showTicketSheet && (
+        <div className="md:hidden fixed inset-0 z-40 flex flex-col justify-end">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowTicketSheet(false)} />
+          <div className="relative bg-white rounded-t-2xl shadow-2xl flex flex-col max-h-[70vh]">
+            <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
+              <div className="w-10 h-1 bg-gray-300 rounded-full" />
+            </div>
+            <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <h2 className="font-semibold text-gray-900">Open Tickets</h2>
+                <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-0.5 rounded-full">{openTickets.length}</span>
+              </div>
+              <button
+                onClick={() => { setShowTicketSheet(false); setShowOpenTicketModal(true); }}
+                className="text-xs font-medium text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg"
+              >
+                + New Ticket
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-5 py-3 space-y-2">
+              {openTickets.map(ticket => (
+                <div
+                  key={ticket.id}
+                  className={`flex items-center justify-between rounded-2xl px-4 py-3.5 border transition-all ${
+                    activeTicketId === ticket.id
+                      ? 'border-blue-400 bg-blue-50 ring-1 ring-blue-400'
+                      : 'border-gray-200 bg-white'
+                  }`}
+                >
+                  <button
+                    className="flex-1 text-left"
+                    onClick={() => {
+                      setActiveTicketId(activeTicketId === ticket.id ? null : ticket.id);
+                      setShowTicketSheet(false);
+                    }}
+                  >
+                    <div className="text-base font-bold text-gray-900">
+                      {ticket.roomNumber ? `Room ${ticket.roomNumber}` : ticket.guestName}
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-xs text-gray-500">{ticket.mealType.charAt(0) + ticket.mealType.slice(1).toLowerCase()}</span>
+                      <span className="w-1 h-1 rounded-full bg-gray-300" />
+                      <span className="text-xs text-gray-400">{ticket.ticketNumber}</span>
+                      {ticket.orders.length > 0 && (
+                        <>
+                          <span className="w-1 h-1 rounded-full bg-gray-300" />
+                          <span className="text-xs text-gray-400">{ticket.orders.length} order{ticket.orders.length !== 1 ? 's' : ''}</span>
+                        </>
+                      )}
+                    </div>
+                    {activeTicketId === ticket.id && (
+                      <span className="text-xs text-blue-600 font-medium mt-1 block">Active — tap to deselect</span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => { handleCloseTicket(ticket.id); setShowTicketSheet(false); }}
+                    disabled={closingTicketId === ticket.id}
+                    className="ml-3 text-sm font-medium text-gray-400 hover:text-red-600 bg-gray-100 hover:bg-red-50 px-3 py-2 rounded-xl transition-colors flex-shrink-0 disabled:opacity-50"
+                  >
+                    {closingTicketId === ticket.id ? '...' : 'Close'}
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="px-5 py-4 border-t border-gray-100 flex-shrink-0">
+              <button onClick={() => setShowTicketSheet(false)}
+                className="w-full py-3 bg-gray-100 text-gray-700 rounded-xl text-sm font-semibold">
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {location && (
+        <OpenTicketModal
+          isOpen={showOpenTicketModal}
+          onClose={() => setShowOpenTicketModal(false)}
+          locationId={location.id}
+          propertyId={selectedPropertyId}
+          onTicketCreated={handleTicketCreated}
         />
       )}
     </div>

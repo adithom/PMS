@@ -128,7 +128,7 @@ public class PdfGenerationService {
             contentStream.addRect(cols[0], yPosition - titleRowHeight, cols[7] - cols[0], titleRowHeight);
             contentStream.fill();
             contentStream.setNonStrokingColor(new Color(33, 58, 90));
-            drawText(contentStream, billTitle, cols[0] + 10, yPosition - 20, fontBold, 12);
+            drawText(contentStream, billTitle, cols[0] + 10, yPosition - 20, fontBold, 10);
             contentStream.setNonStrokingColor(Color.BLACK);
             contentStream.setLineWidth(0.5f);
             contentStream.moveTo(cols[0], yPosition);

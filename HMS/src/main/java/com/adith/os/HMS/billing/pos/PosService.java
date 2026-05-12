@@ -286,11 +286,11 @@ public class PosService {
         }
 
         PosOrder savedOrder = posOrderRepository.save(order);
-        return toDto(savedOrder);
+        return toOrderDto(savedOrder);
     }
 
     @Transactional
-    public PosOrderDto chargeOrderToFolio(UUID orderId, UUID folioId) {
+    private PosOrderDto chargeOrderToFolio(UUID orderId, UUID folioId) {
         PosOrder order = posOrderRepository.findById(orderId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
 
@@ -332,7 +332,7 @@ public class PosService {
         order.setPaymentStatus("CHARGED_TO_FOLIO");
         order.setCompletedAt(OffsetDateTime.now());
 
-        return toDto(posOrderRepository.save(order));
+        return toOrderDto(posOrderRepository.save(order));
     }
 
     @Transactional
@@ -382,7 +382,7 @@ public class PosService {
         updated.setStatus(PosOrderStatus.CLOSED);
         updated.setPaymentStatus("SETTLED");
 
-        return toDto(posOrderRepository.save(updated));
+        return toOrderDto(posOrderRepository.save(updated));
     }
 
     // ──────────────── Order history ────────────────
@@ -394,7 +394,7 @@ public class PosService {
         } else {
             orders = posOrderRepository.findByLocationAndDateRange(locationId, from, to);
         }
-        return orders.stream().map(this::toDto).collect(Collectors.toList());
+        return orders.stream().map(this::toOrderDto).collect(Collectors.toList());
     }
 
     public OrderSummaryDto getOrderSummary(UUID locationId, OffsetDateTime from, OffsetDateTime to) {
@@ -432,7 +432,8 @@ public class PosService {
 
     // ──────────────── Private helpers ────────────────
 
-    private UUID getOrCreateWalkInFolio(Property property, PosLocation location, String username) {
+    @Transactional
+    UUID getOrCreateWalkInFolio(Property property, PosLocation location, String username) {
         Folio existing = location.getCurrentWalkInFolio();
         if (existing != null && existing.getStatus() == FolioStatus.OPEN) {
             return existing.getId();
@@ -512,7 +513,7 @@ public class PosService {
                 entity.getImageUrl());
     }
 
-    private PosOrderDto toDto(PosOrder entity) {
+    PosOrderDto toOrderDto(PosOrder entity) {
         return new PosOrderDto(
                 entity.getId(),
                 entity.getOrderNumber(),

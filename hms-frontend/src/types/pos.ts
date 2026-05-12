@@ -50,12 +50,40 @@ export interface PosOrderItem {
   status?: string;
 }
 
+export type MealType = 'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK';
+export type PosTicketStatus = 'OPEN' | 'CLOSED';
+
+export interface PosTicket {
+  id: string;
+  ticketNumber: string;
+  invoiceNumber?: string;
+  posLocationId: string;
+  bookingId?: string;
+  guestName: string;
+  roomNumber?: string;
+  mealType: MealType;
+  status: PosTicketStatus;
+  mealPlanCovered: boolean;
+  receiptUrl?: string;
+  createdBy: string;
+  createdAt: string;
+  closedAt?: string;
+  orders: PosOrder[];
+}
+
+export interface PosTicketCreationDto {
+  posLocationId: string;
+  bookingId?: string;
+  guestName?: string;
+  mealType: MealType;
+}
+
 export interface PosOrder {
   id: string;
   orderNumber: string;
   posLocationId: string;
   propertyId: string;
-  status: 'OPEN' | 'CLOSED' | 'CHARGED' | 'CANCELLED';
+  status: 'OPEN' | 'CLOSED' | 'CHARGED' | 'CANCELLED' | 'MEAL_PLAN_COVERED';
   paymentStatus: string;
   totalAmount: number;
   subtotal: number;
