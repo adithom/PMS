@@ -156,8 +156,9 @@ public class BookingController {
     public ResponseEntity<BookingDto> updateBookingStatus(
             @PathVariable UUID propertyId,
             @PathVariable UUID id,
-            @PathVariable BookingStatus status) {
-        BookingDto updatedBooking = bookingService.updateBookingStatus(propertyId, id, status);
+            @PathVariable BookingStatus status,
+            @RequestParam(required = false) String reason) {
+        BookingDto updatedBooking = bookingService.updateBookingStatus(propertyId, id, status, reason);
         return ResponseEntity.ok(updatedBooking);
     }
 

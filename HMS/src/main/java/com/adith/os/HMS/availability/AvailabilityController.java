@@ -113,4 +113,23 @@ public class AvailabilityController {
         UnitOccupancyReportDto result = availabilityService.getUnitOccupancyReport(unitId, date);
         return ResponseEntity.ok(result);
     }
+
+    /**
+     * 8. TAPE CHART (with optional ghost-fill for unassigned bookings)
+     * GET /api/availability/properties/{propertyId}/tape-chart?from=2026-05-08&to=2026-05-15&includeGhosts=true
+     *
+     * Returns rooms, real assignments overlapping the window, and (if includeGhosts=true)
+     * deterministic first-fit ghost placements for unassigned bookings within their unit.
+     * Ghosts are not persisted — recomputed every call.
+     */
+    @GetMapping("/properties/{propertyId}/tape-chart")
+    public ResponseEntity<TapeChartDto> getTapeChart(
+            @PathVariable UUID propertyId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false, defaultValue = "false") boolean includeGhosts
+    ) {
+        TapeChartDto result = availabilityService.getTapeChart(propertyId, from, to, includeGhosts);
+        return ResponseEntity.ok(result);
+    }
 }

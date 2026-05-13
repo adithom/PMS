@@ -1,6 +1,6 @@
 package com.adith.os.HMS.billing.bills;
 
-import com.adith.os.HMS.booking.Booking;
+import com.adith.os.HMS.reservation.Reservation;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 
@@ -37,13 +37,13 @@ public class GroupBill {
     private String invoiceNumber;
 
     /**
-     * Links this GroupBill to the group master Booking.
-     * NOT the organiser folio — the booking itself.
+     * Links this GroupBill to its Reservation (the group container).
+     * The bill aggregates charges from all bookings under the reservation.
      */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "parent_booking_id", nullable = false)
+    @JoinColumn(name = "reservation_id", nullable = false)
     @JsonIgnore
-    private Booking parentBooking;
+    private Reservation reservation;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "category", nullable = false)
@@ -123,8 +123,8 @@ public class GroupBill {
     public String getInvoiceNumber() { return invoiceNumber; }
     public void setInvoiceNumber(String invoiceNumber) { this.invoiceNumber = invoiceNumber; }
 
-    public Booking getParentBooking() { return parentBooking; }
-    public void setParentBooking(Booking parentBooking) { this.parentBooking = parentBooking; }
+    public Reservation getReservation() { return reservation; }
+    public void setReservation(Reservation reservation) { this.reservation = reservation; }
 
     public BillType getBillType() { return billType; }
     public void setBillType(BillType billType) { this.billType = billType; }

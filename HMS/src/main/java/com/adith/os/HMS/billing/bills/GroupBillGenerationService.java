@@ -9,6 +9,8 @@ import com.adith.os.HMS.billing.folio.dto.ChargeDto;
 import com.adith.os.HMS.booking.Booking;
 import com.adith.os.HMS.booking.BookingRepository;
 import com.adith.os.HMS.property.PropertyRepository;
+import com.adith.os.HMS.reservation.Reservation;
+import com.adith.os.HMS.reservation.ReservationRepository;
 import com.adith.os.HMS.storage.R2StorageService;
 import com.adith.os.HMS.storage.R2UploadException;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -43,6 +45,7 @@ public class GroupBillGenerationService {
     private final FolioRepository folioRepository;
     private final FolioChargeRepository folioChargeRepository;
     private final PropertyRepository propertyRepository;
+    private final ReservationRepository reservationRepository;
     private final GroupPdfGenerationService groupPdfGenerationService;
     private final GroupBillRepository groupBillRepository;
     private final PropertyInvoiceSequenceRepository sequenceRepository;
@@ -54,6 +57,7 @@ public class GroupBillGenerationService {
             FolioRepository folioRepository,
             FolioChargeRepository folioChargeRepository,
             PropertyRepository propertyRepository,
+            ReservationRepository reservationRepository,
             GroupPdfGenerationService groupPdfGenerationService,
             GroupBillRepository groupBillRepository,
             PropertyInvoiceSequenceRepository sequenceRepository,
@@ -62,6 +66,7 @@ public class GroupBillGenerationService {
         this.folioRepository = folioRepository;
         this.folioChargeRepository = folioChargeRepository;
         this.propertyRepository = propertyRepository;
+        this.reservationRepository = reservationRepository;
         this.groupPdfGenerationService = groupPdfGenerationService;
         this.groupBillRepository = groupBillRepository;
         this.sequenceRepository = sequenceRepository;
@@ -75,49 +80,44 @@ public class GroupBillGenerationService {
 
     @Transactional
     public GroupMultiBillDto generateGroupMultiBill(UUID propertyId,
-                                                    UUID parentBookingId,
+                                                    UUID reservationId,
                                                     String guestGstNumber) {
         if (!propertyRepository.existsById(propertyId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Property not found");
         }
 
-        Booking parent = bookingRepository.findById(parentBookingId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Group booking not found"));
+        Reservation reservation = reservationRepository.findById(reservationId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Reservation not found"));
 
-        if (!parent.getProperty().getId().equals(propertyId)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Booking does not belong to this property");
+        if (!reservation.getProperty().getId().equals(propertyId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Reservation does not belong to this property");
         }
 
-        if (!parent.isGroupMaster()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Booking " + parentBookingId + " is not a group master");
-        }
-
-        long activeBills = groupBillRepository.countActiveByParentBookingId(parentBookingId);
+        long activeBills = groupBillRepository.countActiveByReservationId(reservationId);
         if (activeBills > 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Active group bills already exist for this booking. Void them before generating new ones.");
+                    "Active group bills already exist for this reservation. Void them before generating new ones.");
         }
 
-        List<Booking> children = bookingRepository.findByParentBookingId(parentBookingId);
-        if (children.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No child bookings found for this group");
+        List<Booking> bookings = bookingRepository.findByReservationId(reservationId);
+        if (bookings.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No bookings found for this reservation");
         }
 
         // Accumulate per-BillType: charge entities to link, and per-room sections for PDF
         Map<BillType, List<FolioCharge>>                          chargesByType  = new EnumMap<>(BillType.class);
         Map<BillType, List<GroupMultiBillDto.RoomChargeSection>>  sectionsByType = new EnumMap<>(BillType.class);
 
-        for (Booking child : children) {
-            Folio folio = child.getMasterFolio();
+        for (Booking booking : bookings) {
+            Folio folio = booking.getFolio();
             if (folio == null) continue;
 
             List<FolioCharge> validCharges = folio.getCharges() == null ? List.of()
                     : folio.getCharges().stream()
                            .filter(c -> !c.isVoided() && c.getBill() == null && c.getGroupBill() == null)
+                           .filter(FolioCharge::isRouteToMaster)
                            .toList();
 
-            // Group this child's charges by BillType
             Map<BillType, List<FolioCharge>> byType = new EnumMap<>(BillType.class);
             for (FolioCharge c : validCharges) {
                 byType.computeIfAbsent(BillType.forChargeCode(c.getChargeCode()), k -> new ArrayList<>()).add(c);
@@ -128,7 +128,7 @@ public class GroupBillGenerationService {
                 List<FolioCharge> charges = entry.getValue();
                 chargesByType.computeIfAbsent(bt, k -> new ArrayList<>()).addAll(charges);
                 sectionsByType.computeIfAbsent(bt, k -> new ArrayList<>())
-                              .add(buildRoomSection(child, folio, charges));
+                              .add(buildRoomSection(booking, folio, charges));
             }
         }
 
@@ -140,8 +140,8 @@ public class GroupBillGenerationService {
         UUID batchId = UUID.randomUUID();
         LocalDate today = LocalDate.now(ZoneId.of("Asia/Kolkata"));
         OffsetDateTime now = OffsetDateTime.now();
-        var property  = parent.getProperty();
-        var organizer = parent.getGuest();
+        var property  = reservation.getProperty();
+        var organizer = reservation.getOrganizerGuest();
         String safeGst = guestGstNumber != null ? guestGstNumber : "";
 
         String baseInvoiceNumber = generateInvoiceNumber(property);
@@ -164,15 +164,15 @@ public class GroupBillGenerationService {
             GroupMultiBillDto.GroupBillSectionDto sectionDto = new GroupMultiBillDto.GroupBillSectionDto(
                     invoiceNumber, today, bt.name(),
                     property.getName(), property.getAddress(), property.getGstNumber(),
-                    parent.getId(), parent.getGroupReference(),
+                    reservation.getId(), reservation.getGroupReference(),
                     organizer.getFullName(), organizer.getPhone(), organizer.getEmail(), safeGst,
-                    parent.getCheckIn(), parent.getCheckOut(), parent.getCurrency(), now,
+                    reservation.getCheckIn(), reservation.getCheckOut(), reservation.getCurrency(), now,
                     sections,
                     totals.subtotal(), totals.tax(), totals.discount(), totals.total(),
                     BigDecimal.ZERO, totals.total(),
                     false, null, null, null, null);
 
-            GroupBill billEntity = buildGroupBillEntity(parent, bt, invoiceNumber, safeGst, totals, batchId, sections);
+            GroupBill billEntity = buildGroupBillEntity(reservation, bt, invoiceNumber, safeGst, totals, batchId, sections);
             billEntity = groupBillRepository.save(billEntity);
 
             for (FolioCharge charge : chargeEntities) {
@@ -221,11 +221,11 @@ public class GroupBillGenerationService {
     }
 
     @Transactional
-    public List<GroupBill> voidAllActiveGroupBills(UUID parentBookingId, String reason, String voidedBy) {
-        List<GroupBill> active = groupBillRepository.findActiveByParentBookingId(parentBookingId);
+    public List<GroupBill> voidAllActiveGroupBills(UUID reservationId, String reason, String voidedBy) {
+        List<GroupBill> active = groupBillRepository.findActiveByReservationId(reservationId);
         if (active.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND,
-                    "No active group bills found for this booking");
+                    "No active group bills found for this reservation");
         }
 
         LocalDateTime now = LocalDateTime.now();
@@ -248,8 +248,8 @@ public class GroupBillGenerationService {
     // READ
     // =========================================================================
 
-    public List<GroupBill> getGroupBills(UUID parentBookingId) {
-        return groupBillRepository.findByParentBookingId(parentBookingId);
+    public List<GroupBill> getGroupBills(UUID reservationId) {
+        return groupBillRepository.findByReservationId(reservationId);
     }
 
     public String generateDownloadUrl(UUID groupBillId) {
@@ -277,7 +277,7 @@ public class GroupBillGenerationService {
         }
     }
 
-    private GroupBill buildGroupBillEntity(Booking parent,
+    private GroupBill buildGroupBillEntity(Reservation reservation,
                                            BillType billType,
                                            String invoiceNumber,
                                            String guestGstNumber,
@@ -285,7 +285,7 @@ public class GroupBillGenerationService {
                                            UUID batchId,
                                            List<GroupMultiBillDto.RoomChargeSection> sections) {
         GroupBill entity = new GroupBill();
-        entity.setParentBooking(parent);
+        entity.setReservation(reservation);
         entity.setBillType(billType);
         entity.setInvoiceNumber(invoiceNumber);
         entity.setGuestGstNumber(guestGstNumber);
@@ -299,17 +299,17 @@ public class GroupBillGenerationService {
     }
 
     private GroupMultiBillDto.RoomChargeSection buildRoomSection(
-            Booking child, Folio folio, List<FolioCharge> charges) {
+            Booking booking, Folio folio, List<FolioCharge> charges) {
 
         List<ChargeDto> dtos = charges.stream().map(this::toChargeDto).toList();
 
         return new GroupMultiBillDto.RoomChargeSection(
-                child.getId(),
+                booking.getId(),
                 folio.getId(),
                 folio.getFolioNumber(),
-                child.getGuest().getFullName(),
-                child.getRoom() != null ? child.getRoom().getNumber() : null,
-                child.getUnit() != null ? child.getUnit().getName()   : null,
+                booking.getGuest().getFullName(),
+                booking.getRoom() != null ? booking.getRoom().getNumber() : null,
+                booking.getUnit() != null ? booking.getUnit().getName()   : null,
                 dtos,
                 sum(charges, FolioCharge::getSubtotal),
                 sum(charges, FolioCharge::getTaxAmount),

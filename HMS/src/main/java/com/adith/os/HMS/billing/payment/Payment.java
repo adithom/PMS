@@ -1,7 +1,6 @@
 package com.adith.os.HMS.billing.payment;
 
 import com.adith.os.HMS.billing.folio.ChargeCategory;
-import com.adith.os.HMS.billing.folio.Folio;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -18,10 +17,11 @@ public class Payment {
     @GeneratedValue(strategy = GenerationType.AUTO)
     private UUID id;
 
-    @NotNull
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "folio_id", nullable = false)
-    private Folio folio;
+    @Column(name = "reservation_id")
+    private UUID reservationId;
+
+    @Column(name = "booking_id")
+    private UUID bookingId;
 
     @Column(name = "payment_number", unique = true, nullable = false)
     private String paymentNumber;
@@ -122,15 +122,6 @@ public class Payment {
 
     // Default constructor
     public Payment() {
-    }
-
-    // Constructor for creating a new payment
-    public Payment(Folio folio, BigDecimal amount, PaymentMethod paymentMethod) {
-        this.folio = folio;
-        this.amount = amount;
-        this.paymentMethod = paymentMethod;
-        this.paymentStatus = PaymentStatus.PENDING;
-        this.currency = folio.getCurrency();
     }
 
     // Business logic methods
@@ -247,12 +238,20 @@ public class Payment {
         this.id = id;
     }
 
-    public Folio getFolio() {
-        return folio;
+    public UUID getReservationId() {
+        return reservationId;
     }
 
-    public void setFolio(Folio folio) {
-        this.folio = folio;
+    public void setReservationId(UUID reservationId) {
+        this.reservationId = reservationId;
+    }
+
+    public UUID getBookingId() {
+        return bookingId;
+    }
+
+    public void setBookingId(UUID bookingId) {
+        this.bookingId = bookingId;
     }
 
     public String getPaymentNumber() {

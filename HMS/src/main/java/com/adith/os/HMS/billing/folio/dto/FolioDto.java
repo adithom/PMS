@@ -1,7 +1,6 @@
 package com.adith.os.HMS.billing.folio.dto;
 
 import com.adith.os.HMS.billing.folio.FolioStatus;
-import com.adith.os.HMS.billing.folio.FolioType;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -15,7 +14,6 @@ public record FolioDto(
         String guestName,
         String propertyCode,
         FolioStatus status,
-        FolioType folioType,
         BigDecimal subtotal,
         BigDecimal taxAmount,
         BigDecimal discountAmount,
@@ -26,7 +24,6 @@ public record FolioDto(
         String notes,
         OffsetDateTime createdAt,
         OffsetDateTime closedAt,
-        UUID routedToFolioId,
         LocalDate checkInDate,
         LocalDate checkOutDate,
         String roomNumber,

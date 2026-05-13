@@ -13,15 +13,12 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Endpoints for group bill generation, retrieval, and voiding.
+ * Endpoints for group/reservation-level bill generation, retrieval, and voiding.
  *
- * Base path: /api/properties/{propertyId}/group-bookings/{parentBookingId}/bills
- *
- * Kept under the group-bookings hierarchy so the propertyId scoping
- * is consistent with GroupBookingController and GroupBillingController.
+ * Base path: /api/properties/{propertyId}/reservations/{reservationId}/bills
  */
 @RestController
-@RequestMapping("/api/properties/{propertyId}/group-bookings/{parentBookingId}/bills")
+@RequestMapping("/api/properties/{propertyId}/reservations/{reservationId}/bills")
 public class GroupBillController {
 
     private final GroupBillGenerationService groupBillGenerationService;
@@ -34,52 +31,37 @@ public class GroupBillController {
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
     public ResponseEntity<GroupMultiBillDto> generateGroupBills(
             @PathVariable UUID propertyId,
-            @PathVariable UUID parentBookingId,
+            @PathVariable UUID reservationId,
             @RequestParam(required = false) String guestGstNumber) {
 
         GroupMultiBillDto result = groupBillGenerationService
-                .generateGroupMultiBill(propertyId, parentBookingId, guestGstNumber);
+                .generateGroupMultiBill(propertyId, reservationId, guestGstNumber);
         return ResponseEntity.status(HttpStatus.CREATED).body(result);
     }
 
-    /**
-     * List all GroupBill records (including voided) for a group booking.
-     *
-     * GET /api/properties/{propertyId}/group-bookings/{parentBookingId}/bills
-     */
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
     public ResponseEntity<List<GroupBill>> getGroupBills(
             @PathVariable UUID propertyId,
-            @PathVariable UUID parentBookingId) {
+            @PathVariable UUID reservationId) {
 
-        return ResponseEntity.ok(groupBillGenerationService.getGroupBills(parentBookingId));
+        return ResponseEntity.ok(groupBillGenerationService.getGroupBills(reservationId));
     }
 
-    /**
-     * Get a fresh pre-signed download URL for an existing group bill PDF.
-     *
-     * GET /api/properties/{propertyId}/group-bookings/{parentBookingId}/bills/{groupBillId}/download-url
-     */
     @GetMapping("/{groupBillId}/download-url")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
     public ResponseEntity<String> getGroupBillDownloadUrl(
             @PathVariable UUID propertyId,
-            @PathVariable UUID parentBookingId,
+            @PathVariable UUID reservationId,
             @PathVariable UUID groupBillId) {
         return ResponseEntity.ok(groupBillGenerationService.generateDownloadUrl(groupBillId));
     }
 
-    /**
-     * Void a single GroupBill by its own ID.
-     *
-     * POST /api/properties/{propertyId}/group-bookings/{parentBookingId}/bills/{groupBillId}/void
-     */
     @PostMapping("/{groupBillId}/void")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<GroupBill> voidGroupBill(
             @PathVariable UUID propertyId,
-            @PathVariable UUID parentBookingId,
+            @PathVariable UUID reservationId,
             @PathVariable UUID groupBillId,
             @RequestParam String reason,
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
@@ -95,23 +77,17 @@ public class GroupBillController {
         }
     }
 
-    /**
-     * Void ALL active GroupBills for a group booking.
-     * Useful before correcting charges and re-generating.
-     *
-     * POST /api/properties/{propertyId}/group-bookings/{parentBookingId}/bills/void-all
-     */
     @PostMapping("/void-all")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<List<GroupBill>> voidAllGroupBills(
             @PathVariable UUID propertyId,
-            @PathVariable UUID parentBookingId,
+            @PathVariable UUID reservationId,
             @RequestParam String reason,
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
 
         try {
             List<GroupBill> voided = groupBillGenerationService
-                    .voidAllActiveGroupBills(parentBookingId, reason, userPrincipal.getUsername());
+                    .voidAllActiveGroupBills(reservationId, reason, userPrincipal.getUsername());
             return ResponseEntity.ok(voided);
         } catch (ResponseStatusException e) {
             throw e;

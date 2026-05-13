@@ -36,6 +36,8 @@ export interface BookingCreationDto {
   extraBeds?: number;
   extraBedRatePerNight?: number;
   extraBedChargeCode?: 'ROOM_RENT' | 'MISC';
+  bookingSource?: string;
+  additionalGuestIds?: string[];
 }
 
 export interface BookingUpdatePayload extends Omit<BookingCreationDto, 'nightlyRate'> {
@@ -109,13 +111,15 @@ const bookingApi = {
   partialUpdate: (propertyId: string, bookingId: string, data: Partial<BookingUpdatePayload>) =>
     api.patch<Booking>(`/properties/${propertyId}/bookings/${bookingId}`, data),
 
-  // Update booking status
-  // PATCH /api/properties/{propertyId}/bookings/{id}/status/{status}
-  updateStatus: (propertyId: string, bookingId: string, status: BookingStatus) =>
-    api.patch<Booking>(
-      `/properties/${propertyId}/bookings/${bookingId}/status/${status}`,
+  // Update booking status; optional `reason` is captured on the booking when status=CANCELLED.
+  // PATCH /api/properties/{propertyId}/bookings/{id}/status/{status}?reason=...
+  updateStatus: (propertyId: string, bookingId: string, status: BookingStatus, reason?: string) => {
+    const query = reason && reason.trim() ? `?reason=${encodeURIComponent(reason.trim())}` : '';
+    return api.patch<Booking>(
+      `/properties/${propertyId}/bookings/${bookingId}/status/${status}${query}`,
       undefined
-    ),
+    );
+  },
 
   // Delete a booking
   delete: (propertyId: string, bookingId: string) =>

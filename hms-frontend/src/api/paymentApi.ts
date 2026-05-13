@@ -66,6 +66,17 @@ const paymentApi = {
     return apiClient.post(`/properties/${propertyId}/folios/${folioId}/payments`, data);
   },
 
+  // Reservation-level (master) payment. Tags Payment.reservationId. When reservation
+  // is in SEPARATE billing mode, bills generated next will distribute the payment as
+  // an applied credit equally across member booking bills.
+  recordReservationPayment: async (propertyId: string, reservationId: string, data: PaymentCreationDto): Promise<PaymentDto> => {
+    return apiClient.post(`/properties/${propertyId}/reservations/${reservationId}/payments`, data);
+  },
+
+  getPaymentsByReservation: async (propertyId: string, reservationId: string): Promise<PaymentDto[]> => {
+    return apiClient.get(`/properties/${propertyId}/reservations/${reservationId}/payments`);
+  },
+
   refundPayment: async (propertyId: string, folioId: string, id: string, data: RefundDto): Promise<PaymentDto> => {
     return apiClient.post(`/properties/${propertyId}/folios/${folioId}/payments/${id}/refund`, data);
   },

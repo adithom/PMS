@@ -92,14 +92,17 @@ public class FolioController {
         return ResponseEntity.ok(updatedFolio);
     }
 
-    @PostMapping("/{id}/charges/{chargeId}/route")
-    public ResponseEntity<FolioDto> routeCharge(
+    /**
+     * Per-charge route-to-master flag. Sets the routeToMaster flag on a single charge;
+     * bill generation honors it on the next invoice.
+     */
+    @PatchMapping("/{id}/charges/{chargeId}/route")
+    public ResponseEntity<FolioDto> setChargeRoute(
             @PathVariable UUID propertyId,
             @PathVariable UUID id,
             @PathVariable UUID chargeId,
-            @RequestParam(required = false) UUID targetFolioId) {
-
-        FolioDto updatedFolio = folioService.routeCharge(propertyId, id, chargeId, targetFolioId);
+            @Valid @RequestBody ChargeRouteUpdateDto dto) {
+        FolioDto updatedFolio = folioService.setChargeRoute(propertyId, id, chargeId, dto.routeToMaster());
         return ResponseEntity.ok(updatedFolio);
     }
 

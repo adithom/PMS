@@ -48,7 +48,7 @@ export default function ChargeForm({ propertyId, folioId, onSuccess, onCancel }:
 
     setSubmitting(true);
     try {
-      await folioApi.addCharge(propertyId, folioId, { ...formData, quantity: formData.quantity ?? 1 } as ChargeCreationDto);
+      await folioApi.addCharge(propertyId, folioId, { ...formData, quantity: formData.quantity ?? 1, referenceType: 'MANUAL' } as ChargeCreationDto);
       onSuccess();
     } catch (err: any) {
       setError(err.message || 'Failed to post charge');

@@ -31,18 +31,18 @@ export function todayIST(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: IST });
 }
 
-/** Format a YYYY-MM-DD string or ISO timestamp for display as dd-mm-yyyy. */
+/** Format a YYYY-MM-DD string or ISO timestamp for display as dd/mm/yyyy. */
 export function fmtDate(d: string | Date): string {
   const date = typeof d === 'string'
     ? new Date(d.includes('T') ? d : d + 'T00:00:00')
     : d;
-  return date.toLocaleDateString('en-GB', { timeZone: IST }).replace(/\//g, '-');
+  return date.toLocaleDateString('en-GB', { timeZone: IST });
 }
 
-/** Format an ISO timestamp for display as dd-mm-yyyy HH:mm (IST). */
+/** Format an ISO timestamp for display as dd/mm/yyyy HH:mm (IST). */
 export function fmtDateTime(d: string | Date): string {
   const date = typeof d === 'string' ? new Date(d) : d;
-  const datePart = date.toLocaleDateString('en-GB', { timeZone: IST }).replace(/\//g, '-');
+  const datePart = date.toLocaleDateString('en-GB', { timeZone: IST });
   const timePart = date.toLocaleTimeString('en-GB', { timeZone: IST, hour: '2-digit', minute: '2-digit' });
   return `${datePart} ${timePart}`;
 }

@@ -29,6 +29,9 @@ import com.adith.os.HMS.guest.Guest;
 import com.adith.os.HMS.guest.GuestRepository;
 import com.adith.os.HMS.property.Property;
 import com.adith.os.HMS.property.PropertyRepository;
+import com.adith.os.HMS.reservation.Reservation;
+import com.adith.os.HMS.reservation.ReservationRepository;
+import com.adith.os.HMS.reservation.ReservationStatus;
 import com.adith.os.HMS.room.Room;
 import com.adith.os.HMS.room.RoomRepository;
 import com.adith.os.HMS.room.RoomStatus;
@@ -66,6 +69,7 @@ public class BookingService {
     private final RoomAssignmentRepository roomAssignmentRepository;
     private final TravelAgentService travelAgentService;
     private final PropertyMealPlanRepository mealPlanRepository;
+    private final ReservationRepository reservationRepository;
 
     // Active statuses for room assignments
     private static final List<RoomAssignmentStatus> ACTIVE_ASSIGNMENT_STATUSES =
@@ -82,7 +86,8 @@ public class BookingService {
                           RoomAssignmentService roomAssignmentService,
                           RoomAssignmentRepository roomAssignmentRepository,
                           TravelAgentService travelAgentService,
-                          PropertyMealPlanRepository mealPlanRepository) {
+                          PropertyMealPlanRepository mealPlanRepository,
+                          ReservationRepository reservationRepository) {
         this.propertyRepository = propertyRepository;
         this.roomRepository = roomRepository;
         this.guestRepository = guestRepository;
@@ -95,6 +100,7 @@ public class BookingService {
         this.roomAssignmentRepository = roomAssignmentRepository;
         this.travelAgentService = travelAgentService;
         this.mealPlanRepository = mealPlanRepository;
+        this.reservationRepository = reservationRepository;
     }
 
     @Transactional
@@ -124,6 +130,19 @@ public class BookingService {
         // Validate guest
         Guest guest = guestRepository.findById(bookingCreationDto.guestId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Guest not found"));
+
+        // Resolve additional guests
+        List<Guest> additionalGuests = new java.util.ArrayList<>();
+        if (bookingCreationDto.additionalGuestIds() != null && !bookingCreationDto.additionalGuestIds().isEmpty()) {
+            for (UUID additionalGuestId : bookingCreationDto.additionalGuestIds()) {
+                if (additionalGuestId.equals(bookingCreationDto.guestId())) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Additional guest cannot be the same as the primary guest");
+                }
+                Guest additionalGuest = guestRepository.findById(additionalGuestId)
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Additional guest not found: " + additionalGuestId));
+                additionalGuests.add(additionalGuest);
+            }
+        }
 
         Unit unit = null;
         if (bookingCreationDto.unitId() != null) {
@@ -205,6 +224,9 @@ public class BookingService {
 
         try {
             Booking booking = bookingMapper.toEntity(bookingCreationDto, property, room, guest, unit);
+            if (!additionalGuests.isEmpty()) {
+                booking.setAdditionalGuests(additionalGuests);
+            }
 
             TravelAgent travelAgent = travelAgentService.resolveOrCreate(
                     bookingCreationDto.travelAgentId(), bookingCreationDto.newTravelAgent());
@@ -212,6 +234,21 @@ public class BookingService {
                 booking.setTravelAgent(travelAgent);
                 booking.setCommissionRate(travelAgent.getCommissionRate());
             }
+
+            Reservation reservation = new Reservation();
+            reservation.setProperty(property);
+            reservation.setOrganizerGuest(guest);
+            reservation.setCheckIn(bookingCreationDto.checkIn());
+            reservation.setCheckOut(bookingCreationDto.checkOut());
+            reservation.setCurrency(booking.getCurrency());
+            reservation.setSpecialRequests(bookingCreationDto.specialRequests());
+            reservation.setStatus(ReservationStatus.PENDING);
+            if (travelAgent != null) {
+                reservation.setTravelAgent(travelAgent);
+                reservation.setCommissionRate(travelAgent.getCommissionRate());
+            }
+            Reservation savedReservation = reservationRepository.save(reservation);
+            booking.setReservation(savedReservation);
 
             if (bookingCreationDto.mealPlanType() != null) {
                 PropertyMealPlan plan = mealPlanRepository
@@ -227,15 +264,13 @@ public class BookingService {
 
             Booking savedBooking = bookingRepository.save(booking);
 
-            // NEW: Automatically create a Master Folio for this new booking
+            // Auto-create the booking's folio
             com.adith.os.HMS.billing.folio.dto.FolioCreationDto folioDto =
                     new com.adith.os.HMS.billing.folio.dto.FolioCreationDto(
                             savedBooking.getId(),
                             savedBooking.getGuest().getId(),
-                            com.adith.os.HMS.billing.folio.FolioType.MASTER,
                             savedBooking.getSpecialRequests(),
-                            "SYSTEM",// createdBy
-                            null     // routedToFolioId - not set for master folio
+                            "SYSTEM"
                     );
             FolioDto createdFolio = folioService.createFolio(propertyId, folioDto);
 
@@ -586,6 +621,7 @@ public class BookingService {
             booking.setSpecialRequests(dto.specialRequests());
             booking.setTwinBed(dto.isTwinBed());
             booking.setReferenceNumber(dto.referenceNumber());
+            booking.setBookingSource(dto.bookingSource());
 
             // Travel agent: null travelAgentId on PUT means remove the association
             if (dto.travelAgentId() != null) {
@@ -772,6 +808,10 @@ public class BookingService {
                 booking.setReferenceNumber(dto.referenceNumber());
             }
 
+            if (dto.bookingSource() != null) {
+                booking.setBookingSource(dto.bookingSource());
+            }
+
             // Travel agent partial update
             if (Boolean.TRUE.equals(dto.clearTravelAgent())) {
                 booking.setTravelAgent(null);
@@ -823,6 +863,21 @@ public class BookingService {
                 booking.setExtraBedChargeCode(dto.extraBedChargeCode());
             }
 
+            // Additional guests partial update: if provided, replace the list
+            if (dto.additionalGuestIds() != null) {
+                List<Guest> updatedAdditional = new java.util.ArrayList<>();
+                UUID primaryGuestId = booking.getGuest().getId();
+                for (UUID additionalGuestId : dto.additionalGuestIds()) {
+                    if (additionalGuestId.equals(primaryGuestId)) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Additional guest cannot be the same as the primary guest");
+                    }
+                    Guest additionalGuest = guestRepository.findById(additionalGuestId)
+                            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Additional guest not found: " + additionalGuestId));
+                    updatedAdditional.add(additionalGuest);
+                }
+                booking.setAdditionalGuests(updatedAdditional);
+            }
+
             if (datesChanged) {
                 roomAssignmentService.syncDatesForBookingUpdate(bookingId, newCheckIn, newCheckOut);
             }
@@ -844,6 +899,11 @@ public class BookingService {
 
     @Transactional
     public BookingDto updateBookingStatus(UUID propertyId, UUID bookingId, BookingStatus status) {
+        return updateBookingStatus(propertyId, bookingId, status, null);
+    }
+
+    @Transactional
+    public BookingDto updateBookingStatus(UUID propertyId, UUID bookingId, BookingStatus status, String reason) {
         if (propertyId == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Property ID is required");
         }
@@ -868,6 +928,9 @@ public class BookingService {
 
         try {
             booking.setStatus(status);
+            if (status == BookingStatus.CANCELLED && reason != null && !reason.isBlank()) {
+                booking.setCancellationReason(reason.trim());
+            }
 
             if (status == BookingStatus.CANCELLED || status == BookingStatus.NO_SHOW) {
                 roomAssignmentService.cancelAssignmentsForBooking(bookingId);
@@ -1037,7 +1100,7 @@ public class BookingService {
             nightlyRateToApply = dto.extensionNightlyRate();
         } else {
             // Automatically calculate the average nightly rate from the current stay
-            Folio masterFolio = booking.getMasterFolio();
+            Folio masterFolio = booking.getFolio();
             if (masterFolio != null && originalNights > 0) {
                 BigDecimal currentRoomTotal = masterFolio.getCharges().stream()
                         .filter(c -> !c.isVoided() && c.getChargeCode().isRoomRent())
@@ -1067,7 +1130,7 @@ public class BookingService {
         booking.setCheckOut(newCheckOut);
 
         // 6. Post Charges to Folio
-        Folio folio = booking.getMasterFolio();
+        Folio folio = booking.getFolio();
         if (folio != null) {
             // Prevent modifying closed/posted folios
             if (folio.getStatus() == com.adith.os.HMS.billing.folio.FolioStatus.POSTED ||
@@ -1091,7 +1154,8 @@ public class BookingService {
                                 "BOOKING",
                                 bookingId,
                                 dto.notes() != null ? dto.notes() : "Extended Stay",
-                                "SYSTEM"
+                                "SYSTEM",
+                                null
                         );
                 folioService.addCharge(propertyId, folio.getId(), chargeDto);
             }
@@ -1163,7 +1227,7 @@ public class BookingService {
         }
 
         // Optional: Prevent checkout if folio has a balance
-        Folio masterFolio = booking.getMasterFolio();
+        Folio masterFolio = booking.getFolio();
         if (masterFolio != null && !masterFolio.isFullyPaid()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Cannot check out: Folio has an outstanding balance of " + masterFolio.getBalanceDue());
         }
@@ -1190,7 +1254,7 @@ public class BookingService {
         booking.setStatus(BookingStatus.CHECKED_OUT);
 
         // 2. Fetch the Master Folio
-        Folio folio = booking.getMasterFolio();
+        Folio folio = booking.getFolio();
 
         // 3. Handle Financials based on Policy
         switch (policy) {
@@ -1243,7 +1307,7 @@ public class BookingService {
                             "Early Checkout Custom Adjustment",
                             adjustmentNeeded.negate(), // Make it negative
                             BigDecimal.ONE,
-                            BigDecimal.ZERO, BigDecimal.ZERO, null, null, "Early Checkout", "SYSTEM"
+                            BigDecimal.ZERO, BigDecimal.ZERO, null, null, "Early Checkout", "SYSTEM", null
                     );
                     folioService.addCharge(propertyId, folio.getId(), adjDto);
                 }

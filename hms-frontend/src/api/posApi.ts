@@ -11,10 +11,11 @@ import type {
   PosItemCategoryUpdateDto,
   PosProductCreationDto,
   PosProductUpdateDto,
-  PosSettleDto,
   OrderSummary,
+  PosTicket,
+  PosTicketCreationDto,
+  PosTicketHistory,
 } from '../types/pos';
-import type { FolioDto } from './folioApi';
 
 const posApi = {
   // Locations
@@ -27,8 +28,6 @@ const posApi = {
   updateLocation: (id: string, data: PosLocationUpdateDto) =>
     api.put<PosLocation>(`/pos/locations/${id}`, data),
 
-  postWalkInFolio: (locationId: string) =>
-    api.post<FolioDto>(`/pos/locations/${locationId}/post-walkin-folio`, null),
 
   // Categories
   getCategories: (locationId: string) =>
@@ -56,15 +55,6 @@ const posApi = {
   deleteProduct: (id: string) =>
     api.delete<void>(`/pos/products/${id}`),
 
-  // Orders
-  createOrder: (data: PosOrderCreationDto) =>
-    api.post<PosOrder>('/pos/orders', data),
-
-  chargeOrder: (orderId: string, folioId: string) =>
-    api.post<PosOrder>(`/pos/orders/${orderId}/charge?folioId=${folioId}`, null),
-
-  settleOrder: (orderId: string, data: PosSettleDto) =>
-    api.post<PosOrder>(`/pos/orders/${orderId}/settle`, data),
 
   // Order history (MANAGER)
   getOrders: (locationId: string, from: string, to: string, status?: string) =>
@@ -77,6 +67,25 @@ const posApi = {
 
   getOrderSummary: (locationId: string, from: string, to: string) =>
     api.get<OrderSummary>('/pos/orders/summary', { locationId, from, to }),
+
+  // Tickets
+  openTicket: (data: PosTicketCreationDto) =>
+    api.post<PosTicket>('/pos/tickets', data),
+
+  addOrderToTicket: (ticketId: string, data: PosOrderCreationDto) =>
+    api.post<PosOrder>(`/pos/tickets/${ticketId}/orders`, data),
+
+  closeTicket: (ticketId: string, data?: { paymentMethod?: string; transactionReference?: string }) =>
+    api.post<PosTicket>(`/pos/tickets/${ticketId}/close`, data ?? null),
+
+  getOpenTickets: (locationId: string) =>
+    api.get<PosTicket[]>('/pos/tickets', { locationId }),
+
+  getTicketHistory: (locationId: string, from: string, to: string) =>
+    api.get<PosTicketHistory[]>('/pos/tickets/history', { locationId, from, to }),
+
+  getTicketSummary: (locationId: string, from: string, to: string) =>
+    api.get<OrderSummary>('/pos/tickets/summary', { locationId, from, to }),
 };
 
 export default posApi;

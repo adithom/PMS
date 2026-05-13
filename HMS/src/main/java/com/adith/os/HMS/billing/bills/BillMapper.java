@@ -9,8 +9,10 @@ import com.adith.os.HMS.booking.Booking;
 import com.adith.os.HMS.guest.Guest;
 import com.adith.os.HMS.property.Property;
 import com.adith.os.HMS.billing.payment.Payment;
+import com.adith.os.HMS.billing.payment.PaymentRepository;
 import com.adith.os.HMS.billing.payment.PaymentStatus;
 import com.adith.os.HMS.travelagent.TravelAgent;
+import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -18,26 +20,50 @@ import java.time.ZoneId;
 import java.util.Comparator;
 import java.util.List;
 
+@Component
 public class BillMapper {
 
-    public static BillDto toBillDto(
+    private final PaymentRepository paymentRepository;
+
+    public BillMapper(PaymentRepository paymentRepository) {
+        this.paymentRepository = paymentRepository;
+    }
+
+    public BillDto toBillDto(
             Bill bill,
             Folio folio,
             List<ChargeDto> charges,
             String guestGstNumber
     ) {
-        return toBillDto(bill, folio, charges, guestGstNumber, null);
+        return toBillDto(bill, folio, charges, guestGstNumber, null, BigDecimal.ZERO);
     }
 
-    public static BillDto toBillDto(
+    public BillDto toBillDto(
             Bill bill,
             Folio folio,
             List<ChargeDto> charges,
             String guestGstNumber,
             String pdfDownloadUrl
     ) {
+        return toBillDto(bill, folio, charges, guestGstNumber, pdfDownloadUrl, BigDecimal.ZERO);
+    }
 
-        // 1. Include voided charges with zeroed amounts and [VOID] label
+    /**
+     * Phase B: caller supplies an `appliedMasterCredit` — the share of reservation-level
+     * payments allocated to this bill at generation time (used when the reservation is in
+     * SEPARATE billing mode and master payments need to be split equally across non-master
+     * bookings).
+     */
+    public BillDto toBillDto(
+            Bill bill,
+            Folio folio,
+            List<ChargeDto> charges,
+            String guestGstNumber,
+            String pdfDownloadUrl,
+            BigDecimal appliedMasterCredit
+    ) {
+
+        // Include voided charges with zeroed amounts and [VOID] label
         List<ChargeDto> validCharges = charges.stream()
                 .map(c -> c.isVoided()
                         ? new ChargeDto(c.id(), c.chargeDate(), c.postingDate(), c.chargeCode(),
@@ -50,7 +76,6 @@ public class BillMapper {
 
         var totals = BillTotalCalculator.calculate(validCharges);
 
-        // 2. Extract relationships safely
         Guest guest = folio.getGuest();
         Property property = folio.getProperty();
         Booking booking = folio.getBooking();
@@ -68,12 +93,14 @@ public class BillMapper {
 
         String safeGstNumber = (guestGstNumber != null) ? guestGstNumber : "";
 
-        // --- 3. DYNAMIC PAYMENT & BALANCE CALCULATIONS ---
-        // Map legacy ChargeCategory routing onto the new BillType:
-        //   null target      → applies to every bill
-        //   ROOM_RENT/MEAL_PLAN → applies only to the ROOM_RENT bill
-        //   ANCILLARY        → applies to all non-room-rent bills
-        BigDecimal categoryAmountPaid = folio.getPayments().stream()
+        // --- DYNAMIC PAYMENT & BALANCE CALCULATIONS ---
+        // Payments are queried by bookingId (the folio's booking) — not via folio.payments.
+        // Map legacy ChargeCategory targeting onto BillType for payment-to-bill matching.
+        List<Payment> bookingPayments = booking != null
+                ? paymentRepository.findByBookingId(booking.getId())
+                : List.of();
+
+        BigDecimal categoryAmountPaid = bookingPayments.stream()
                 .filter(p -> p.getPaymentStatus() == PaymentStatus.COMPLETED || p.getPaymentStatus() == PaymentStatus.REFUNDED)
                 .filter(p -> {
                     ChargeCategory t = p.getTargetCategory();
@@ -85,7 +112,7 @@ public class BillMapper {
                 .map(Payment::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        BigDecimal categoryRefunds = folio.getPayments().stream()
+        BigDecimal categoryRefunds = bookingPayments.stream()
                 .filter(p -> p.getPaymentStatus() == PaymentStatus.COMPLETED || p.getPaymentStatus() == PaymentStatus.REFUNDED)
                 .filter(p -> {
                     ChargeCategory t = p.getTargetCategory();
@@ -97,14 +124,19 @@ public class BillMapper {
                 .map(p -> p.getRefundedAmount() != null ? p.getRefundedAmount() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // Calculate the absolute final paid amount and balance due
         BigDecimal finalAmountPaid = categoryAmountPaid.subtract(categoryRefunds);
+
+        // Apply the booking's share of reservation-level payments (master credit) on the
+        // designated bill (typically ROOM_RENT, the first bill in a multi-bill batch).
+        if (appliedMasterCredit != null && appliedMasterCredit.compareTo(BigDecimal.ZERO) > 0) {
+            finalAmountPaid = finalAmountPaid.add(appliedMasterCredit);
+        }
+
         BigDecimal grandTotal = totals.total();
 
-        // Use .max(BigDecimal.ZERO) so if the guest overpaid, the balance due just shows 0.00 instead of a negative number
+        // .max(BigDecimal.ZERO) so overpayments show 0.00 instead of negative.
         BigDecimal balanceDue = grandTotal.subtract(finalAmountPaid).max(BigDecimal.ZERO);
 
-        // 4. Map it all to the DTO
         return new BillDto(
                 bill.getId(),
                 folio.getId(),
@@ -136,12 +168,11 @@ public class BillMapper {
                 totals.discount(),
                 grandTotal,
 
-                finalAmountPaid, // Amount paid mapped accurately!
-                balanceDue,      // Balance due mapped accurately!
+                finalAmountPaid,
+                balanceDue,
 
                 folio.getNotes(),
 
-                // Map Void Data
                 bill.isVoided(),
                 bill.getVoidReason(),
                 bill.getVoidedAt(),
@@ -158,7 +189,7 @@ public class BillMapper {
      * Groups a batch of bills (same generationBatchId) into a single ledger row.
      * The "main" invoice is the one whose number sorts first (base number, no suffix letter).
      */
-    public static BillBatchRowDto toBatchRowDto(List<Bill> batchBills) {
+    public BillBatchRowDto toBatchRowDto(List<Bill> batchBills) {
         Bill main = batchBills.stream()
                 .min(Comparator.comparing(Bill::getInvoiceNumber))
                 .orElseThrow();
@@ -195,9 +226,8 @@ public class BillMapper {
     /**
      * Lightweight mapper for the bill ledger list view.
      * Uses stored totals from the Bill entity (no charge line items loaded).
-     * Requires Bill.folio, folio.property, folio.guest, folio.booking to be JOIN FETCHed.
      */
-    public static BillDto toLedgerRowDto(Bill bill) {
+    public BillDto toLedgerRowDto(Bill bill) {
         Folio folio = bill.getFolio();
         Guest guest = folio.getGuest();
         Property property = folio.getProperty();
@@ -237,15 +267,15 @@ public class BillMapper {
                 checkIn,
                 checkOut,
 
-                List.of(),              // no line items for ledger row
+                List.of(),
 
                 bill.getSubtotal(),
                 bill.getTaxAmount(),
                 bill.getDiscountAmount(),
-                bill.getTotalAmount(),  // grandTotal
+                bill.getTotalAmount(),
 
-                BigDecimal.ZERO,        // amountPaid — not needed for ledger
-                BigDecimal.ZERO,        // balanceDue — not needed for ledger
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
 
                 folio.getNotes(),
 
@@ -254,7 +284,7 @@ public class BillMapper {
                 bill.getVoidedAt(),
                 bill.getVoidedBy(),
 
-                null,                   // pdfDownloadUrl — not pre-signed for list
+                null,
 
                 agent != null ? agent.getId() : null,
                 agent != null ? agent.getName() : null

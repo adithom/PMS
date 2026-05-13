@@ -5,12 +5,12 @@ import { useAuth } from '../contexts/AuthContext';
 import posApi from '../api/posApi';
 import ConfirmModal from '../components/ConfirmModal';
 import type {
-  PosLocation, PosItemCategory, PosProduct, PosOrder, OrderSummary,
+  PosLocation, PosItemCategory, PosProduct, OrderSummary, PosTicketHistory,
   PosLocationCreationDto, PosItemCategoryCreationDto, PosProductCreationDto,
 } from '../types/pos';
 
 const fmt = (n: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(n);
-const tabs = ['Outlets', 'Categories & Items', 'Walk-in Folios', 'Order History'] as const;
+const tabs = ['Outlets', 'Categories & Items', 'Order History'] as const;
 type Tab = typeof tabs[number];
 
 const inputCls = 'border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow w-full';
@@ -511,79 +511,6 @@ function EditProductRow({ product, onSave, onCancel }: { product: PosProduct; on
   );
 }
 
-// ─── WalkInFoliosTab ─────────────────────────────────────────────────────────
-
-function WalkInFoliosTab({ locations, onRefresh }: { locations: PosLocation[]; onRefresh: () => void }) {
-  const [posting, setPosting] = useState<string | null>(null);
-  const [confirmId, setConfirmId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const handlePost = async (locId: string) => {
-    setPosting(locId); setError(null);
-    try {
-      await posApi.postWalkInFolio(locId);
-      setConfirmId(null); onRefresh();
-    } catch { setError('Failed to post walk-in folio'); } finally { setPosting(null); }
-  };
-
-  return (
-    <div className="space-y-5">
-      {error && <div className="bg-red-50 border border-red-100 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>}
-
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b border-gray-100">
-            <tr>
-              <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Outlet</th>
-              <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Type</th>
-              <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Walk-in Folio</th>
-              <th className="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Action</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50">
-            {locations.map(loc => (
-              <tr key={loc.id} className="hover:bg-gray-50/50 transition-colors">
-                <td className="px-5 py-3.5 font-medium text-gray-900">{loc.name}</td>
-                <td className="px-5 py-3.5">
-                  <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{loc.locationType}</span>
-                </td>
-                <td className="px-5 py-3.5">
-                  {loc.currentWalkInFolioId ? (
-                    <span className="inline-flex items-center gap-1.5 text-sm">
-                      <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
-                      <span className="text-emerald-700 font-medium">Active</span>
-                      <span className="text-gray-400 text-xs">({loc.currentWalkInFolioId.slice(0, 8)})</span>
-                    </span>
-                  ) : (
-                    <span className="text-gray-400 text-sm">No active folio</span>
-                  )}
-                </td>
-                <td className="px-5 py-3.5 text-right">
-                  {confirmId === loc.id ? (
-                    <div className="flex items-center justify-end gap-2">
-                      <span className="text-xs text-amber-700 font-medium">Confirm?</span>
-                      <button onClick={() => handlePost(loc.id)} disabled={posting === loc.id}
-                        className="text-xs px-3 py-1.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors font-medium shadow-sm">
-                        {posting === loc.id ? 'Posting...' : 'Yes, Post'}
-                      </button>
-                      <button onClick={() => setConfirmId(null)} className="text-xs px-3 py-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors font-medium">Cancel</button>
-                    </div>
-                  ) : (
-                    <button onClick={() => setConfirmId(loc.id)} disabled={!loc.currentWalkInFolioId}
-                      className="text-xs px-3 py-1.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium shadow-sm">
-                      Post & Archive
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
 // ─── OrderHistoryTab ─────────────────────────────────────────────────────────
 
 function OrderHistoryTab({ locations }: { locations: PosLocation[] }) {
@@ -593,33 +520,32 @@ function OrderHistoryTab({ locations }: { locations: PosLocation[] }) {
   const thirtyDaysAgo = toISTDate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
   const [fromDate, setFromDate] = useState(thirtyDaysAgo);
   const [toDate, setToDate] = useState(today);
-  const [statusFilter, setStatusFilter] = useState<string>('');
-  const [orders, setOrders] = useState<PosOrder[]>([]);
+  const [tickets, setTickets] = useState<PosTicketHistory[]>([]);
   const [summary, setSummary] = useState<OrderSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [orderError, setOrderError] = useState<string | null>(null);
 
-  const loadOrders = useCallback(async () => {
+  const loadTickets = useCallback(async () => {
     if (!selectedLocationId) return;
     setLoading(true);
     setOrderError(null);
     try {
-      const [orderResult, summaryResult] = await Promise.allSettled([
-        posApi.getOrders(selectedLocationId, fromDate, toDate, statusFilter || undefined),
-        posApi.getOrderSummary(selectedLocationId, fromDate, toDate),
+      const [ticketResult, summaryResult] = await Promise.allSettled([
+        posApi.getTicketHistory(selectedLocationId, fromDate, toDate),
+        posApi.getTicketSummary(selectedLocationId, fromDate, toDate),
       ]);
-      if (orderResult.status === 'fulfilled') {
-        setOrders(orderResult.value);
+      if (ticketResult.status === 'fulfilled') {
+        setTickets(ticketResult.value);
       } else {
-        setOrders([]);
-        setOrderError('Failed to load orders. Please try again.');
+        setTickets([]);
+        setOrderError('Failed to load receipts. Please try again.');
       }
       setSummary(summaryResult.status === 'fulfilled' ? summaryResult.value : null);
     } finally { setLoading(false); }
-  }, [selectedLocationId, fromDate, toDate, statusFilter]);
+  }, [selectedLocationId, fromDate, toDate]);
 
-  useEffect(() => { loadOrders(); }, [loadOrders]);
+  useEffect(() => { loadTickets(); }, [loadTickets]);
 
   return (
     <div className="space-y-5">
@@ -636,13 +562,6 @@ function OrderHistoryTab({ locations }: { locations: PosLocation[] }) {
           <label className="text-sm text-gray-500 whitespace-nowrap">To</label>
           <DateInput value={toDate} onChange={setToDate} />
         </div>
-        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className={selectCls}>
-          <option value="">All Statuses</option>
-          <option value="OPEN">Open</option>
-          <option value="CLOSED">Closed</option>
-          <option value="CHARGED">Charged</option>
-          <option value="CANCELLED">Cancelled</option>
-        </select>
       </div>
 
       {/* Summary cards */}
@@ -653,7 +572,7 @@ function OrderHistoryTab({ locations }: { locations: PosLocation[] }) {
             <div className="text-2xl font-bold text-gray-900">{fmt(summary.totalRevenue)}</div>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 border-t-2 border-t-blue-500">
-            <div className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-2">Orders</div>
+            <div className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-2">Receipts</div>
             <div className="text-2xl font-bold text-gray-900">{summary.orderCount}</div>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 border-t-2 border-t-purple-500">
@@ -670,50 +589,46 @@ function OrderHistoryTab({ locations }: { locations: PosLocation[] }) {
         </div>
       )}
 
-      {/* Orders table */}
+      {/* Receipts table */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         {loading ? (
-          <div className="text-center py-12 text-gray-400 text-sm">Loading orders...</div>
+          <div className="text-center py-12 text-gray-400 text-sm">Loading receipts...</div>
         ) : (
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
-                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Order #</th>
+                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Receipt #</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Date</th>
+                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Guest</th>
+                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Room</th>
+                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Meal</th>
                 <th className="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Items</th>
-                <th className="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Subtotal</th>
-                <th className="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Discount</th>
                 <th className="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Total</th>
-                <th className="text-center px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
-                <th className="text-center px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Payment</th>
+                <th className="text-center px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Type</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {orders.map(order => (
+              {tickets.map(ticket => (
                 <>
-                  <tr key={order.id} className="hover:bg-gray-50/50 cursor-pointer transition-colors" onClick={() => setExpandedId(expandedId === order.id ? null : order.id)}>
-                    <td className="px-5 py-3.5 font-medium text-gray-900">{order.orderNumber}</td>
-                    <td className="px-5 py-3.5 text-gray-500 text-xs">
-                      {fmtDateTime(order.orderDate)}
+                  <tr key={ticket.id} className="hover:bg-gray-50/50 cursor-pointer transition-colors" onClick={() => setExpandedId(expandedId === ticket.id ? null : ticket.id)}>
+                    <td className="px-5 py-3.5 font-medium text-gray-900">{ticket.invoiceNumber ?? '—'}</td>
+                    <td className="px-5 py-3.5 text-gray-500 text-xs">{fmtDateTime(ticket.closedAt)}</td>
+                    <td className="px-5 py-3.5 text-gray-700">{ticket.guestName}</td>
+                    <td className="px-5 py-3.5 text-gray-500">{ticket.roomNumber ?? '—'}</td>
+                    <td className="px-5 py-3.5 text-gray-500 capitalize">{ticket.mealType.toLowerCase()}</td>
+                    <td className="px-5 py-3.5 text-right text-gray-600">{ticket.items.length}</td>
+                    <td className="px-5 py-3.5 text-right font-semibold text-gray-900">
+                      {ticket.mealPlanCovered ? <span className="text-gray-400">—</span> : fmt(ticket.totalAmount)}
                     </td>
-                    <td className="px-5 py-3.5 text-right text-gray-600">{order.items?.length ?? 0}</td>
-                    <td className="px-5 py-3.5 text-right text-gray-600">{fmt(order.subtotal)}</td>
-                    <td className="px-5 py-3.5 text-right">
-                      {order.discountAmount > 0 ? <span className="text-emerald-600 font-medium">−{fmt(order.discountAmount)}</span> : <span className="text-gray-400">—</span>}
-                    </td>
-                    <td className="px-5 py-3.5 text-right font-semibold text-gray-900">{fmt(order.totalAmount)}</td>
                     <td className="px-5 py-3.5 text-center">
-                      <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold ${
-                        order.status === 'CLOSED' ? 'bg-emerald-100 text-emerald-700' :
-                        order.status === 'CHARGED' ? 'bg-blue-100 text-blue-700' :
-                        order.status === 'CANCELLED' ? 'bg-red-100 text-red-600' :
-                        'bg-amber-100 text-amber-700'
-                      }`}>{order.status}</span>
+                      {ticket.mealPlanCovered
+                        ? <span className="inline-block px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">Meal Plan</span>
+                        : <span className="inline-block px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">Billed</span>
+                      }
                     </td>
-                    <td className="px-5 py-3.5 text-center text-xs text-gray-500">{order.paymentStatus}</td>
                   </tr>
-                  {expandedId === order.id && order.items && (
-                    <tr key={`${order.id}-detail`}>
+                  {expandedId === ticket.id && (
+                    <tr key={`${ticket.id}-detail`}>
                       <td colSpan={8} className="bg-gray-50 px-8 py-4">
                         <table className="w-full text-xs">
                           <thead>
@@ -726,7 +641,7 @@ function OrderHistoryTab({ locations }: { locations: PosLocation[] }) {
                             </tr>
                           </thead>
                           <tbody>
-                            {order.items.map((item, idx) => (
+                            {ticket.items.map((item, idx) => (
                               <tr key={idx} className="border-t border-gray-100">
                                 <td className="py-1.5 text-gray-800">{item.itemName}</td>
                                 <td className="py-1.5 text-right text-gray-600">{item.quantity}</td>
@@ -737,14 +652,14 @@ function OrderHistoryTab({ locations }: { locations: PosLocation[] }) {
                             ))}
                           </tbody>
                         </table>
-                        {order.createdBy && <div className="mt-3 text-xs text-gray-400">Created by: {order.createdBy}</div>}
+                        {ticket.createdBy && <div className="mt-3 text-xs text-gray-400">Created by: {ticket.createdBy}</div>}
                       </td>
                     </tr>
                   )}
                 </>
               ))}
-              {orders.length === 0 && (
-                <tr><td colSpan={8} className="px-5 py-10 text-center text-gray-400 text-sm">No orders found for this period.</td></tr>
+              {tickets.length === 0 && (
+                <tr><td colSpan={8} className="px-5 py-10 text-center text-gray-400 text-sm">No receipts found for this period.</td></tr>
               )}
             </tbody>
           </table>
@@ -821,9 +736,6 @@ export default function PosManagement() {
               locations.length > 0
                 ? <CategoriesItemsTab locations={locations} />
                 : <div className="text-center py-16 text-gray-400 text-sm">Create an outlet first.</div>
-            )}
-            {activeTab === 'Walk-in Folios' && (
-              <WalkInFoliosTab locations={locations} onRefresh={loadLocations} />
             )}
             {activeTab === 'Order History' && (
               locations.length > 0

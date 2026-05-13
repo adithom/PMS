@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import bookingApi from '../../api/bookingApi';
 import type { Booking } from '../../types';
 import { STATUS_COLORS, cn } from './TapeChartConstants';
-import { toDS, dateStr } from '../../utils/dateHelpers';
+import { toDS, dateStr, fmtDate } from '../../utils/dateHelpers';
 import ConfirmModal from '../ConfirmModal';
 
 type PendingAction = {
@@ -167,7 +167,7 @@ export default function TapeChartCtxMenu({
           <span className="text-[11px] text-slate-400">Room {booking.roomNumber || '—'}</span>
         </div>
         <p className="mt-1.5 text-[11px] text-slate-500">
-          {dateStr(booking.checkIn)} → {dateStr(booking.checkOut)}
+          {fmtDate(booking.checkIn)} → {fmtDate(booking.checkOut)}
         </p>
       </div>
       <div className="py-1">

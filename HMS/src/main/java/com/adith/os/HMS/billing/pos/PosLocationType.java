@@ -19,4 +19,15 @@ public enum PosLocationType {
     public ChargeCode toChargeCode() {
         return chargeCode;
     }
+
+    public String getInvoicePrefix() {
+        return switch (this) {
+            case RESTAURANT -> "KTN";
+            case BAR        -> "BAR";
+            case SPA        -> "SPA";
+            case BAKERY     -> "BKY";
+            case LAUNDRY    -> "LND";
+            case SHOP       -> "SHP";
+        };
+    }
 }

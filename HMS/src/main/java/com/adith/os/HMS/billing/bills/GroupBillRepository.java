@@ -11,13 +11,13 @@ import java.util.UUID;
 @Repository
 public interface GroupBillRepository extends JpaRepository<GroupBill, UUID> {
 
-    List<GroupBill> findByParentBookingId(UUID parentBookingId);
+    List<GroupBill> findByReservationId(UUID reservationId);
 
-    @Query("SELECT gb FROM GroupBill gb WHERE gb.parentBooking.id = :parentBookingId AND gb.isVoided = false")
-    List<GroupBill> findActiveByParentBookingId(@Param("parentBookingId") UUID parentBookingId);
+    @Query("SELECT gb FROM GroupBill gb WHERE gb.reservation.id = :reservationId AND gb.isVoided = false")
+    List<GroupBill> findActiveByReservationId(@Param("reservationId") UUID reservationId);
 
-    @Query("SELECT COUNT(gb) FROM GroupBill gb WHERE gb.parentBooking.id = :parentBookingId AND gb.isVoided = false")
-    long countActiveByParentBookingId(@Param("parentBookingId") UUID parentBookingId);
+    @Query("SELECT COUNT(gb) FROM GroupBill gb WHERE gb.reservation.id = :reservationId AND gb.isVoided = false")
+    long countActiveByReservationId(@Param("reservationId") UUID reservationId);
 
     List<GroupBill> findByGenerationBatchId(UUID generationBatchId);
 }

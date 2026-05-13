@@ -10,6 +10,7 @@ import jakarta.validation.constraints.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 import static com.adith.os.HMS.booking.BookingStatus.PENDING;
@@ -78,7 +79,12 @@ public record BookingCreationDto(
 
         ChargeCode extraBedChargeCode,  // ROOM_RENT or MISC; null defaults to MISC in night audit
 
-        PaymentMethod advancePaymentMethod  // Optional — payment method for the advance payment; defaults to CASH if paidAmount > 0
+        PaymentMethod advancePaymentMethod,  // Optional — payment method for the advance payment; defaults to CASH if paidAmount > 0
+
+        String bookingSource,  // Optional — source of the booking (e.g. "Direct / Walk-In", "MakeMyTrip")
+
+        @Size(max = 3, message = "Maximum 3 additional guests allowed")
+        List<UUID> additionalGuestIds  // Optional — up to 3 co-guests linked to existing Guest profiles
 
 ) {
     public BookingCreationDto {

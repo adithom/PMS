@@ -7,6 +7,9 @@ import com.adith.os.HMS.guest.Guest;
 import com.adith.os.HMS.guest.GuestRepository;
 import com.adith.os.HMS.property.Property;
 import com.adith.os.HMS.property.PropertyRepository;
+import com.adith.os.HMS.reservation.Reservation;
+import com.adith.os.HMS.reservation.ReservationRepository;
+import com.adith.os.HMS.reservation.ReservationStatus;
 import com.adith.os.HMS.room.Room;
 import com.adith.os.HMS.room.RoomRepository;
 import com.adith.os.HMS.room.RoomStatus;
@@ -34,9 +37,10 @@ public class GroupBookingService {
     private final UnitRepository unitRepository;
     private final RoomRepository roomRepository;
     private final BookingRepository bookingRepository;
-    private final FolioRepository folioRepository;
     private final FolioService folioService;
     private final TravelAgentService travelAgentService;
+    private final ReservationRepository reservationRepository;
+    private final FolioChargeRepository folioChargeRepository;
 
     public GroupBookingService(
             PropertyRepository propertyRepository,
@@ -44,17 +48,19 @@ public class GroupBookingService {
             UnitRepository unitRepository,
             RoomRepository roomRepository,
             BookingRepository bookingRepository,
-            FolioRepository folioRepository,
             FolioService folioService,
-            TravelAgentService travelAgentService) {
+            TravelAgentService travelAgentService,
+            ReservationRepository reservationRepository,
+            FolioChargeRepository folioChargeRepository) {
         this.propertyRepository = propertyRepository;
         this.guestRepository = guestRepository;
         this.unitRepository = unitRepository;
         this.roomRepository = roomRepository;
         this.bookingRepository = bookingRepository;
-        this.folioRepository = folioRepository;
         this.folioService = folioService;
         this.travelAgentService = travelAgentService;
+        this.reservationRepository = reservationRepository;
+        this.folioChargeRepository = folioChargeRepository;
     }
 
     // =========================================================================
@@ -62,24 +68,21 @@ public class GroupBookingService {
     // =========================================================================
 
     /**
-     * Creates a complete group booking in a single transaction.
+     * Creates a group reservation in a single transaction.
      *
-     * What happens here:
-     * 1. Validate all inputs upfront (fail fast before touching the DB)
-     * 2. Create the parent (master) booking — no unit/room, isGroupMaster=true
-     * 3. For each room request, create a child booking linked to the parent
-     * 4. Auto-create a master folio for each child booking
-     * 5. If billingMode is CONSOLIDATED, route all child folios to the
-     *    organizer's folio (created on the parent booking)
+     *  1. Validate inputs upfront (fail before any DB writes)
+     *  2. Create the Reservation (the group container)
+     *  3. For each room request, create a Booking under the reservation + a folio for it
+     *
+     * The reservation's `defaultRouteToMaster` flag is set from the requested billing mode;
+     * the night audit reads it to decide where new charges land.
      */
     @Transactional
     public GroupBookingSummaryDto createGroupBooking(UUID propertyId,
                                                      @Valid GroupBookingCreationDto dto) {
-        // --- Validate property ---
         Property property = propertyRepository.findById(propertyId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Property not found"));
 
-        // --- Validate dates ---
         if (dto.checkIn().isBefore(LocalDate.now())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Check-in date cannot be in the past");
         }
@@ -88,169 +91,101 @@ public class GroupBookingService {
                     "Check-out date must be after check-in date");
         }
 
-        // --- Validate organizer guest ---
         Guest organizer = guestRepository.findById(dto.organizerGuestId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Organizer guest not found"));
 
-        // --- Validate all room requests upfront (fail before any DB writes) ---
         List<ValidatedRoomRequest> validated = validateAndResolveRoomRequests(
                 propertyId, dto, organizer);
 
-        // --- Resolve travel agent once for the whole group ---
         TravelAgent travelAgent = travelAgentService.resolveOrCreate(
                 dto.travelAgentId(), dto.newTravelAgent());
 
-        // ---- 1. Create the parent booking ----
-        Booking parent = new Booking();
-        parent.setProperty(property);
-        parent.setGuest(organizer);
-        parent.setUnit(null);   // master booking has no unit
-        parent.setRoom(null);
-        parent.setCheckIn(dto.checkIn());
-        parent.setCheckOut(dto.checkOut());
-        parent.setAdults(0);    // headcount lives on children
-        parent.setChildren(0);
-        parent.setCurrency(dto.currency());
-        parent.setTotalPrice(BigDecimal.ZERO); // will be set after children are summed
-        parent.setPaidAmount(BigDecimal.ZERO);
-        parent.setSpecialRequests(dto.specialRequests());
-        parent.setStatus(BookingStatus.CONFIRMED);
-        parent.setGroupMaster(true);
-        if (dto.groupReference() != null) {
-            parent.setGroupReference(dto.groupReference());
-        }
+        // ---- Create the Reservation ----
+        Reservation reservation = new Reservation();
+        reservation.setProperty(property);
+        reservation.setOrganizerGuest(organizer);
+        reservation.setCheckIn(dto.checkIn());
+        reservation.setCheckOut(dto.checkOut());
+        reservation.setCurrency(dto.currency());
+        reservation.setSpecialRequests(dto.specialRequests());
+        reservation.setGroupReference(dto.groupReference());
+        reservation.setStatus(ReservationStatus.PENDING);
+        reservation.setDefaultRouteToMaster(
+                dto.billingMode() == GroupBookingCreationDto.GroupBillingMode.CONSOLIDATED);
         if (travelAgent != null) {
-            parent.setTravelAgent(travelAgent);
-            parent.setCommissionRate(travelAgent.getCommissionRate());
+            reservation.setTravelAgent(travelAgent);
+            reservation.setCommissionRate(travelAgent.getCommissionRate());
         }
-        Booking savedParent = bookingRepository.save(parent);
+        Reservation savedReservation = reservationRepository.save(reservation);
 
-        // ---- 2. Create a folio on the parent (used for consolidated billing) ----
-        FolioCreationDto parentFolioDto = new FolioCreationDto(
-                savedParent.getId(),
-                organizer.getId(),
-                FolioType.MASTER,
-                "Group organizer folio" + (dto.groupReference() != null ? " - " + dto.groupReference() : ""),
-                "SYSTEM",
-                null    // no routing on the parent folio itself
-        );
-        var parentFolioDto2 = folioService.createFolio(propertyId, parentFolioDto);
-        UUID parentFolioId = parentFolioDto2.id();
-
-        // ---- 3. Create child bookings ----
-        List<Booking> savedChildren = new ArrayList<>();
+        // ---- Create one Booking per room request, plus a folio for each ----
+        List<Booking> savedBookings = new ArrayList<>();
         BigDecimal totalGroupPrice = BigDecimal.ZERO;
 
         for (ValidatedRoomRequest vr : validated) {
-            Booking child = new Booking();
-            child.setProperty(property);
-            child.setGuest(vr.guest());
-            child.setUnit(vr.unit());
-            child.setRoom(vr.room()); // may be null — assigned at check-in
-            child.setCheckIn(dto.checkIn());
-            child.setCheckOut(dto.checkOut());
-            child.setAdults(vr.request().adults());
-            child.setChildren(vr.request().children());
-            child.setCurrency(dto.currency());
+            Booking booking = new Booking();
+            booking.setProperty(property);
+            booking.setReservation(savedReservation);
+            booking.setGuest(vr.guest());
+            booking.setUnit(vr.unit());
+            booking.setRoom(vr.room()); // may be null — assigned at check-in
+            booking.setCheckIn(dto.checkIn());
+            booking.setCheckOut(dto.checkOut());
+            booking.setAdults(vr.request().adults());
+            booking.setChildren(vr.request().children());
+            booking.setCurrency(dto.currency());
             long nights = ChronoUnit.DAYS.between(dto.checkIn(), dto.checkOut());
-            BigDecimal childTotal = (vr.request().nightlyRate() != null
+            BigDecimal bookingTotal = (vr.request().nightlyRate() != null
                     && vr.request().nightlyRate().compareTo(BigDecimal.ZERO) > 0 && nights > 0)
                     ? vr.request().nightlyRate().multiply(BigDecimal.valueOf(nights))
                     : BigDecimal.ZERO;
-            child.setTotalPrice(childTotal);
-            child.setPaidAmount(BigDecimal.ZERO);
-            child.setSpecialRequests(vr.request().specialRequests());
-            child.setStatus(BookingStatus.CONFIRMED);
-            child.setGroupMaster(false);
-            child.setParentBooking(savedParent);
-            child.setTwinBed(vr.request().isTwinBed() != null ? vr.request().isTwinBed() : false);
+            booking.setTotalPrice(bookingTotal);
+            booking.setPaidAmount(BigDecimal.ZERO);
+            booking.setSpecialRequests(vr.request().specialRequests());
+            booking.setStatus(BookingStatus.CONFIRMED);
+            booking.setTwinBed(vr.request().isTwinBed() != null ? vr.request().isTwinBed() : false);
             if (travelAgent != null) {
-                child.setTravelAgent(travelAgent);
-                child.setCommissionRate(travelAgent.getCommissionRate());
+                booking.setTravelAgent(travelAgent);
+                booking.setCommissionRate(travelAgent.getCommissionRate());
             }
 
-            Booking savedChild = bookingRepository.save(child);
-            savedChildren.add(savedChild);
-            totalGroupPrice = totalGroupPrice.add(childTotal);
+            Booking saved = bookingRepository.save(booking);
+            savedBookings.add(saved);
+            totalGroupPrice = totalGroupPrice.add(bookingTotal);
 
-            // ---- 4. Create master folio for this child booking ----
-            UUID routedTo = dto.billingMode() == GroupBookingCreationDto.GroupBillingMode.CONSOLIDATED
-                    ? parentFolioId
-                    : null;
-
-            FolioCreationDto childFolioDto = new FolioCreationDto(
-                    savedChild.getId(),
+            // Auto-create the booking's folio
+            FolioCreationDto folioDto = new FolioCreationDto(
+                    saved.getId(),
                     vr.guest().getId(),
-                    FolioType.MASTER,
                     vr.request().specialRequests(),
-                    "SYSTEM",
-                    routedTo
+                    "SYSTEM"
             );
-            folioService.createFolio(propertyId, childFolioDto);
+            folioService.createFolio(propertyId, folioDto);
         }
 
-        // ---- 5. Update parent total price ----
-        savedParent.setTotalPrice(totalGroupPrice);
-        bookingRepository.save(savedParent);
-
-        // ---- 6. Build and return summary ----
-        return buildGroupSummary(savedParent, savedChildren, parentFolioId,
-                dto.billingMode().name(), property);
+        return buildReservationSummary(savedReservation, savedBookings);
     }
 
     // =========================================================================
     // READ
     // =========================================================================
 
-    /**
-     * Fetch a complete group booking summary by parent booking ID.
-     */
-    public GroupBookingSummaryDto getGroupBookingSummary(UUID propertyId, UUID parentBookingId) {
-        Booking parent = bookingRepository.findById(parentBookingId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Booking not found"));
-
-        if (!parent.getProperty().getId().equals(propertyId)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Booking does not belong to this property");
-        }
-
-        if (!parent.isGroupMaster()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Booking " + parentBookingId + " is not a group master booking");
-        }
-
-        List<Booking> children = bookingRepository.findByParentBookingId(parentBookingId);
-
-        Folio parentFolio = parent.getMasterFolio();
-        UUID parentFolioId = parentFolio != null ? parentFolio.getId() : null;
-
-        // Infer billing mode from whether children are routed
-        String billingMode = inferBillingMode(children, parentFolioId);
-
-        return buildGroupSummary(parent, children, parentFolioId, billingMode,
-                parent.getProperty());
+    public GroupBookingSummaryDto getGroupReservationSummary(UUID propertyId, UUID reservationId) {
+        Reservation reservation = getValidatedReservation(propertyId, reservationId);
+        List<Booking> bookings = bookingRepository.findByReservationId(reservationId);
+        return buildReservationSummary(reservation, bookings);
     }
 
-    /**
-     * Get all group bookings for a property (returns only the parent bookings).
-     */
-    public List<GroupBookingSummaryDto> getGroupBookingsByProperty(UUID propertyId) {
+    public List<GroupBookingSummaryDto> getGroupReservationsByProperty(UUID propertyId) {
         if (!propertyRepository.existsById(propertyId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Property not found");
         }
 
-        List<Booking> groupMasters = bookingRepository.findGroupMastersByPropertyId(propertyId);
-
-        return groupMasters.stream()
-                .map(parent -> {
-                    List<Booking> children = bookingRepository.findByParentBookingId(parent.getId());
-                    Folio parentFolio = parent.getMasterFolio();
-                    UUID parentFolioId = parentFolio != null ? parentFolio.getId() : null;
-                    String billingMode = inferBillingMode(children, parentFolioId);
-                    return buildGroupSummary(parent, children, parentFolioId, billingMode,
-                            parent.getProperty());
+        return reservationRepository.findByPropertyIdOrderByCheckInDesc(propertyId).stream()
+                .map(reservation -> {
+                    List<Booking> bookings = bookingRepository.findByReservationId(reservation.getId());
+                    return buildReservationSummary(reservation, bookings);
                 })
                 .collect(Collectors.toList());
     }
@@ -260,275 +195,177 @@ public class GroupBookingService {
     // =========================================================================
 
     /**
-     * Route a child folio to the parent/organizer folio (consolidated billing).
-     * Can also be used to un-route (pass null as targetFolioId) for separate billing.
+     * Switch the reservation to CONSOLIDATED billing.
+     *  - Set reservation.defaultRouteToMaster = true (drives night-audit default for new charges).
+     *  - Bulk-flip all unbilled, non-voided charges in the reservation to routeToMaster = true.
+     *  - No payment movement: reservation-level payments stay put.
      */
     @Transactional
-    public GroupBookingSummaryDto routeChildFolio(UUID propertyId,
-                                                  UUID parentBookingId,
-                                                  UUID childBookingId,
-                                                  UUID targetFolioId) {
-        Booking parent = getValidatedGroupMaster(propertyId, parentBookingId);
-        Booking child = getValidatedChildBooking(propertyId, childBookingId, parentBookingId);
+    public GroupBookingSummaryDto consolidateBilling(UUID propertyId, UUID reservationId) {
+        Reservation reservation = getValidatedReservation(propertyId, reservationId);
+        reservation.setDefaultRouteToMaster(true);
+        reservationRepository.save(reservation);
 
-        Folio childFolio = child.getMasterFolio();
-        if (childFolio == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
-                    "Child booking has no master folio");
+        List<FolioCharge> unbilled = folioChargeRepository
+                .findActiveChargesByReservationId(reservationId)
+                .stream()
+                .filter(c -> c.getBill() == null && c.getGroupBill() == null)
+                .toList();
+        for (FolioCharge c : unbilled) {
+            c.setRouteToMaster(true);
         }
+        folioChargeRepository.saveAll(unbilled);
 
-        // 1. Capture the previous target before making any changes
-        Folio previousTargetFolio = childFolio.getRoutedToFolio();
-
-        if (targetFolioId != null) {
-            Folio targetFolio = folioRepository.findById(targetFolioId)
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                            "Target folio not found"));
-            if (!targetFolio.getProperty().getId().equals(propertyId)) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Target folio does not belong to this property");
-            }
-
-            // FIX: Actually apply the routing (this was missing in the original code)
-            childFolio.setRoutedToFolio(targetFolio);
-
-            childFolio.recalculateTotals();
-            targetFolio.recalculateTotals();
-            folioRepository.save(targetFolio);
-
-            // Edge case: If the room was routed to Folio A and is now being routed to Folio B,
-            // we must recalculate Folio A so it drops the charges.
-            if (previousTargetFolio != null && !previousTargetFolio.getId().equals(targetFolioId)) {
-                previousTargetFolio.recalculateTotals();
-                folioRepository.save(previousTargetFolio);
-            }
-
-        } else {
-            // Un-route — child pays independently
-            childFolio.setRoutedToFolio(null);
-            childFolio.recalculateTotals();
-
-            // FIX: Recalculate and save the previous target folio so it drops the child's balance
-            if (previousTargetFolio != null) {
-                previousTargetFolio.recalculateTotals();
-                folioRepository.save(previousTargetFolio);
-            }
-        }
-
-        folioRepository.save(childFolio);
-
-        List<Booking> children = bookingRepository.findByParentBookingId(parentBookingId);
-        Folio parentFolio = parent.getMasterFolio();
-        UUID parentFolioId = parentFolio != null ? parentFolio.getId() : null;
-        String billingMode = inferBillingMode(children, parentFolioId);
-
-        return buildGroupSummary(parent, children, parentFolioId, billingMode,
-                parent.getProperty());
+        List<Booking> bookings = bookingRepository.findByReservationId(reservationId);
+        return buildReservationSummary(reservation, bookings);
     }
 
     /**
-     * Route ALL child folios to the organizer's master folio (switch to consolidated).
+     * Switch the reservation to SEPARATE billing.
+     *  - Set reservation.defaultRouteToMaster = false (new charges land on the booking's own bill).
+     *  - Bulk-flip all unbilled, non-voided charges in the reservation to routeToMaster = false.
+     *  - No payment movement: reservation-level payments stay put. Booking bills generated next will
+     *    include their equal share of those payments as an applied master credit.
      */
     @Transactional
-    public GroupBookingSummaryDto consolidateBilling(UUID propertyId, UUID parentBookingId) {
-        Booking parent = getValidatedGroupMaster(propertyId, parentBookingId);
-        Folio parentFolio = parent.getMasterFolio();
-        if (parentFolio == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
-                    "Parent booking has no master folio");
+    public GroupBookingSummaryDto separateBilling(UUID propertyId, UUID reservationId) {
+        Reservation reservation = getValidatedReservation(propertyId, reservationId);
+        reservation.setDefaultRouteToMaster(false);
+        reservationRepository.save(reservation);
+
+        List<FolioCharge> unbilled = folioChargeRepository
+                .findActiveChargesByReservationId(reservationId)
+                .stream()
+                .filter(c -> c.getBill() == null && c.getGroupBill() == null)
+                .toList();
+        for (FolioCharge c : unbilled) {
+            c.setRouteToMaster(false);
         }
+        folioChargeRepository.saveAll(unbilled);
 
-        List<Booking> children = bookingRepository.findByParentBookingId(parentBookingId);
-        for (Booking child : children) {
-            Folio childFolio = child.getMasterFolio();
-            if (childFolio != null && !childFolio.getId().equals(parentFolio.getId())) {
-                childFolio.setRoutedToFolio(parentFolio);
-                folioRepository.save(childFolio);
-            }
-        }
-
-        String billingMode = inferBillingMode(children, parentFolio.getId());
-        return buildGroupSummary(parent, children, parentFolio.getId(), billingMode,
-                parent.getProperty());
-    }
-
-    /**
-     * Un-route ALL child folios — each room settles independently (switch to separate).
-     */
-    @Transactional
-    public GroupBookingSummaryDto separateBilling(UUID propertyId, UUID parentBookingId) {
-        Booking parent = getValidatedGroupMaster(propertyId, parentBookingId);
-
-        List<Booking> children = bookingRepository.findByParentBookingId(parentBookingId);
-        for (Booking child : children) {
-            Folio childFolio = child.getMasterFolio();
-            if (childFolio != null && childFolio.isRouted()) {
-                childFolio.setRoutedToFolio(null);
-                folioRepository.save(childFolio);
-            }
-        }
-
-        Folio parentFolio = parent.getMasterFolio();
-        UUID parentFolioId = parentFolio != null ? parentFolio.getId() : null;
-        String billingMode = inferBillingMode(children, parentFolioId);
-        return buildGroupSummary(parent, children, parentFolioId, billingMode,
-                parent.getProperty());
+        List<Booking> bookings = bookingRepository.findByReservationId(reservationId);
+        return buildReservationSummary(reservation, bookings);
     }
 
     // =========================================================================
     // CHECK-IN / CHECK-OUT
     // =========================================================================
 
-    /**
-     * Check in a single child booking within the group.
-     * Delegates to BookingService logic by updating status directly
-     * (room auto-assignment is handled by BookingService.checkInBooking).
-     */
     @Transactional
-    public GroupBookingSummaryDto checkInChild(UUID propertyId,
-                                               UUID parentBookingId,
-                                               UUID childBookingId) {
-        getValidatedGroupMaster(propertyId, parentBookingId);
-        Booking child = getValidatedChildBooking(propertyId, childBookingId, parentBookingId);
+    public GroupBookingSummaryDto checkInBooking(UUID propertyId,
+                                                 UUID reservationId,
+                                                 UUID bookingId) {
+        Reservation reservation = getValidatedReservation(propertyId, reservationId);
+        Booking booking = getValidatedBooking(propertyId, bookingId, reservationId);
 
-        if (child.getStatus() != BookingStatus.CONFIRMED) {
+        if (booking.getStatus() != BookingStatus.CONFIRMED) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Child booking must be in CONFIRMED status to check in");
+                    "Booking must be in CONFIRMED status to check in");
         }
 
-        // Auto-assign room if not yet assigned
-        if (child.getRoom() == null) {
+        if (booking.getRoom() == null) {
             Room available = findAvailableRoomInUnit(
-                    child.getUnit().getId(), child.getCheckIn(), child.getCheckOut());
+                    booking.getUnit().getId(), booking.getCheckIn(), booking.getCheckOut());
             if (available == null) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
-                        "No available rooms in unit for this child booking. Assign a room manually first.");
+                        "No available rooms in unit for this booking. Assign a room manually first.");
             }
-            child.setRoom(available);
+            booking.setRoom(available);
         }
 
-        child.setStatus(BookingStatus.CHECKED_IN);
-        bookingRepository.save(child);
+        booking.setStatus(BookingStatus.CHECKED_IN);
+        bookingRepository.save(booking);
 
-        Booking parent = bookingRepository.findById(parentBookingId).orElseThrow();
-        List<Booking> children = bookingRepository.findByParentBookingId(parentBookingId);
-        Folio parentFolio = parent.getMasterFolio();
-        UUID parentFolioId = parentFolio != null ? parentFolio.getId() : null;
-        String billingMode = inferBillingMode(children, parentFolioId);
-        return buildGroupSummary(parent, children, parentFolioId, billingMode,
-                parent.getProperty());
+        List<Booking> bookings = bookingRepository.findByReservationId(reservationId);
+        return buildReservationSummary(reservation, bookings);
     }
 
-    /**
-     * Check in ALL confirmed children at once.
-     */
     @Transactional
-    public GroupBookingSummaryDto checkInAllChildren(UUID propertyId, UUID parentBookingId) {
-        Booking parent = getValidatedGroupMaster(propertyId, parentBookingId);
-        List<Booking> children = bookingRepository.findByParentBookingId(parentBookingId);
+    public GroupBookingSummaryDto checkInAllBookings(UUID propertyId, UUID reservationId) {
+        Reservation reservation = getValidatedReservation(propertyId, reservationId);
+        List<Booking> bookings = bookingRepository.findByReservationId(reservationId);
 
-        for (Booking child : children) {
-            if (child.getStatus() == BookingStatus.CONFIRMED) {
-                if (child.getRoom() == null) {
+        for (Booking booking : bookings) {
+            if (booking.getStatus() == BookingStatus.CONFIRMED) {
+                if (booking.getRoom() == null) {
                     Room available = findAvailableRoomInUnit(
-                            child.getUnit().getId(), child.getCheckIn(), child.getCheckOut());
+                            booking.getUnit().getId(), booking.getCheckIn(), booking.getCheckOut());
                     if (available == null) {
                         throw new ResponseStatusException(HttpStatus.CONFLICT,
-                                "No available room for unit " + child.getUnit().getName()
+                                "No available room for unit " + booking.getUnit().getName()
                                         + ". Assign rooms manually before bulk check-in.");
                     }
-                    child.setRoom(available);
+                    booking.setRoom(available);
                 }
-                child.setStatus(BookingStatus.CHECKED_IN);
-                bookingRepository.save(child);
+                booking.setStatus(BookingStatus.CHECKED_IN);
+                bookingRepository.save(booking);
             }
         }
 
-        Folio parentFolio = parent.getMasterFolio();
-        UUID parentFolioId = parentFolio != null ? parentFolio.getId() : null;
-        // Reload children after saves
-        List<Booking> updatedChildren = bookingRepository.findByParentBookingId(parentBookingId);
-        String billingMode = inferBillingMode(updatedChildren, parentFolioId);
-        return buildGroupSummary(parent, updatedChildren, parentFolioId, billingMode,
-                parent.getProperty());
+        List<Booking> updated = bookingRepository.findByReservationId(reservationId);
+        return buildReservationSummary(reservation, updated);
     }
 
     /**
-     * Check out a single child booking.
-     * Enforces that the child's folio is settled before checkout
-     * (unless it's routed — in that case the parent folio holds the balance).
+     * Check out a single booking. Enforces folio settlement before checkout.
      */
     @Transactional
-    public GroupBookingSummaryDto checkOutChild(UUID propertyId,
-                                                UUID parentBookingId,
-                                                UUID childBookingId) {
-        getValidatedGroupMaster(propertyId, parentBookingId);
-        Booking child = getValidatedChildBooking(propertyId, childBookingId, parentBookingId);
+    public GroupBookingSummaryDto checkOutBooking(UUID propertyId,
+                                                  UUID reservationId,
+                                                  UUID bookingId) {
+        Reservation reservation = getValidatedReservation(propertyId, reservationId);
+        Booking booking = getValidatedBooking(propertyId, bookingId, reservationId);
 
-        if (child.getStatus() != BookingStatus.CHECKED_IN) {
+        if (booking.getStatus() != BookingStatus.CHECKED_IN) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Child booking must be CHECKED_IN to check out");
+                    "Booking must be CHECKED_IN to check out");
         }
 
-        Folio childFolio = child.getMasterFolio();
-        if (childFolio != null && !childFolio.isRouted() && !childFolio.isFullyPaid()) {
+        Folio folio = booking.getFolio();
+        if (folio != null && !folio.isFullyPaid()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Cannot check out: folio has an outstanding balance of "
-                            + childFolio.getBalanceDue()
-                            + ". Settle the folio or route it to the group master folio first.");
+                            + folio.getBalanceDue()
+                            + ". Settle the folio first.");
         }
 
-        child.setStatus(BookingStatus.CHECKED_OUT);
-        bookingRepository.save(child);
+        booking.setStatus(BookingStatus.CHECKED_OUT);
+        bookingRepository.save(booking);
 
-        // Close all open folios on this child booking
-        folioService.closeOpenFoliosForBooking(childBookingId);
+        folioService.closeOpenFoliosForBooking(bookingId);
 
-        Booking parent = bookingRepository.findById(parentBookingId).orElseThrow();
-        List<Booking> children = bookingRepository.findByParentBookingId(parentBookingId);
-        Folio parentFolio = parent.getMasterFolio();
-        UUID parentFolioId = parentFolio != null ? parentFolio.getId() : null;
-        String billingMode = inferBillingMode(children, parentFolioId);
-        return buildGroupSummary(parent, children, parentFolioId, billingMode,
-                parent.getProperty());
+        List<Booking> bookings = bookingRepository.findByReservationId(reservationId);
+        return buildReservationSummary(reservation, bookings);
     }
 
     /**
-     * Cancel the entire group booking — cancels parent and all children.
+     * Cancel the entire reservation — cancels all member bookings.
      */
     @Transactional
-    public GroupBookingSummaryDto cancelGroupBooking(UUID propertyId, UUID parentBookingId) {
-        Booking parent = getValidatedGroupMaster(propertyId, parentBookingId);
-        List<Booking> children = bookingRepository.findByParentBookingId(parentBookingId);
+    public GroupBookingSummaryDto cancelReservation(UUID propertyId, UUID reservationId) {
+        Reservation reservation = getValidatedReservation(propertyId, reservationId);
+        List<Booking> bookings = bookingRepository.findByReservationId(reservationId);
 
-        for (Booking child : children) {
-            if (child.getStatus() == BookingStatus.CHECKED_IN) {
+        for (Booking booking : bookings) {
+            if (booking.getStatus() == BookingStatus.CHECKED_IN) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
-                        "Cannot cancel group: booking " + child.getId()
-                                + " is already checked in. Check out individual rooms first.");
+                        "Cannot cancel reservation: booking " + booking.getId()
+                                + " is already checked in. Check out first.");
             }
-            child.setStatus(BookingStatus.CANCELLED);
-            bookingRepository.save(child);
+            booking.setStatus(BookingStatus.CANCELLED);
+            bookingRepository.save(booking);
         }
 
-        parent.setStatus(BookingStatus.CANCELLED);
-        bookingRepository.save(parent);
+        reservation.setStatus(ReservationStatus.CANCELLED);
+        reservationRepository.save(reservation);
 
-        Folio parentFolio = parent.getMasterFolio();
-        UUID parentFolioId = parentFolio != null ? parentFolio.getId() : null;
-        String billingMode = inferBillingMode(children, parentFolioId);
-        return buildGroupSummary(parent, children, parentFolioId, billingMode,
-                parent.getProperty());
+        return buildReservationSummary(reservation, bookings);
     }
 
     // =========================================================================
     // PRIVATE HELPERS
     // =========================================================================
 
-    /**
-     * Validates all room requests before any DB writes.
-     * Returns a list of resolved entities ready for booking creation.
-     */
     private List<ValidatedRoomRequest> validateAndResolveRoomRequests(
             UUID propertyId,
             GroupBookingCreationDto dto,
@@ -540,7 +377,6 @@ public class GroupBookingService {
             GroupRoomRequestDto req = dto.roomRequests().get(i);
             String context = "Room request #" + (i + 1);
 
-            // Resolve unit
             Unit unit = unitRepository.findById(req.unitId())
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                             context + ": Unit not found"));
@@ -550,7 +386,6 @@ public class GroupBookingService {
                         context + ": Unit does not belong to this property");
             }
 
-            // Resolve room (optional)
             Room room = null;
             if (req.roomId() != null) {
                 room = roomRepository.findById(req.roomId())
@@ -567,7 +402,6 @@ public class GroupBookingService {
                             context + ": Room is inactive");
                 }
 
-                // 1. Check availability in Database
                 if (bookingRepository.existsOverlappingBooking(
                         room.getId(), dto.checkIn(), dto.checkOut())) {
                     throw new ResponseStatusException(HttpStatus.CONFLICT,
@@ -575,7 +409,6 @@ public class GroupBookingService {
                                     + " is not available for the selected dates");
                 }
 
-                // 2. NEW: Check if this specific room was ALREADY requested in this JSON batch
                 final UUID finalRoomId = room.getId();
                 boolean roomAlreadyRequestedInBatch = results.stream()
                         .filter(vr -> vr.room() != null)
@@ -587,13 +420,10 @@ public class GroupBookingService {
                                     + " is requested multiple times in this group booking");
                 }
             } else {
-                // Unit-level capacity check
                 long totalRooms = bookingRepository.countRoomsInUnit(unit.getId());
                 long overlapping = bookingRepository.countOverlappingUnitBookings(
                         unit.getId(), dto.checkIn(), dto.checkOut());
 
-                // Also count how many rooms in THIS request batch are targeting the same unit
-                // to prevent double-booking within the same group creation
                 long alreadyAllocatedInThisBatch = results.stream()
                         .filter(vr -> vr.unit().getId().equals(unit.getId()))
                         .count();
@@ -605,7 +435,6 @@ public class GroupBookingService {
                 }
             }
 
-            // Resolve guest for this room
             Guest guest = organizer;
             if (req.childGuestId() != null) {
                 guest = guestRepository.findById(req.childGuestId())
@@ -619,128 +448,106 @@ public class GroupBookingService {
         return results;
     }
 
-    private GroupBookingSummaryDto buildGroupSummary(
-            Booking parent,
-            List<Booking> children,
-            UUID parentFolioId,
-            String billingMode,
-            Property property) {
+    private GroupBookingSummaryDto buildReservationSummary(
+            Reservation reservation,
+            List<Booking> bookings) {
 
-        BigDecimal totalGroupPrice = children.stream()
+        BigDecimal totalGroupPrice = bookings.stream()
                 .map(Booking::getTotalPrice)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        BookingStatus overallStatus = deriveOverallStatus(children);
+        BookingStatus overallStatus = deriveOverallStatus(bookings);
 
-        List<GroupBookingSummaryDto.ChildBookingSummaryDto> childDtos = children.stream()
-                .map(child -> {
-                    Folio childFolio = child.getMasterFolio();
-                    return new GroupBookingSummaryDto.ChildBookingSummaryDto(
-                            child.getId(),
-                            child.getGuest().getId(),
-                            child.getGuest().getFullName(),
-                            child.getUnit() != null ? child.getUnit().getId() : null,
-                            child.getUnit() != null ? child.getUnit().getName() : null,
-                            child.getRoom() != null ? child.getRoom().getNumber() : null,
-                            child.getStatus(),
-                            child.getTotalPrice(),
-                            child.getBalanceDue(),
-                            childFolio != null ? childFolio.getId() : null,
-                            childFolio != null ? childFolio.getFolioNumber() : null,
-                            childFolio != null && childFolio.isRouted(),
-                            child.getSpecialRequests(),
-                            child.isTwinBed()
+        List<GroupBookingSummaryDto.BookingSummaryDto> bookingDtos = bookings.stream()
+                .map(b -> {
+                    Folio folio = b.getFolio();
+                    return new GroupBookingSummaryDto.BookingSummaryDto(
+                            b.getId(),
+                            b.getGuest().getId(),
+                            b.getGuest().getFullName(),
+                            b.getUnit() != null ? b.getUnit().getId() : null,
+                            b.getUnit() != null ? b.getUnit().getName() : null,
+                            b.getRoom() != null ? b.getRoom().getNumber() : null,
+                            b.getStatus(),
+                            b.getTotalPrice(),
+                            b.getBalanceDue(),
+                            folio != null ? folio.getId() : null,
+                            folio != null ? folio.getFolioNumber() : null,
+                            b.getSpecialRequests(),
+                            b.isTwinBed()
                     );
                 })
                 .collect(Collectors.toList());
 
+        String billingMode = reservation.isDefaultRouteToMaster() ? "CONSOLIDATED" : "SEPARATE";
 
         return new GroupBookingSummaryDto(
-                parent.getId(),
-                parent.getGroupReference(),
-                parent.getGuest().getId(),
-                parent.getGuest().getFullName(),
-                parent.getCheckIn(),
-                parent.getCheckOut(),
+                reservation.getId(),
+                reservation.getGroupReference(),
+                reservation.getOrganizerGuest().getId(),
+                reservation.getOrganizerGuest().getFullName(),
+                reservation.getCheckIn(),
+                reservation.getCheckOut(),
                 overallStatus,
-                children.size(),
+                bookings.size(),
                 totalGroupPrice,
-                parent.getCurrency(),
-                parent.getCreatedAt(),
+                reservation.getCurrency(),
+                reservation.getCreatedAt(),
                 billingMode,
-                parentFolioId,
-                childDtos
+                bookingDtos
         );
     }
 
     /**
-     * Derives a single status for the group from child statuses.
-     * Priority: CHECKED_IN > CONFIRMED > CHECKED_OUT > CANCELLED
+     * Derives a single status for the reservation from member booking statuses.
      */
-    private BookingStatus deriveOverallStatus(List<Booking> children) {
-        if (children.isEmpty()) return BookingStatus.CONFIRMED;
+    private BookingStatus deriveOverallStatus(List<Booking> bookings) {
+        if (bookings.isEmpty()) return BookingStatus.CONFIRMED;
 
-        boolean anyCheckedIn = children.stream()
+        boolean anyCheckedIn = bookings.stream()
                 .anyMatch(b -> b.getStatus() == BookingStatus.CHECKED_IN);
         if (anyCheckedIn) return BookingStatus.CHECKED_IN;
 
-        boolean anyConfirmed = children.stream()
+        boolean anyConfirmed = bookings.stream()
                 .anyMatch(b -> b.getStatus() == BookingStatus.CONFIRMED);
         if (anyConfirmed) return BookingStatus.CONFIRMED;
 
-        boolean allCheckedOut = children.stream()
+        boolean allCheckedOut = bookings.stream()
                 .allMatch(b -> b.getStatus() == BookingStatus.CHECKED_OUT);
         if (allCheckedOut) return BookingStatus.CHECKED_OUT;
 
-        boolean allCancelled = children.stream()
+        boolean allCancelled = bookings.stream()
                 .allMatch(b -> b.getStatus() == BookingStatus.CANCELLED);
         if (allCancelled) return BookingStatus.CANCELLED;
 
         return BookingStatus.CONFIRMED;
     }
 
-    private String inferBillingMode(List<Booking> children, UUID parentFolioId) {
-        if (parentFolioId == null || children.isEmpty()) return "SEPARATE";
-
-        boolean allRouted = children.stream().allMatch(child -> {
-            Folio f = child.getMasterFolio();
-            return f != null && f.isRouted()
-                    && f.getRoutedToFolio().getId().equals(parentFolioId);
-        });
-
-        return allRouted ? "CONSOLIDATED" : "SEPARATE";
+    private Reservation getValidatedReservation(UUID propertyId, UUID reservationId) {
+        Reservation reservation = reservationRepository.findById(reservationId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Reservation not found"));
+        if (!reservation.getProperty().getId().equals(propertyId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Reservation does not belong to this property");
+        }
+        return reservation;
     }
 
-    private Booking getValidatedGroupMaster(UUID propertyId, UUID parentBookingId) {
-        Booking parent = bookingRepository.findById(parentBookingId)
+    private Booking getValidatedBooking(UUID propertyId, UUID bookingId, UUID expectedReservationId) {
+        Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Group booking not found"));
-        if (!parent.getProperty().getId().equals(propertyId)) {
+                        "Booking not found"));
+        if (!booking.getProperty().getId().equals(propertyId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Booking does not belong to this property");
         }
-        if (!parent.isGroupMaster()) {
+        if (booking.getReservation() == null
+                || !booking.getReservation().getId().equals(expectedReservationId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Booking is not a group master");
+                    "Booking " + bookingId + " is not part of reservation " + expectedReservationId);
         }
-        return parent;
-    }
-
-    private Booking getValidatedChildBooking(UUID propertyId, UUID childBookingId,
-                                             UUID expectedParentId) {
-        Booking child = bookingRepository.findById(childBookingId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Child booking not found"));
-        if (!child.getProperty().getId().equals(propertyId)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Child booking does not belong to this property");
-        }
-        if (child.getParentBooking() == null
-                || !child.getParentBooking().getId().equals(expectedParentId)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Booking " + childBookingId + " is not a child of group " + expectedParentId);
-        }
-        return child;
+        return booking;
     }
 
     private Room findAvailableRoomInUnit(UUID unitId,

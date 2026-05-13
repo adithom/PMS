@@ -49,12 +49,6 @@ public class PosController {
         return ResponseEntity.ok(posService.updateLocation(id, dto));
     }
 
-    @PostMapping("/locations/{id}/post-walkin-folio")
-    @PreAuthorize("hasRole('MANAGER')")
-    public ResponseEntity<FolioDto> postWalkInFolio(@PathVariable UUID id) {
-        return ResponseEntity.ok(posService.postWalkInFolio(id));
-    }
-
     // ──────────────── Categories ────────────────
 
     @GetMapping("/categories")
@@ -111,33 +105,6 @@ public class PosController {
     public ResponseEntity<Void> deleteProduct(@PathVariable UUID id) {
         posService.deleteProduct(id);
         return ResponseEntity.noContent().build();
-    }
-
-    // ──────────────── Orders ────────────────
-
-    @PostMapping("/orders")
-    @PreAuthorize("hasAnyRole('MANAGER', 'POS')")
-    public ResponseEntity<PosOrderDto> createOrder(
-            @Valid @RequestBody PosOrderCreationDto dto,
-            @AuthenticationPrincipal UserPrincipal principal) {
-        return ResponseEntity.ok(posService.createOrder(dto, principal.getUsername()));
-    }
-
-    @PostMapping("/orders/{orderId}/charge")
-    @PreAuthorize("hasAnyRole('MANAGER', 'POS')")
-    public ResponseEntity<PosOrderDto> chargeOrderToFolio(
-            @PathVariable UUID orderId,
-            @RequestParam UUID folioId) {
-        return ResponseEntity.ok(posService.chargeOrderToFolio(orderId, folioId));
-    }
-
-    @PostMapping("/orders/{orderId}/settle")
-    @PreAuthorize("hasAnyRole('MANAGER', 'POS')")
-    public ResponseEntity<PosOrderDto> settleOrder(
-            @PathVariable UUID orderId,
-            @Valid @RequestBody PosSettleDto dto,
-            @AuthenticationPrincipal UserPrincipal principal) {
-        return ResponseEntity.ok(posService.settleOrder(orderId, dto, principal.getUsername()));
     }
 
     // ──────────────── Order History (MANAGER only) ────────────────

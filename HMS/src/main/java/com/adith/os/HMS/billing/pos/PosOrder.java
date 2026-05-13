@@ -45,6 +45,10 @@ public class PosOrder {
     @JoinColumn(name = "room_id")
     private Room room;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "ticket_id")
+    private PosTicket ticket;
+
     @Column(name = "order_type", nullable = false, length = 50)
     private String orderType = "DINE_IN";
 
@@ -189,6 +193,14 @@ public class PosOrder {
 
     public void setRoom(Room room) {
         this.room = room;
+    }
+
+    public PosTicket getTicket() {
+        return ticket;
+    }
+
+    public void setTicket(PosTicket ticket) {
+        this.ticket = ticket;
     }
 
     public String getOrderType() {

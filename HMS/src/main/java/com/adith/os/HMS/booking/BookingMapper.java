@@ -2,6 +2,7 @@ package com.adith.os.HMS.booking;
 
 import com.adith.os.HMS.booking.dto.BookingCreationDto;
 import com.adith.os.HMS.booking.dto.BookingDto;
+import com.adith.os.HMS.booking.dto.GuestSummaryDto;
 import com.adith.os.HMS.guest.Guest;
 import com.adith.os.HMS.property.Property;
 import com.adith.os.HMS.property.mealplan.PropertyMealPlan;
@@ -61,6 +62,7 @@ public class BookingMapper {
                 bookingCreationDto.isTwinBed()
         );
         booking.setReferenceNumber(bookingCreationDto.referenceNumber());
+        booking.setBookingSource(bookingCreationDto.bookingSource());
         booking.setMealPlanType(bookingCreationDto.mealPlanType());
         booking.setMealPlanPricePerNight(bookingCreationDto.mealPlanPricePerNight());
         booking.setMealPlanChildrenPricePerNight(bookingCreationDto.mealPlanChildrenPricePerNight());
@@ -95,9 +97,7 @@ public class BookingMapper {
                 booking.getSpecialRequests(), // ADDED: Special requests in DTO
                 booking.getCreatedAt(),
                 booking.getPaymentProgress(),
-                booking.getParentBooking() != null ? booking.getParentBooking().getId() : null,
-                booking.isGroupMaster(),
-                booking.getChildBookings() != null ? booking.getChildBookings().size() : 0,
+                booking.getReservation() != null ? booking.getReservation().getId() : null,
                 booking.isTwinBed(),
                 booking.getReferenceNumber(),
                 booking.getTravelAgent() != null ? booking.getTravelAgent().getId() : null,
@@ -111,7 +111,13 @@ public class BookingMapper {
                 booking.getExtraBedRatePerNight(),
                 booking.getExtraBedChargeCode(),
                 resolveNightlyRate(booking),
-                resolveNightlyRateExTax(booking)
+                resolveNightlyRateExTax(booking),
+                booking.getBookingSource(),
+                booking.getCancellationReason(),
+                booking.getRescheduleReason(),
+                booking.getOriginalCheckIn(),
+                booking.getOriginalCheckOut(),
+                mapAdditionalGuests(booking)
         );
     }
 
@@ -150,6 +156,15 @@ public class BookingMapper {
                 .findByPropertyIdAndMealPlanType(booking.getProperty().getId(), booking.getMealPlanType())
                 .map(PropertyMealPlan::getChildrenPricePerNight)
                 .orElse(null);
+    }
+
+    private List<GuestSummaryDto> mapAdditionalGuests(Booking booking) {
+        if (booking.getAdditionalGuests() == null || booking.getAdditionalGuests().isEmpty()) {
+            return List.of();
+        }
+        return booking.getAdditionalGuests().stream()
+                .map(g -> new GuestSummaryDto(g.getId(), g.getFullName(), g.getEmail(), g.getPhone()))
+                .collect(Collectors.toList());
     }
 
     public List<BookingDto> toDtoList(List<Booking> bookings) {

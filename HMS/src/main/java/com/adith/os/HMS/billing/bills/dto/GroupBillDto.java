@@ -9,18 +9,17 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Full consolidated billing view for a group booking.
+ * Full consolidated billing view for a group reservation.
  *
  * Contains:
  *   - Group-level totals (sum across all rooms)
  *   - Per-room charge breakdown (RoomBillSection)
- *   - All charge line-items per room, each tagged with room number and guest name
- *     so the frontend can render a clear itemized view
+ *   - All charge line-items per room
  */
 public record GroupBillDto(
 
-        // --- Group identity ---
-        UUID parentBookingId,
+        // --- Reservation identity ---
+        UUID reservationId,
         String groupReference,
         String organizerGuestName,
         LocalDate checkIn,
@@ -42,14 +41,10 @@ public record GroupBillDto(
 ) {
 
     /**
-     * Billing section for one room/child booking within the group.
-     *
-     * If billingMode is CONSOLIDATED, all charges here are also reflected
-     * in the group totals above. If SEPARATE, each room settles independently
-     * and the group totals are informational only.
+     * Billing section for one booking under the reservation.
      */
     public record RoomBillSection(
-            UUID childBookingId,
+            UUID bookingId,
             UUID folioId,
             String folioNumber,
             UUID guestId,
@@ -57,7 +52,7 @@ public record GroupBillDto(
             String roomNumber,          // null if not yet assigned
             String unitName,
 
-            // Folio totals for this room
+            // Folio totals for this booking
             BigDecimal subtotal,
             BigDecimal taxAmount,
             BigDecimal discountAmount,
@@ -65,10 +60,7 @@ public record GroupBillDto(
             BigDecimal paidAmount,
             BigDecimal balanceDue,
 
-            boolean isRouted,           // true if routed to master folio
-            UUID routedToFolioId,       // the folio this is routed to (if isRouted)
-
-            // Full line-item charges for this room (voided charges excluded)
+            // Full line-item charges for this booking (voided charges excluded)
             List<ChargeDto> charges
     ) {}
 }

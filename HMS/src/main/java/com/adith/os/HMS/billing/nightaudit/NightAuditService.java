@@ -134,7 +134,7 @@ public class NightAuditService {
             try {
                 Booking booking = assignment.getBooking();
                 Room room = assignment.getRoom();
-                Folio masterFolio = booking.getMasterFolio();
+                Folio masterFolio = booking.getFolio();
 
                 if (masterFolio == null) {
                     log.warn("Night Audit: No master folio found for booking {}. Skipping.", booking.getId());
@@ -182,7 +182,8 @@ public class NightAuditService {
                         "ROOM_ASSIGNMENT",
                         assignment.getId(),
                         manualRun ? "Night Audit - Manual run for " + chargeDate : "Night Audit - Auto-posted",
-                        "NIGHT_AUDIT"
+                        "NIGHT_AUDIT",
+                        null
                 );
 
                 folioService.addCharge(
@@ -221,7 +222,8 @@ public class NightAuditService {
                                     "BOOKING",
                                     booking.getId(),
                                     manualRun ? "Night Audit - Manual run for " + chargeDate : "Night Audit - Auto-posted",
-                                    "NIGHT_AUDIT"
+                                    "NIGHT_AUDIT",
+                                    null
                             );
                             folioService.addCharge(booking.getProperty().getId(), masterFolio.getId(), mealPlanCharge);
                             mealPlanChargesPosted++;
@@ -269,7 +271,8 @@ public class NightAuditService {
                                     "EXTRA_BED",
                                     booking.getId(),
                                     manualRun ? "Night Audit - Manual run for " + chargeDate : "Night Audit - Auto-posted",
-                                    "NIGHT_AUDIT"
+                                    "NIGHT_AUDIT",
+                                    null
                             );
                             folioService.addCharge(booking.getProperty().getId(), masterFolio.getId(), extraBedCharge);
                             extraBedChargesPosted++;

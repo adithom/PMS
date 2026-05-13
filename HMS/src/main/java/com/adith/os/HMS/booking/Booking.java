@@ -2,10 +2,10 @@ package com.adith.os.HMS.booking;
 
 import com.adith.os.HMS.billing.folio.ChargeCode;
 import com.adith.os.HMS.billing.folio.Folio;
-import com.adith.os.HMS.billing.folio.FolioType;
 import com.adith.os.HMS.guest.Guest;
 import com.adith.os.HMS.property.Property;
 import com.adith.os.HMS.property.mealplan.MealPlanType;
+import com.adith.os.HMS.reservation.Reservation;
 import com.adith.os.HMS.room.Room;
 import com.adith.os.HMS.roomassignment.RoomAssignment;
 import com.adith.os.HMS.travelagent.TravelAgent;
@@ -33,12 +33,24 @@ public class Booking {
     private Property property;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "reservation_id", nullable = false)
+    private Reservation reservation;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "room_id")
     private Room room;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "guest_id", nullable = false)
     private Guest guest;
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "booking_additional_guests",
+        joinColumns = @JoinColumn(name = "booking_id"),
+        inverseJoinColumns = @JoinColumn(name = "guest_id")
+    )
+    private List<Guest> additionalGuests = new ArrayList<>();
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "unit_id")
@@ -79,35 +91,18 @@ public class Booking {
     @Column(name = "created_at", nullable = false, columnDefinition = "timestamp with time zone default now()")
     private OffsetDateTime createdAt;
 
-    @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL)
-    private List<Folio> folios;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "parent_booking_id")
-    private Booking parentBooking;
-
-    @OneToMany(mappedBy = "parentBooking", cascade = CascadeType.ALL, orphanRemoval = false)
-    private List<Booking> childBookings = new ArrayList<>();
-
-    @Column(name = "is_group_master", nullable = false, columnDefinition = "boolean default false")
-    private boolean isGroupMaster = false;
-
-    @Column(name = "group_reference", length = 100)
-    private String groupReference;
+    @OneToOne(mappedBy = "booking", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private Folio folio;
 
     @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL)
     private List<RoomAssignment> roomAssignments = new ArrayList<>();
 
-    public Folio getMasterFolio() {
-        if (folios == null || folios.isEmpty()) return null;
-        return folios.stream()
-                .filter(f -> f.getFolioType() == FolioType.MASTER)
-                .findFirst()
-                .orElse(null);
+    public Folio getFolio() {
+        return folio;
     }
 
-    public boolean isGroupChild() {
-        return parentBooking != null;
+    public void setFolio(Folio folio) {
+        this.folio = folio;
     }
 
     @Column(name = "is_twin_bed", nullable = false, columnDefinition = "boolean default false")
@@ -142,6 +137,22 @@ public class Booking {
     @Enumerated(EnumType.STRING)
     @Column(name = "extra_bed_charge_code")
     private ChargeCode extraBedChargeCode;
+
+    // Audit fields populated when status flips to CANCELLED / on a future reschedule.
+    @Column(name = "booking_source", length = 200)
+    private String bookingSource;
+
+    @Column(name = "cancellation_reason", length = 500)
+    private String cancellationReason;
+
+    @Column(name = "reschedule_reason", length = 500)
+    private String rescheduleReason;
+
+    @Column(name = "original_check_in")
+    private LocalDate originalCheckIn;
+
+    @Column(name = "original_check_out")
+    private LocalDate originalCheckOut;
 
     @PrePersist
     protected void onCreate() {
@@ -198,6 +209,14 @@ public class Booking {
         this.property = property;
     }
 
+    public Reservation getReservation() {
+        return reservation;
+    }
+
+    public void setReservation(Reservation reservation) {
+        this.reservation = reservation;
+    }
+
     public Room getRoom() {
         return room;
     }
@@ -221,6 +240,9 @@ public class Booking {
     public void setGuest(Guest guest) {
         this.guest = guest;
     }
+
+    public List<Guest> getAdditionalGuests() { return additionalGuests; }
+    public void setAdditionalGuests(List<Guest> additionalGuests) { this.additionalGuests = additionalGuests != null ? additionalGuests : new ArrayList<>(); }
 
     public BookingStatus getStatus() {
         return status;
@@ -302,18 +324,6 @@ public class Booking {
         this.createdAt = createdAt;
     }
 
-    public Booking getParentBooking() { return parentBooking; }
-    public void setParentBooking(Booking parentBooking) { this.parentBooking = parentBooking; }
-
-    public List<Booking> getChildBookings() { return childBookings; }
-    public void setChildBookings(List<Booking> childBookings) { this.childBookings = childBookings; }
-
-    public boolean isGroupMaster() { return isGroupMaster; }
-    public void setGroupMaster(boolean groupMaster) { isGroupMaster = groupMaster; }
-
-    public String getGroupReference() { return groupReference; }
-    public void setGroupReference(String groupReference) { this.groupReference = groupReference; }
-
     public List<RoomAssignment> getRoomAssignments() { return roomAssignments; }
     public void setRoomAssignments(List<RoomAssignment> roomAssignments) { this.roomAssignments = roomAssignments; }
 
@@ -345,6 +355,21 @@ public class Booking {
 
     public ChargeCode getExtraBedChargeCode() { return extraBedChargeCode; }
     public void setExtraBedChargeCode(ChargeCode extraBedChargeCode) { this.extraBedChargeCode = extraBedChargeCode; }
+
+    public String getCancellationReason() { return cancellationReason; }
+    public void setCancellationReason(String cancellationReason) { this.cancellationReason = cancellationReason; }
+
+    public String getRescheduleReason() { return rescheduleReason; }
+    public void setRescheduleReason(String rescheduleReason) { this.rescheduleReason = rescheduleReason; }
+
+    public LocalDate getOriginalCheckIn() { return originalCheckIn; }
+    public void setOriginalCheckIn(LocalDate originalCheckIn) { this.originalCheckIn = originalCheckIn; }
+
+    public LocalDate getOriginalCheckOut() { return originalCheckOut; }
+    public void setOriginalCheckOut(LocalDate originalCheckOut) { this.originalCheckOut = originalCheckOut; }
+
+    public String getBookingSource() { return bookingSource; }
+    public void setBookingSource(String bookingSource) { this.bookingSource = bookingSource; }
 
     // Calculated fields - these compute values dynamically
 

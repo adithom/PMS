@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Download } from 'lucide-react';
 import billingApi from '../../api/billingApi';
 import type { BillBatchRowDto, BillBatchPageDto } from '../../api/billingApi';
+import { fmtDate } from '../../utils/dateHelpers';
 
 const ZIP_LIMIT = 150;
 
@@ -14,12 +15,7 @@ const btnPrimary =
 const btnSecondary =
   'inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition-all hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50';
 
-function formatDate(d?: string): string {
-  if (!d) return '—';
-  const [year, month, day] = d.split('-');
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${day} ${months[parseInt(month) - 1]} ${year}`;
-}
+const formatDate = (d?: string) => d ? fmtDate(d) : '—';
 
 export default function BillLedgerTab() {
   const [fromDate, setFromDate] = useState<string>(() => {

@@ -12,11 +12,8 @@ public interface FolioRepository extends JpaRepository<Folio, UUID> {
 
     Optional<Folio> findByFolioNumber(String folioNumber);
 
-    @Query("SELECT f FROM Folio f WHERE f.booking.id = :bookingId AND f.folioType = :type")
-    Optional<Folio> findByBookingAndType(
-            @Param("bookingId") UUID bookingId,
-            @Param("type") FolioType type
-    );
+    @Query("SELECT f FROM Folio f WHERE f.booking.id = :bookingId")
+    Optional<Folio> findByBookingId(@Param("bookingId") UUID bookingId);
 
     @Query("SELECT f FROM Folio f WHERE f.booking.id = :bookingId")
     List<Folio> findAllByBookingId(@Param("bookingId") UUID bookingId);
@@ -39,10 +36,6 @@ public interface FolioRepository extends JpaRepository<Folio, UUID> {
     @Query("SELECT COUNT(f) FROM Folio f WHERE f.property.id = :propertyId " +
             "AND f.status = 'OPEN' AND f.balanceDue > 0")
     long countOpenFoliosWithBalance(@Param("propertyId") UUID propertyId);
-
-    // Finds all folios that are routing their charges to the given target folio
-    @Query("SELECT f FROM Folio f WHERE f.routedToFolio.id = :targetFolioId")
-    List<Folio> findByRoutedToFolioId(@Param("targetFolioId") UUID targetFolioId);
 
     boolean existsByFolioNumber(String folioNumber);
 }

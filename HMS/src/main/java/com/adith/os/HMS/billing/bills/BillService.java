@@ -3,7 +3,11 @@ package com.adith.os.HMS.billing.bills;
 import com.adith.os.HMS.billing.folio.*;
 import com.adith.os.HMS.billing.folio.dto.ChargeDto;
 import com.adith.os.HMS.billing.bills.dto.*;
+import com.adith.os.HMS.billing.payment.PaymentRepository;
+import com.adith.os.HMS.booking.Booking;
+import com.adith.os.HMS.booking.BookingRepository;
 import com.adith.os.HMS.property.Property;
+import com.adith.os.HMS.reservation.Reservation;
 import com.adith.os.HMS.storage.R2StorageService;
 import com.adith.os.HMS.storage.R2UploadException;
 
@@ -44,6 +48,9 @@ public class BillService {
     private final ChargeMapper chargeMapper;
     private final PdfGenerationService pdfGenerationService;
     private final R2StorageService r2StorageService;
+    private final PaymentRepository paymentRepository;
+    private final BookingRepository bookingRepository;
+    private final BillMapper billMapper;
 
     public BillService(FolioRepository folioRepository,
                        FolioChargeRepository folioChargeRepository,
@@ -51,7 +58,10 @@ public class BillService {
                        PropertyInvoiceSequenceRepository sequenceRepository,
                        ChargeMapper chargeMapper,
                        PdfGenerationService pdfGenerationService,
-                       R2StorageService r2StorageService) {
+                       R2StorageService r2StorageService,
+                       PaymentRepository paymentRepository,
+                       BookingRepository bookingRepository,
+                       BillMapper billMapper) {
         this.folioRepository = folioRepository;
         this.folioChargeRepository = folioChargeRepository;
         this.billRepository = billRepository;
@@ -59,6 +69,28 @@ public class BillService {
         this.chargeMapper = chargeMapper;
         this.pdfGenerationService = pdfGenerationService;
         this.r2StorageService = r2StorageService;
+        this.paymentRepository = paymentRepository;
+        this.bookingRepository = bookingRepository;
+        this.billMapper = billMapper;
+    }
+
+    /**
+     * Phase B: when a reservation is in SEPARATE mode (defaultRouteToMaster=false), reservation-level
+     * payments get distributed equally across the reservation's non-master bookings at bill-generation time.
+     * Returns the per-booking share (or ZERO if not applicable).
+     */
+    private BigDecimal computeMasterCreditShareForBooking(Booking booking) {
+        if (booking == null || booking.getReservation() == null) return BigDecimal.ZERO;
+        Reservation r = booking.getReservation();
+        if (r.isDefaultRouteToMaster()) return BigDecimal.ZERO; // CONSOLIDATED — credits stay on master bill
+        BigDecimal totalReservationPayments = paymentRepository.sumCompletedByReservationId(r.getId());
+        if (totalReservationPayments == null || totalReservationPayments.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO;
+        }
+        long shareCount = bookingRepository.countByReservationId(r.getId());
+        if (shareCount <= 0) return BigDecimal.ZERO;
+        return totalReservationPayments.divide(
+                BigDecimal.valueOf(shareCount), 2, java.math.RoundingMode.HALF_DOWN);
     }
 
     @Transactional
@@ -77,6 +109,8 @@ public class BillService {
 
         List<FolioCharge> unbilledCharges = folio.getCharges().stream()
                 .filter(c -> c.getBill() == null && c.getGroupBill() == null)
+                .filter(c -> !c.isRouteToMaster())   // Phase B: charges flagged for the master bill don't appear on a booking bill
+                .filter(c -> !c.isVoided())
                 .toList();
 
         if (unbilledCharges.isEmpty()) {
@@ -86,6 +120,9 @@ public class BillService {
 
         Property property = folio.getProperty();
         String baseInvoiceNumber = generateInvoiceNumber(property);
+
+        // Phase B: compute reservation master-credit share for this booking — applied to the first bill only.
+        BigDecimal masterCreditPool = computeMasterCreditShareForBooking(folio.getBooking());
 
         List<BillDto> generatedBills = new ArrayList<>();
         int suffixIdx = 0;
@@ -99,18 +136,19 @@ public class BillService {
             String invoiceNumber = suffixIdx == 0
                     ? baseInvoiceNumber
                     : baseInvoiceNumber + (char) ('a' + suffixIdx - 1);
+            BigDecimal creditForThisBill = (suffixIdx == 0) ? masterCreditPool : BigDecimal.ZERO;
             suffixIdx++;
 
             Bill bill = createAndSaveBill(folio, charges, bt, invoiceNumber, guestGstNumber, batchId);
 
             List<ChargeDto> chargeDtos = chargeMapper.toDtos(charges);
-            BillDto dtoForPdf = BillMapper.toBillDto(bill, folio, chargeDtos, guestGstNumber);
+            BillDto dtoForPdf = billMapper.toBillDto(bill, folio, chargeDtos, guestGstNumber, null, creditForThisBill);
             String localPath = pdfGenerationService.generateInvoicePdf(dtoForPdf);
             String objectKey = "invoices/" + bill.getInvoiceNumber() + ".pdf";
             String signedUrl = uploadToR2WithFallback(localPath, objectKey, "INV_" + bill.getInvoiceNumber() + ".pdf");
             bill.setPdfFilePath(objectKey);
             billRepository.save(bill);
-            generatedBills.add(BillMapper.toBillDto(bill, folio, chargeDtos, guestGstNumber, signedUrl));
+            generatedBills.add(billMapper.toBillDto(bill, folio, chargeDtos, guestGstNumber, signedUrl, creditForThisBill));
         }
 
         return new MultiBillDto(generatedBills);
@@ -120,7 +158,7 @@ public class BillService {
         Folio folio = folioRepository.findById(folioId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Folio not found"));
         return billRepository.findByFolioId(folioId).stream()
-                .map(bill -> BillMapper.toBillDto(bill, folio, chargeMapper.toDtos(
+                .map(bill -> billMapper.toBillDto(bill, folio, chargeMapper.toDtos(
                         folioChargeRepository.findByBillId(bill.getId())), bill.getGuestGstNumber()))
                 .toList();
     }
@@ -161,7 +199,7 @@ public class BillService {
         folio.recalculateTotals();
         folioRepository.save(folio);
 
-        return BillMapper.toBillDto(savedBill, folio, chargeMapper.toDtos(charges), savedBill.getGuestGstNumber());
+        return billMapper.toBillDto(savedBill, folio, chargeMapper.toDtos(charges), savedBill.getGuestGstNumber());
     }
 
     @Transactional
@@ -189,7 +227,7 @@ public class BillService {
                         b.getGenerationBatchId() != null ? b.getGenerationBatchId() : b.getId()));
 
         List<BillBatchRowDto> batchRows = grouped.values().stream()
-                .map(BillMapper::toBatchRowDto)
+                .map(billMapper::toBatchRowDto)
                 .sorted(Comparator.comparing(BillBatchRowDto::billDate).reversed()
                         .thenComparing(BillBatchRowDto::mainInvoiceNumber))
                 .toList();
