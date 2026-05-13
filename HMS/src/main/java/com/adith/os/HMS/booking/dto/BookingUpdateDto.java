@@ -5,9 +5,11 @@ import com.adith.os.HMS.booking.BookingStatus;
 import com.adith.os.HMS.property.mealplan.MealPlanType;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 public record BookingUpdateDto(
@@ -67,7 +69,12 @@ public record BookingUpdateDto(
         @PositiveOrZero(message = "Extra bed rate cannot be negative")
         BigDecimal extraBedRatePerNight,
 
-        ChargeCode extraBedChargeCode  // ROOM_RENT or MISC
+        ChargeCode extraBedChargeCode,  // ROOM_RENT or MISC
+
+        String bookingSource,  // Optional — source of the booking
+
+        @Size(max = 3, message = "Maximum 3 additional guests allowed")
+        List<UUID> additionalGuestIds  // Optional — if present, replaces the booking's additional guests list
 
   ) {
 }

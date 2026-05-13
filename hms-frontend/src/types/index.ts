@@ -70,6 +70,13 @@ export interface Guest {
   preferences?: string;
 }
 
+export interface GuestSummary {
+  id: string;
+  fullName: string;
+  email?: string;
+  phone?: string;
+}
+
 export interface Booking {
   id?: string;
   propertyId: string;
@@ -107,12 +114,31 @@ export interface Booking {
   extraBedChargeCode?: 'ROOM_RENT' | 'MISC';
   nightlyRate?: number;
   nightlyRateExTax?: number;
+  bookingSource?: string;
   // Audit fields surfaced in the Reservations Detail modal.
   cancellationReason?: string;
   rescheduleReason?: string;
   originalCheckIn?: string;
   originalCheckOut?: string;
+  additionalGuests?: GuestSummary[];
 }
+
+export const BOOKING_SOURCE_OPTIONS = [
+  'Direct / Walk-In',
+  'Phone Call',
+  'Email',
+  'Property Website',
+  'MakeMyTrip',
+  'Booking.com',
+  'Expedia',
+  'Agoda',
+  'Airbnb',
+  'Travel Agent',
+  'Corporate',
+  'Repeat Guest',
+  'Social Media',
+  'Referral',
+];
 
 // Ghost (deterministic first-fit, server-computed) bar on the tape chart for an
 // unassigned booking. Rendered with dashed border + 80% opacity. Booking.roomId

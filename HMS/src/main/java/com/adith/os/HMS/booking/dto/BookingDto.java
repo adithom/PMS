@@ -10,6 +10,7 @@ import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 
 public record BookingDto(
@@ -94,11 +95,15 @@ public record BookingDto(
         BigDecimal nightlyRate,
         BigDecimal nightlyRateExTax,
 
+        String bookingSource,
+
         // Audit fields surfaced in the Reservations Detail modal.
         String cancellationReason,
         String rescheduleReason,
         @JsonFormat(pattern = "yyyy-MM-dd") LocalDate originalCheckIn,
-        @JsonFormat(pattern = "yyyy-MM-dd") LocalDate originalCheckOut
+        @JsonFormat(pattern = "yyyy-MM-dd") LocalDate originalCheckOut,
+
+        List<GuestSummaryDto> additionalGuests
 ) {
     // Compact constructor for validation and defaults
     public BookingDto {
@@ -110,7 +115,8 @@ public record BookingDto(
         if (isFullyPaid == null) {
             isFullyPaid = balanceDue.compareTo(BigDecimal.ZERO) <= 0;
         }
-
-        
+        if (additionalGuests == null) {
+            additionalGuests = List.of();
+        }
     }
 }

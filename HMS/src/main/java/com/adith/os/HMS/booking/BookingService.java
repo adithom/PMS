@@ -131,6 +131,19 @@ public class BookingService {
         Guest guest = guestRepository.findById(bookingCreationDto.guestId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Guest not found"));
 
+        // Resolve additional guests
+        List<Guest> additionalGuests = new java.util.ArrayList<>();
+        if (bookingCreationDto.additionalGuestIds() != null && !bookingCreationDto.additionalGuestIds().isEmpty()) {
+            for (UUID additionalGuestId : bookingCreationDto.additionalGuestIds()) {
+                if (additionalGuestId.equals(bookingCreationDto.guestId())) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Additional guest cannot be the same as the primary guest");
+                }
+                Guest additionalGuest = guestRepository.findById(additionalGuestId)
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Additional guest not found: " + additionalGuestId));
+                additionalGuests.add(additionalGuest);
+            }
+        }
+
         Unit unit = null;
         if (bookingCreationDto.unitId() != null) {
             unit = unitRepository.findById(bookingCreationDto.unitId())
@@ -211,6 +224,9 @@ public class BookingService {
 
         try {
             Booking booking = bookingMapper.toEntity(bookingCreationDto, property, room, guest, unit);
+            if (!additionalGuests.isEmpty()) {
+                booking.setAdditionalGuests(additionalGuests);
+            }
 
             TravelAgent travelAgent = travelAgentService.resolveOrCreate(
                     bookingCreationDto.travelAgentId(), bookingCreationDto.newTravelAgent());
@@ -605,6 +621,7 @@ public class BookingService {
             booking.setSpecialRequests(dto.specialRequests());
             booking.setTwinBed(dto.isTwinBed());
             booking.setReferenceNumber(dto.referenceNumber());
+            booking.setBookingSource(dto.bookingSource());
 
             // Travel agent: null travelAgentId on PUT means remove the association
             if (dto.travelAgentId() != null) {
@@ -791,6 +808,10 @@ public class BookingService {
                 booking.setReferenceNumber(dto.referenceNumber());
             }
 
+            if (dto.bookingSource() != null) {
+                booking.setBookingSource(dto.bookingSource());
+            }
+
             // Travel agent partial update
             if (Boolean.TRUE.equals(dto.clearTravelAgent())) {
                 booking.setTravelAgent(null);
@@ -840,6 +861,21 @@ public class BookingService {
             }
             if (dto.extraBedChargeCode() != null) {
                 booking.setExtraBedChargeCode(dto.extraBedChargeCode());
+            }
+
+            // Additional guests partial update: if provided, replace the list
+            if (dto.additionalGuestIds() != null) {
+                List<Guest> updatedAdditional = new java.util.ArrayList<>();
+                UUID primaryGuestId = booking.getGuest().getId();
+                for (UUID additionalGuestId : dto.additionalGuestIds()) {
+                    if (additionalGuestId.equals(primaryGuestId)) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Additional guest cannot be the same as the primary guest");
+                    }
+                    Guest additionalGuest = guestRepository.findById(additionalGuestId)
+                            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Additional guest not found: " + additionalGuestId));
+                    updatedAdditional.add(additionalGuest);
+                }
+                booking.setAdditionalGuests(updatedAdditional);
             }
 
             if (datesChanged) {

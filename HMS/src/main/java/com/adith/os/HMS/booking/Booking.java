@@ -44,6 +44,14 @@ public class Booking {
     @JoinColumn(name = "guest_id", nullable = false)
     private Guest guest;
 
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "booking_additional_guests",
+        joinColumns = @JoinColumn(name = "booking_id"),
+        inverseJoinColumns = @JoinColumn(name = "guest_id")
+    )
+    private List<Guest> additionalGuests = new ArrayList<>();
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "unit_id")
     private Unit unit;
@@ -131,6 +139,9 @@ public class Booking {
     private ChargeCode extraBedChargeCode;
 
     // Audit fields populated when status flips to CANCELLED / on a future reschedule.
+    @Column(name = "booking_source", length = 200)
+    private String bookingSource;
+
     @Column(name = "cancellation_reason", length = 500)
     private String cancellationReason;
 
@@ -229,6 +240,9 @@ public class Booking {
     public void setGuest(Guest guest) {
         this.guest = guest;
     }
+
+    public List<Guest> getAdditionalGuests() { return additionalGuests; }
+    public void setAdditionalGuests(List<Guest> additionalGuests) { this.additionalGuests = additionalGuests != null ? additionalGuests : new ArrayList<>(); }
 
     public BookingStatus getStatus() {
         return status;
@@ -353,6 +367,9 @@ public class Booking {
 
     public LocalDate getOriginalCheckOut() { return originalCheckOut; }
     public void setOriginalCheckOut(LocalDate originalCheckOut) { this.originalCheckOut = originalCheckOut; }
+
+    public String getBookingSource() { return bookingSource; }
+    public void setBookingSource(String bookingSource) { this.bookingSource = bookingSource; }
 
     // Calculated fields - these compute values dynamically
 

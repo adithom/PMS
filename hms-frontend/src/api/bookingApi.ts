@@ -36,6 +36,8 @@ export interface BookingCreationDto {
   extraBeds?: number;
   extraBedRatePerNight?: number;
   extraBedChargeCode?: 'ROOM_RENT' | 'MISC';
+  bookingSource?: string;
+  additionalGuestIds?: string[];
 }
 
 export interface BookingUpdatePayload extends Omit<BookingCreationDto, 'nightlyRate'> {

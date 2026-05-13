@@ -6,8 +6,8 @@ import travelAgentApi from '../../api/travelAgentApi';
 import mealPlanApi from '../../api/mealPlanApi';
 import roomApi from '../../api/roomApi';
 import availabilityApi from '../../api/availabilityApi';
-import { GuestIdType, GUEST_ID_TYPE_LABELS } from '../../types';
-import type { Property, Room, UnitDto, Booking, TravelAgent, MealPlan, MealPlanType } from '../../types';
+import { GuestIdType, GUEST_ID_TYPE_LABELS, BOOKING_SOURCE_OPTIONS } from '../../types';
+import type { Property, Room, UnitDto, Booking, TravelAgent, MealPlan, MealPlanType, GuestSummary } from '../../types';
 
 /* ────────────────────────────────────────────────────────────── */
 /* Helpers                                                      */
@@ -137,6 +137,7 @@ export default function BookingForm({
   // ---> NEW STATE FOR TWIN BED <---
   const [isTwinBed, setIsTwinBed] = useState<boolean>(booking?.isTwinBed ?? false);
   const [referenceNumber, setReferenceNumber] = useState<string>(booking?.referenceNumber ?? '');
+  const [bookingSource, setBookingSource] = useState<string>(booking?.bookingSource ?? '');
 
   // ── Guest State ──
   const defaultGuestName = initialGuest ? `${initialGuest.firstName} ${initialGuest.lastName}` : '';
@@ -152,6 +153,30 @@ export default function BookingForm({
   const [newGuestIdNumber, setNewGuestIdNumber] = useState<string>('');
   const [newGuestIdType, setNewGuestIdType] = useState<GuestIdType | ''>('');
   const [newGuestDateOfBirth, setNewGuestDateOfBirth] = useState<string>('');
+
+  // ── Additional Guests State ──
+  const initialAdditionalGuests: GuestSearchResult[] = booking?.additionalGuests?.map((g: GuestSummary) => {
+    const parts = g.fullName.trim().split(' ');
+    return {
+      id: g.id,
+      firstName: parts[0] ?? '',
+      lastName: (parts.slice(1).join(' ') || parts[0]) ?? '',
+      email: g.email,
+      phone: g.phone,
+    };
+  }) ?? [];
+  const [additionalGuests, setAdditionalGuests] = useState(initialAdditionalGuests);
+  const [addGuestOpen, setAddGuestOpen] = useState<boolean>(false);
+  const [addGuestQuery, setAddGuestQuery] = useState<string>('');
+  const [addGuestResults, setAddGuestResults] = useState<GuestSearchResult[]>([]);
+  const [creatingAdditional, setCreatingAdditional] = useState<boolean>(false);
+  const [newAddGuestFirstName, setNewAddGuestFirstName] = useState<string>('');
+  const [newAddGuestLastName, setNewAddGuestLastName] = useState<string>('');
+  const [newAddGuestEmail, setNewAddGuestEmail] = useState<string>('');
+  const [newAddGuestPhone, setNewAddGuestPhone] = useState<string>('');
+  const [newAddGuestIdNumber, setNewAddGuestIdNumber] = useState<string>('');
+  const [newAddGuestIdType, setNewAddGuestIdType] = useState<GuestIdType | ''>('');
+  const [newAddGuestDateOfBirth, setNewAddGuestDateOfBirth] = useState<string>('');
 
   // ── Travel Agent State ──
   const [agentSectionOpen, setAgentSectionOpen] = useState<boolean>(
@@ -295,10 +320,12 @@ export default function BookingForm({
   }, [selectedPropertyId, selectedUnitId, checkIn, checkOut, isEditMode, booking, preselectedRoom]);
 
   // Pre-fill nightly rate from room's base rate when a room is selected (create mode only)
+  // Falls back to the first room in the unit when no specific room is chosen yet
   useEffect(() => {
     if (isEditMode) return;
-    if (room) setNightlyRate(room.baseRate);
-  }, [room, isEditMode]);
+    if (room) { setNightlyRate(room.baseRate); return; }
+    if (availableRooms.length > 0) setNightlyRate(availableRooms[0].baseRate);
+  }, [room, availableRooms, isEditMode]);
 
   // Auto-fill extra bed rate from property default when section opens (create mode only)
   useEffect(() => {
@@ -328,6 +355,24 @@ export default function BookingForm({
     }).catch(() => setGuestResults([]));
     return () => { mounted = false; };
   }, [guestQuery, isEditMode]);
+
+  // Additional Guest Search Effect
+  useEffect(() => {
+    if (!addGuestQuery || addGuestQuery.length < 2) { setAddGuestResults([]); return; }
+    let mounted = true;
+    guestApi.search(addGuestQuery).then(raw => {
+      if (!mounted) return;
+      const normalized = (raw || []).map((g: any) => ({
+        id: String(g.id ?? g.uuid ?? g.guestId ?? g._id),
+        firstName: String(g.firstName ?? g.first_name ?? g.fname ?? ''),
+        lastName: String(g.lastName ?? g.last_name ?? g.lname ?? ''),
+        email: g.email,
+        phone: g.phone,
+      })).filter((g: any) => g.id !== 'undefined');
+      setAddGuestResults(normalized);
+    }).catch(() => setAddGuestResults([]));
+    return () => { mounted = false; };
+  }, [addGuestQuery]);
 
   // Fetch property meal plans when property changes
   useEffect(() => {
@@ -388,6 +433,38 @@ export default function BookingForm({
     } catch (err: any) {
       setError(err.message || 'Failed to create guest');
       throw err;
+    } finally { setLoading(false); }
+  };
+
+  const createAndAddGuest = async () => {
+    setLoading(true); setError(null);
+    try {
+      const payload: Parameters<typeof guestApi.create>[0] = {
+        firstName: newAddGuestFirstName,
+        lastName: newAddGuestLastName,
+        ...(newAddGuestEmail && { email: newAddGuestEmail }),
+        ...(newAddGuestPhone && { phone: newAddGuestPhone }),
+        ...(newAddGuestIdNumber && { idNumber: newAddGuestIdNumber }),
+        ...(newAddGuestIdType && { guestIdType: newAddGuestIdType }),
+        ...(newAddGuestDateOfBirth && { dateOfBirth: newAddGuestDateOfBirth }),
+      };
+      const created = await guestApi.create(payload) as any;
+      const g: GuestSearchResult = {
+        id: String(created.id ?? created.uuid ?? created.guestId ?? created._id),
+        firstName: newAddGuestFirstName,
+        lastName: newAddGuestLastName,
+        email: newAddGuestEmail || undefined,
+        phone: newAddGuestPhone || undefined,
+      };
+      setAdditionalGuests(prev => [...prev, g]);
+      setCreatingAdditional(false);
+      setAddGuestOpen(false);
+      setAddGuestQuery(''); setAddGuestResults([]);
+      setNewAddGuestFirstName(''); setNewAddGuestLastName('');
+      setNewAddGuestEmail(''); setNewAddGuestPhone('');
+      setNewAddGuestIdNumber(''); setNewAddGuestIdType(''); setNewAddGuestDateOfBirth('');
+    } catch (err: any) {
+      setError(err.message || 'Failed to create guest');
     } finally { setLoading(false); }
   };
 
@@ -463,6 +540,8 @@ export default function BookingForm({
         checkIn, checkOut, adults, children, currency, paidAmount, specialRequests,
         isTwinBed,
         referenceNumber: referenceNumber || undefined,
+        bookingSource: bookingSource || undefined,
+        additionalGuestIds: additionalGuests.length > 0 ? additionalGuests.map(g => g.id) : undefined,
         ...(!isEditMode && paidAmount > 0 ? { advancePaymentMethod } : {}),
         ...(isEditMode
           ? { totalPrice: computedTotalPrice, nightlyRate, nightlyRateExTax }
@@ -620,6 +699,111 @@ export default function BookingForm({
             {selectedGuestId && <span className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">✓ Guest Attached</span>}
           </div>
         )}
+
+        {/* ── Additional Guests ── */}
+        <div className="border-t border-slate-100 pt-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Additional Guests <span className="font-normal normal-case">(up to 3)</span></span>
+            {!addGuestOpen && additionalGuests.length < 3 && (
+              <button type="button" onClick={() => setAddGuestOpen(true)}
+                className="text-xs font-bold text-emerald-600 hover:text-emerald-700">
+                + Add Guest
+              </button>
+            )}
+          </div>
+
+          {additionalGuests.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {additionalGuests.map((g, i) => (
+                <div key={g.id} className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 pl-3 pr-1.5 py-1 text-sm font-medium text-slate-700">
+                  <span>{g.firstName} {g.lastName}</span>
+                  <button type="button"
+                    onClick={() => setAdditionalGuests(prev => prev.filter((_, idx) => idx !== i))}
+                    className="rounded-full w-4 h-4 flex items-center justify-center hover:bg-slate-300 text-slate-400 hover:text-slate-600 text-base leading-none">
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {addGuestOpen && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3 space-y-3">
+              {creatingAdditional ? (
+                <div className="space-y-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label><span className={labelCls}>First Name *</span><input className={inputCls} value={newAddGuestFirstName} onChange={e => setNewAddGuestFirstName(e.target.value)} /></label>
+                    <label><span className={labelCls}>Last Name *</span><input className={inputCls} value={newAddGuestLastName} onChange={e => setNewAddGuestLastName(e.target.value)} /></label>
+                  </div>
+                  <label><span className={labelCls}>Email</span><input className={inputCls} value={newAddGuestEmail} onChange={e => setNewAddGuestEmail(e.target.value)} /></label>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label><span className={labelCls}>Phone</span><input className={inputCls} value={newAddGuestPhone} onChange={e => setNewAddGuestPhone(e.target.value)} /></label>
+                    <label><span className={labelCls}>Document ID</span><input className={inputCls} value={newAddGuestIdNumber} onChange={e => setNewAddGuestIdNumber(e.target.value)} placeholder="e.g. A1234567" /></label>
+                  </div>
+                  <label>
+                    <span className={labelCls}>ID Type</span>
+                    <select className={inputCls} value={newAddGuestIdType} onChange={e => setNewAddGuestIdType(e.target.value as GuestIdType | '')}>
+                      <option value="">— Select type —</option>
+                      {Object.values(GuestIdType).map(t => (
+                        <option key={t} value={t}>{GUEST_ID_TYPE_LABELS[t]}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span className={labelCls}>Date of Birth</span>
+                    <input type="date" className={inputCls} value={newAddGuestDateOfBirth} onChange={e => setNewAddGuestDateOfBirth(e.target.value)} />
+                  </label>
+                  <div className="flex justify-end gap-2">
+                    <button type="button" onClick={() => setCreatingAdditional(false)} className={btnSecondary}>Back</button>
+                    <button type="button" onClick={createAndAddGuest}
+                      disabled={loading || !newAddGuestFirstName || !newAddGuestLastName}
+                      className={btnPrimary}>
+                      {loading ? 'Saving...' : 'Save & Add'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="relative">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-slate-700">Search guest</span>
+                    <button type="button"
+                      onClick={() => { setCreatingAdditional(true); setAddGuestQuery(''); setAddGuestResults([]); }}
+                      className="text-xs font-bold text-emerald-600 hover:text-emerald-700">
+                      + Create Guest
+                    </button>
+                  </div>
+                  <input className={inputCls} placeholder="Type name or phone..." value={addGuestQuery}
+                    onChange={e => setAddGuestQuery(e.target.value)} />
+                  {addGuestResults.length > 0 && (
+                    <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
+                      {addGuestResults
+                        .filter(g => !additionalGuests.find(ag => ag.id === g.id) && g.id !== selectedGuestId)
+                        .map(g => (
+                          <button key={g.id} type="button"
+                            onClick={() => {
+                              setAdditionalGuests(prev => [...prev, g]);
+                              setAddGuestOpen(false);
+                              setAddGuestQuery(''); setAddGuestResults([]);
+                            }}
+                            className="flex w-full flex-col items-start px-4 py-3 text-left hover:bg-slate-50 border-b border-slate-100 last:border-0">
+                            <span className="font-semibold text-slate-900">{g.firstName} {g.lastName}</span>
+                            <span className="text-xs text-slate-500">{g.email ?? g.phone ?? 'No contact info'}</span>
+                          </button>
+                        ))}
+                    </div>
+                  )}
+                  <div className="flex justify-end mt-2">
+                    <button type="button"
+                      onClick={() => { setAddGuestOpen(false); setAddGuestQuery(''); setAddGuestResults([]); }}
+                      className={btnSecondary}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Travel Agent ── */}
@@ -1120,6 +1304,22 @@ export default function BookingForm({
             Twin Bedded Room
           </label>
         </div>
+
+        <label>
+          <span className={labelCls}>Booking Source <span className="font-normal text-slate-400">(Optional)</span></span>
+          <input
+            list="booking-source-options"
+            className={inputCls}
+            placeholder="e.g. Direct / Walk-In"
+            value={bookingSource}
+            onChange={e => setBookingSource(e.target.value)}
+          />
+          <datalist id="booking-source-options">
+            {BOOKING_SOURCE_OPTIONS.map(opt => (
+              <option key={opt} value={opt} />
+            ))}
+          </datalist>
+        </label>
 
         <label>
           <span className={labelCls}>Reference Number <span className="font-normal text-slate-400">(Optional)</span></span>
