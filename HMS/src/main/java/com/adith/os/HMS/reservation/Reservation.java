@@ -7,7 +7,6 @@ import com.adith.os.HMS.travelagent.TravelAgent;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -60,9 +59,6 @@ public class Reservation {
     @JoinColumn(name = "travel_agent_id")
     private TravelAgent travelAgent;
 
-    @Column(name = "commission_rate", precision = 5, scale = 2)
-    private BigDecimal commissionRate;
-
     @Column(name = "created_at", nullable = false, columnDefinition = "timestamp with time zone default now()")
     private OffsetDateTime createdAt;
 
@@ -113,9 +109,6 @@ public class Reservation {
 
     public TravelAgent getTravelAgent() { return travelAgent; }
     public void setTravelAgent(TravelAgent travelAgent) { this.travelAgent = travelAgent; }
-
-    public BigDecimal getCommissionRate() { return commissionRate; }
-    public void setCommissionRate(BigDecimal commissionRate) { this.commissionRate = commissionRate; }
 
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(OffsetDateTime createdAt) { this.createdAt = createdAt; }

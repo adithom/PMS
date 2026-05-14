@@ -326,7 +326,7 @@ public class AvailabilityService {
          * 6. Search available rooms by unit.
          * Uses RoomAssignment table.
          */
-        public List<AvailableRoomDto> searchAvailableRoomsByUnit(UUID unitId, LocalDate checkIn, LocalDate checkOut) {
+        public List<AvailableRoomDto> searchAvailableRoomsByUnit(UUID unitId, LocalDate checkIn, LocalDate checkOut, UUID excludeBookingId) {
                 validateDateRange(checkIn, checkOut);
 
                 Unit unit = unitRepository.findById(unitId)
@@ -345,10 +345,15 @@ public class AvailabilityService {
                                 .filter(room -> !occupiedRoomIds.contains(room.getId()))
                                 .collect(Collectors.toList());
 
-                long unassignedHolds = bookingRepository.countUnassignedOverlappingUnitBookings(
-                                unitId, checkIn, checkOut, CAPACITY_HOLD_BOOKING_STATUSES);
+                long unassignedHolds = (excludeBookingId != null)
+                                ? bookingRepository.countUnassignedOverlappingUnitBookingsExcludingCurrent(
+                                                unitId, checkIn, checkOut, excludeBookingId, CAPACITY_HOLD_BOOKING_STATUSES)
+                                : bookingRepository.countUnassignedOverlappingUnitBookings(
+                                                unitId, checkIn, checkOut, CAPACITY_HOLD_BOOKING_STATUSES);
 
-                int roomsToActuallyReturn = Math.max(0, physicallyEmptyRooms.size() - (int) unassignedHolds);
+                int roomsToActuallyReturn = (excludeBookingId != null)
+                                ? physicallyEmptyRooms.size()
+                                : Math.max(0, physicallyEmptyRooms.size() - (int) unassignedHolds);
 
                 return physicallyEmptyRooms.stream()
                                 .limit(roomsToActuallyReturn)

@@ -41,6 +41,8 @@ import com.adith.os.HMS.roomassignment.RoomAssignmentService;
 import com.adith.os.HMS.roomassignment.RoomAssignmentStatus;
 import com.adith.os.HMS.property.mealplan.PropertyMealPlan;
 import com.adith.os.HMS.property.mealplan.PropertyMealPlanRepository;
+import com.adith.os.HMS.travelagent.ContactPerson;
+import com.adith.os.HMS.travelagent.ContactPersonRepository;
 import com.adith.os.HMS.travelagent.TravelAgent;
 import com.adith.os.HMS.travelagent.TravelAgentService;
 import com.adith.os.HMS.unit.Unit;
@@ -68,6 +70,7 @@ public class BookingService {
     private final RoomAssignmentService roomAssignmentService;
     private final RoomAssignmentRepository roomAssignmentRepository;
     private final TravelAgentService travelAgentService;
+    private final ContactPersonRepository contactPersonRepository;
     private final PropertyMealPlanRepository mealPlanRepository;
     private final ReservationRepository reservationRepository;
 
@@ -86,6 +89,7 @@ public class BookingService {
                           RoomAssignmentService roomAssignmentService,
                           RoomAssignmentRepository roomAssignmentRepository,
                           TravelAgentService travelAgentService,
+                          ContactPersonRepository contactPersonRepository,
                           PropertyMealPlanRepository mealPlanRepository,
                           ReservationRepository reservationRepository) {
         this.propertyRepository = propertyRepository;
@@ -99,6 +103,7 @@ public class BookingService {
         this.roomAssignmentService = roomAssignmentService;
         this.roomAssignmentRepository = roomAssignmentRepository;
         this.travelAgentService = travelAgentService;
+        this.contactPersonRepository = contactPersonRepository;
         this.mealPlanRepository = mealPlanRepository;
         this.reservationRepository = reservationRepository;
     }
@@ -232,22 +237,33 @@ public class BookingService {
                     bookingCreationDto.travelAgentId(), bookingCreationDto.newTravelAgent());
             if (travelAgent != null) {
                 booking.setTravelAgent(travelAgent);
-                booking.setCommissionRate(travelAgent.getCommissionRate());
+            }
+            if (bookingCreationDto.contactPersonId() != null) {
+                ContactPerson cp = contactPersonRepository.findById(bookingCreationDto.contactPersonId())
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                                "Contact person not found: " + bookingCreationDto.contactPersonId()));
+                booking.setContactPerson(cp);
             }
 
-            Reservation reservation = new Reservation();
-            reservation.setProperty(property);
-            reservation.setOrganizerGuest(guest);
-            reservation.setCheckIn(bookingCreationDto.checkIn());
-            reservation.setCheckOut(bookingCreationDto.checkOut());
-            reservation.setCurrency(booking.getCurrency());
-            reservation.setSpecialRequests(bookingCreationDto.specialRequests());
-            reservation.setStatus(ReservationStatus.PENDING);
-            if (travelAgent != null) {
-                reservation.setTravelAgent(travelAgent);
-                reservation.setCommissionRate(travelAgent.getCommissionRate());
+            Reservation savedReservation;
+            if (bookingCreationDto.reservationId() != null) {
+                savedReservation = reservationRepository.findById(bookingCreationDto.reservationId())
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                                "Reservation not found: " + bookingCreationDto.reservationId()));
+            } else {
+                Reservation reservation = new Reservation();
+                reservation.setProperty(property);
+                reservation.setOrganizerGuest(guest);
+                reservation.setCheckIn(bookingCreationDto.checkIn());
+                reservation.setCheckOut(bookingCreationDto.checkOut());
+                reservation.setCurrency(booking.getCurrency());
+                reservation.setSpecialRequests(bookingCreationDto.specialRequests());
+                reservation.setStatus(ReservationStatus.PENDING);
+                if (travelAgent != null) {
+                    reservation.setTravelAgent(travelAgent);
+                }
+                savedReservation = reservationRepository.save(reservation);
             }
-            Reservation savedReservation = reservationRepository.save(reservation);
             booking.setReservation(savedReservation);
 
             if (bookingCreationDto.mealPlanType() != null) {
@@ -627,10 +643,15 @@ public class BookingService {
             if (dto.travelAgentId() != null) {
                 TravelAgent agent = travelAgentService.resolveOrCreate(dto.travelAgentId(), null);
                 booking.setTravelAgent(agent);
-                booking.setCommissionRate(agent.getCommissionRate());
             } else {
                 booking.setTravelAgent(null);
-                booking.setCommissionRate(null);
+                booking.setContactPerson(null);
+            }
+            if (dto.contactPersonId() != null) {
+                ContactPerson cp = contactPersonRepository.findById(dto.contactPersonId())
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                                "Contact person not found: " + dto.contactPersonId()));
+                booking.setContactPerson(cp);
             }
 
             // Sync dates before saving
@@ -815,11 +836,16 @@ public class BookingService {
             // Travel agent partial update
             if (Boolean.TRUE.equals(dto.clearTravelAgent())) {
                 booking.setTravelAgent(null);
-                booking.setCommissionRate(null);
+                booking.setContactPerson(null);
             } else if (dto.travelAgentId() != null) {
                 TravelAgent agent = travelAgentService.resolveOrCreate(dto.travelAgentId(), null);
                 booking.setTravelAgent(agent);
-                booking.setCommissionRate(agent.getCommissionRate());
+            }
+            if (dto.contactPersonId() != null) {
+                ContactPerson cp = contactPersonRepository.findById(dto.contactPersonId())
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                                "Contact person not found: " + dto.contactPersonId()));
+                booking.setContactPerson(cp);
             }
 
             // Meal plan partial update

@@ -69,7 +69,7 @@ function AppRoutes() {
       <Route
         path="/bookings"
         element={
-          <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER', 'FRONTDESK', 'AGENCY']}>
+          <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER']}>
             <>
               <Navigation allowedRoutes={allowedRoutes} />
               <Bookings />
@@ -81,7 +81,7 @@ function AppRoutes() {
       <Route
         path="/reservations"
         element={
-          <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER', 'FRONTDESK', 'AGENCY']}>
+          <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER']}>
             <>
               <Navigation allowedRoutes={allowedRoutes} />
               <Reservations />
@@ -93,7 +93,7 @@ function AppRoutes() {
       <Route
         path="/guests"
         element={
-          <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER', 'FRONTDESK']}>
+          <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER']}>
             <>
               <Navigation allowedRoutes={allowedRoutes} />
               <Guests />
@@ -130,7 +130,7 @@ function AppRoutes() {
       <Route
         path="/billing"
         element={
-          <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER', 'FRONTDESK']}>
+          <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER']}>
             <>
               <Navigation allowedRoutes={allowedRoutes} />
               
@@ -149,7 +149,7 @@ function AppRoutes() {
        <Route
         path="/reports"
         element={
-          <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER', 'FRONTDESK']}>
+          <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER']}>
             <>
               <Navigation allowedRoutes={allowedRoutes} />
               <Reports />

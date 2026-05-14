@@ -30,7 +30,7 @@ public class ReservationPaymentController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<PaymentDto> recordReservationPayment(
             @PathVariable UUID propertyId,
             @PathVariable UUID reservationId,
@@ -43,7 +43,7 @@ public class ReservationPaymentController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK', 'AGENCY')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<List<PaymentDto>> getReservationPayments(
             @PathVariable UUID propertyId,
             @PathVariable UUID reservationId) {

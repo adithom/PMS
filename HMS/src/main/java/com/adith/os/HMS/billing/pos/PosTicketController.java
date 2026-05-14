@@ -57,7 +57,7 @@ public class PosTicketController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('MANAGER', 'POS', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('MANAGER', 'POS')")
     public ResponseEntity<List<PosTicketDto>> getOpenTickets(@RequestParam UUID locationId) {
         return ResponseEntity.ok(ticketService.getOpenTickets(locationId));
     }

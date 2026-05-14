@@ -28,7 +28,7 @@ public class PaymentController {
 
     // CREATE - Instantly record a completed payment
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<PaymentDto> recordPayment(
             @PathVariable UUID propertyId,
             @PathVariable UUID folioId,

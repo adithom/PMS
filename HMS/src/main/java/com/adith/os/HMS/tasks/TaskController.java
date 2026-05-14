@@ -21,19 +21,19 @@ public class TaskController {
     }
 
     @GetMapping("/maintenance")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<List<RoomDto>> getMaintenanceRooms(@PathVariable UUID propertyId) {
         return ResponseEntity.ok(taskService.getRoomsInMaintenance(propertyId));
     }
 
     @GetMapping("/birthdays")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<List<GuestDto>> getBirthdays(@PathVariable UUID propertyId) {
         return ResponseEntity.ok(taskService.getInHouseGuestBirthdays(propertyId));
     }
 
     @GetMapping("/unassigned")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<List<BookingDto>> getUnassignedCheckins(@PathVariable UUID propertyId) {
         return ResponseEntity.ok(taskService.getUnassignedUpcomingCheckins(propertyId));
     }

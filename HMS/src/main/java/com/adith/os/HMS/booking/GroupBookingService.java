@@ -115,7 +115,6 @@ public class GroupBookingService {
                 dto.billingMode() == GroupBookingCreationDto.GroupBillingMode.CONSOLIDATED);
         if (travelAgent != null) {
             reservation.setTravelAgent(travelAgent);
-            reservation.setCommissionRate(travelAgent.getCommissionRate());
         }
         Reservation savedReservation = reservationRepository.save(reservation);
 
@@ -147,7 +146,6 @@ public class GroupBookingService {
             booking.setTwinBed(vr.request().isTwinBed() != null ? vr.request().isTwinBed() : false);
             if (travelAgent != null) {
                 booking.setTravelAgent(travelAgent);
-                booking.setCommissionRate(travelAgent.getCommissionRate());
             }
 
             Booking saved = bookingRepository.save(booking);

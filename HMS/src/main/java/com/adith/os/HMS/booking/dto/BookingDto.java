@@ -81,7 +81,8 @@ public record BookingDto(
 
         UUID travelAgentId,
         String travelAgentName,
-        BigDecimal commissionRate,
+        UUID contactPersonId,
+        String contactPersonName,
 
         MealPlanType mealPlanType,
         String mealPlanDisplayName,

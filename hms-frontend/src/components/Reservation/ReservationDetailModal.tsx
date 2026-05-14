@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import ModalShell from '../ModalShell';
+import BookingDetailModal from '../Booking/BookingDetailModal';
+import BookingForm from '../Booking/BookingForm';
 import reservationApi from '../../api/reservationApi';
 import type { GroupBookingSummaryDto, BookingSummaryDto } from '../../api/reservationApi';
 import bookingApi from '../../api/bookingApi';
@@ -37,6 +39,8 @@ export default function ReservationDetailModal({ propertyId, reservationId, onCl
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
+  const [showAddRoom, setShowAddRoom] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -94,8 +98,11 @@ export default function ReservationDetailModal({ propertyId, reservationId, onCl
     }
   };
 
+  const selectedBooking = selectedBookingId ? bookings.find(b => b.id === selectedBookingId) ?? null : null;
+
   return (
-    <ModalShell isOpen={true} onClose={onClose} title="Reservation" className="max-w-3xl">
+    <>
+    <ModalShell isOpen={true} onClose={onClose} title="Reservation" className="max-w-4xl">
       <div className="p-6">
         {error && <div className="mb-4 p-3 bg-rose-50 text-rose-700 text-sm rounded-md">{error}</div>}
         {loading && <div className="text-sm text-slate-500">Loading…</div>}
@@ -125,7 +132,7 @@ export default function ReservationDetailModal({ propertyId, reservationId, onCl
                   {reservation.overallStatus.replace('_', ' ')}
                 </span>
               </div>
-              <div className="mt-4 grid grid-cols-2 gap-4 text-xs sm:grid-cols-4">
+              <div className="mt-4 grid grid-cols-3 gap-4 text-xs">
                 <div>
                   <div className="font-bold uppercase tracking-wider text-slate-400">Total</div>
                   <div className="mt-0.5 font-bold text-slate-900">{reservation.currency} {reservation.totalGroupPrice.toFixed(2)}</div>
@@ -138,24 +145,28 @@ export default function ReservationDetailModal({ propertyId, reservationId, onCl
                   <div className="font-bold uppercase tracking-wider text-slate-400">Created</div>
                   <div className="mt-0.5 text-slate-700">{fmtDate(reservation.createdAt)}</div>
                 </div>
-                <div className="flex items-end justify-end">
-                  <button
-                    type="button"
-                    className="text-xs font-bold text-indigo-600 hover:text-indigo-700"
-                    onClick={handleToggleBilling}
-                  >
-                    Switch to {reservation.billingMode === 'CONSOLIDATED' ? 'SEPARATE' : 'CONSOLIDATED'}
-                  </button>
-                </div>
+              </div>
+              <div className="mt-3">
+                <button
+                  type="button"
+                  className="w-full rounded-full border border-indigo-200 bg-indigo-50 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100 transition-colors"
+                  onClick={handleToggleBilling}
+                >
+                  Switch to {reservation.billingMode === 'CONSOLIDATED' ? 'Separate' : 'Consolidated'} billing
+                </button>
               </div>
             </div>
 
             {/* Member bookings */}
             <div className="mt-6">
-              <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500">Bookings ({reservation.bookings.length})</h3>
+              <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500">Rooms ({reservation.bookings.length})</h3>
               <ul className="mt-2 divide-y divide-slate-200 rounded-xl border border-slate-200">
                 {reservation.bookings.map((b: BookingSummaryDto) => (
-                  <li key={b.bookingId} className="flex items-center justify-between gap-4 px-4 py-3">
+                  <li
+                    key={b.bookingId}
+                    className="flex items-center justify-between gap-4 px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors"
+                    onClick={() => setSelectedBookingId(b.bookingId)}
+                  >
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-bold text-slate-900 truncate">{b.guestName}</div>
                       <div className="text-xs text-slate-500">
@@ -166,16 +177,22 @@ export default function ReservationDetailModal({ propertyId, reservationId, onCl
                         <div className="mt-1 text-xs text-slate-500 italic">"{b.specialRequests}"</div>
                       )}
                     </div>
-                    <div className="text-right">
-                      <span className={cn('inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold', STATUS_BADGE[b.status] || STATUS_BADGE.PENDING)}>
-                        {b.status.replace('_', ' ')}
-                      </span>
-                      <div className="mt-1 text-xs text-slate-600">
-                        {reservation.currency} {b.totalPrice.toFixed(2)}
-                        {b.balanceDue > 0 && (
-                          <span className="ml-2 text-rose-600">due {b.balanceDue.toFixed(2)}</span>
-                        )}
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <span className={cn('inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold', STATUS_BADGE[b.status] || STATUS_BADGE.PENDING)}>
+                          {b.status.replace('_', ' ')}
+                        </span>
+                        <div className="mt-1 text-xs text-slate-600">
+                          {reservation.currency} {b.totalPrice.toFixed(2)}
+                        </div>
                       </div>
+                      <button
+                        type="button"
+                        className="shrink-0 text-xs font-medium text-rose-500 hover:text-rose-700"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Remove
+                      </button>
                     </div>
                   </li>
                 ))}
@@ -219,19 +236,59 @@ export default function ReservationDetailModal({ propertyId, reservationId, onCl
               {reservation.overallStatus !== 'CANCELLED' && reservation.overallStatus !== 'CHECKED_OUT' && (
                 <button
                   type="button"
+                  onClick={() => setShowAddRoom(true)}
+                  className="rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-bold text-indigo-700 hover:bg-indigo-100"
+                >
+                  Add Room
+                </button>
+              )}
+              <button
+                type="button"
+                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
+              >
+                Edit Reservation
+              </button>
+              {reservation.overallStatus !== 'CANCELLED' && reservation.overallStatus !== 'CHECKED_OUT' && (
+                <button
+                  type="button"
                   onClick={handleCancelReservation}
                   className="rounded-lg bg-rose-50 px-4 py-2 text-sm font-bold text-rose-700 hover:bg-rose-100"
                 >
                   Cancel Reservation
                 </button>
               )}
-              <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">
-                Close
-              </button>
             </div>
           </>
         )}
       </div>
     </ModalShell>
+    {selectedBooking && (
+      <BookingDetailModal
+        booking={selectedBooking}
+        propertyId={propertyId}
+        onClose={() => setSelectedBookingId(null)}
+        onEditBooking={() => setSelectedBookingId(null)}
+        onOpenFolio={() => setSelectedBookingId(null)}
+      />
+    )}
+    {showAddRoom && (
+      <ModalShell isOpen={true} onClose={() => setShowAddRoom(false)} title="Add Room to Reservation">
+        <div className="p-6">
+          <BookingForm
+            propertyId={propertyId}
+            reservationId={reservationId}
+            initialCheckIn={reservation?.checkIn}
+            initialCheckOut={reservation?.checkOut}
+            onSuccess={() => {
+              setShowAddRoom(false);
+              fetchData();
+              onUpdated?.();
+            }}
+            onCancel={() => setShowAddRoom(false)}
+          />
+        </div>
+      </ModalShell>
+    )}
+    </>
   );
 }

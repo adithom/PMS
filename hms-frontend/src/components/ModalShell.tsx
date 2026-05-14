@@ -8,11 +8,12 @@ type ModalShellProps = {
   title: string;
   subtitle?: string;
   size?: 'regular' | 'wide';
+  className?: string;
   children: ReactNode;
   onClose: () => void;
 };
 
-export default function ModalShell({ title, subtitle, size = 'regular', children, onClose }: ModalShellProps) {
+export default function ModalShell({ title, subtitle, size = 'regular', className, children, onClose }: ModalShellProps) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-sm"
@@ -22,6 +23,7 @@ export default function ModalShell({ title, subtitle, size = 'regular', children
         className={cn(
           'w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl',
           size === 'wide' ? 'max-w-5xl' : 'max-w-lg',
+          className,
         )}
         onClick={(e) => e.stopPropagation()}
       >

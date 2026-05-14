@@ -313,8 +313,8 @@ export default function BookingDetailModal({ booking, propertyId, onClose, onEdi
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
               <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">Travel Agent</p>
               <p className="text-sm font-semibold text-slate-800">{booking.travelAgentName}</p>
-              {booking.commissionRate != null && (
-                <p className="mt-1 text-xs text-slate-500">Commission: {booking.commissionRate}%</p>
+              {booking.contactPersonName && (
+                <p className="mt-1 text-xs text-slate-500">Contact: {booking.contactPersonName}</p>
               )}
             </div>
           )}

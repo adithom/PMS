@@ -54,6 +54,8 @@ public record BookingCreationDto(
         UUID parentBookingId,       // Set when creating a child booking individually
         String groupReference,       // e.g. "WEDDING-SHARMA-2025", purely informational
 
+        UUID reservationId,          // Set when attaching a new booking to an existing reservation
+
         Boolean isTwinBed,
 
         String referenceNumber,      // Optional external booking engine reference
@@ -62,6 +64,8 @@ public record BookingCreationDto(
 
         @Valid
         TravelAgentCreationDto newTravelAgent,  // Optional — create a new travel agent inline
+
+        UUID contactPersonId,        // Optional — contact person at the travel agent for this booking
 
         MealPlanType mealPlanType,   // Optional — select a meal plan for this booking
 

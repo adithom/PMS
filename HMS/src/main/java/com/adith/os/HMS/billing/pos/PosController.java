@@ -30,7 +30,7 @@ public class PosController {
     // ──────────────── Locations ────────────────
 
     @GetMapping("/locations")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'POS', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'POS')")
     public ResponseEntity<List<PosLocationDto>> getLocations(@RequestParam UUID propertyId) {
         return ResponseEntity.ok(posService.getLocations(propertyId));
     }

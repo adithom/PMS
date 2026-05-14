@@ -6,7 +6,7 @@ import propertyApi from '../api/propertyApi';
 import posApi from '../api/posApi';
 import travelAgentApi from '../api/travelAgentApi';
 import adminApi from '../api/adminApi';
-import type { Property, TravelAgent } from '../types';
+import type { Property, TravelAgent, ContactPerson } from '../types';
 import type { PosLocation } from '../types/pos';
 import ModalShell from '../components/ModalShell';
 import ConfirmModal from '../components/ConfirmModal';
@@ -15,12 +15,12 @@ import ConfirmModal from '../components/ConfirmModal';
 /* Tokens                                                        */
 /* ────────────────────────────────────────────────────────────── */
 
-const ROLES = ['ADMIN', 'MANAGER', 'FRONTDESK', 'HOUSEKEEPING', 'AGENCY', 'POS'] as const;
+const ROLES = ['ADMIN', 'MANAGER', 'HOUSEKEEPING', 'POS'] as const;
 const ROLES_NO_ADMIN = ROLES.filter(r => r !== 'ADMIN');
 
 const roleLabel: Record<string, string> = {
-  ADMIN: 'Admin', MANAGER: 'Manager', FRONTDESK: 'Front Desk',
-  HOUSEKEEPING: 'Housekeeping', AGENCY: 'Agency', POS: 'POS',
+  ADMIN: 'Admin', MANAGER: 'Manager',
+  HOUSEKEEPING: 'Housekeeping', POS: 'POS',
 };
 
 const btnPrimary =
@@ -38,9 +38,7 @@ const inputCls =
 const roleBadgeClass: Record<string, string> = {
   ADMIN: 'bg-slate-800 text-white border-slate-700',
   MANAGER: 'bg-blue-100 text-blue-800 border-blue-200',
-  FRONTDESK: 'bg-emerald-100 text-emerald-800 border-emerald-200',
   HOUSEKEEPING: 'bg-purple-100 text-purple-800 border-purple-200',
-  AGENCY: 'bg-amber-100 text-amber-800 border-amber-200',
   POS: 'bg-rose-100 text-rose-800 border-rose-200',
 };
 
@@ -319,8 +317,8 @@ export default function AdminConsole() {
                     <thead className="sticky top-0 bg-slate-50/90 backdrop-blur-sm">
                       <tr className="text-xs font-medium text-slate-400 border-b border-slate-100">
                         <th className="px-5 py-2 font-medium">Agency</th>
-                        <th className="px-3 py-2 font-medium">IATA</th>
-                        <th className="px-3 py-2 font-medium">Commission</th>
+                        <th className="px-3 py-2 font-medium">GSTIN</th>
+                        <th className="px-3 py-2 font-medium">Contacts</th>
                         <th className="px-3 py-2 font-medium">Status</th>
                         <th className="px-5 py-2 font-medium text-right">Actions</th>
                       </tr>
@@ -330,19 +328,15 @@ export default function AdminConsole() {
                         <tr key={a.id} className="transition-colors hover:bg-slate-50/60">
                           <td className="px-5 py-2">
                             <p className="text-xs font-semibold text-slate-900">{a.name}</p>
-                            {(a.contactPerson || a.email) && (
-                              <p className="text-[10px] text-slate-400">{a.contactPerson ?? a.email}</p>
-                            )}
+                            {a.email && <p className="text-[10px] text-slate-400">{a.email}</p>}
                           </td>
                           <td className="px-3 py-2">
-                            {a.iataCode
-                              ? <span className="font-mono text-[10px] font-semibold text-slate-600">{a.iataCode}</span>
+                            {a.gstin
+                              ? <span className="font-mono text-[10px] font-semibold text-slate-600">{a.gstin}</span>
                               : <span className="text-[10px] text-slate-300">—</span>}
                           </td>
                           <td className="px-3 py-2">
-                            {a.commissionRate != null
-                              ? <span className="text-xs font-semibold text-slate-700">{a.commissionRate}%</span>
-                              : <span className="text-[10px] text-slate-300">—</span>}
+                            <span className="text-[10px] text-slate-500">{a.contactPersons?.length ?? 0}</span>
                           </td>
                           <td className="px-3 py-2">
                             <span className={`inline-block rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${a.active ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-400 border-slate-200'}`}>
@@ -479,7 +473,7 @@ function UserForm({ mode, initialData, allProperties, allPosLocations, onSubmit,
   const [username, setUsername] = useState(initialData?.username ?? '');
   const [password, setPassword] = useState('');
   const [email, setEmail] = useState(initialData?.email ?? '');
-  const [role, setRole] = useState(initialData?.role ?? 'FRONTDESK');
+  const [role, setRole] = useState(initialData?.role ?? 'MANAGER');
   const [propertyIds, setPropertyIds] = useState<string[]>(initialData?.properties.map(p => p.id) ?? []);
   const [posLocationId, setPosLocationId] = useState(initialData?.posLocationId ?? '');
   const [saving, setSaving] = useState(false);
@@ -588,14 +582,21 @@ interface AgentFormProps {
 
 function AgentForm({ mode, initialData, onSubmit, onCancel }: AgentFormProps) {
   const [name, setName] = useState(initialData?.name ?? '');
-  const [contactPerson, setContactPerson] = useState(initialData?.contactPerson ?? '');
   const [email, setEmail] = useState(initialData?.email ?? '');
   const [phone, setPhone] = useState(initialData?.phone ?? '');
-  const [iataCode, setIataCode] = useState(initialData?.iataCode ?? '');
-  const [commissionRate, setCommissionRate] = useState(initialData?.commissionRate?.toString() ?? '');
+  const [gstin, setGstin] = useState(initialData?.gstin ?? '');
   const [address, setAddress] = useState(initialData?.address ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Contact persons (only in edit mode)
+  const [contacts, setContacts] = useState<ContactPerson[]>(initialData?.contactPersons ?? []);
+  const [addingContact, setAddingContact] = useState(false);
+  const [newContactName, setNewContactName] = useState('');
+  const [newContactPhone, setNewContactPhone] = useState('');
+  const [newContactEmail, setNewContactEmail] = useState('');
+  const [newContactDesignation, setNewContactDesignation] = useState('');
+  const [savingContact, setSavingContact] = useState(false);
 
   const handleSubmit = async () => {
     if (!name.trim()) { setError('Agency name is required.'); return; }
@@ -603,15 +604,38 @@ function AgentForm({ mode, initialData, onSubmit, onCancel }: AgentFormProps) {
     try {
       await onSubmit({
         name: name.trim(),
-        contactPerson: contactPerson.trim() || undefined,
         email: email.trim() || undefined,
         phone: phone.trim() || undefined,
-        iataCode: iataCode.trim() || undefined,
-        commissionRate: commissionRate ? Number(commissionRate) : undefined,
+        gstin: gstin.trim() || undefined,
         address: address.trim() || undefined,
       });
     } catch (e: any) { setError(e.message || 'Something went wrong'); }
     finally { setSaving(false); }
+  };
+
+  const handleAddContact = async () => {
+    if (!newContactName.trim() || !initialData?.id) return;
+    setSavingContact(true);
+    try {
+      const created = await travelAgentApi.createContact(initialData.id, {
+        name: newContactName.trim(),
+        phone: newContactPhone.trim() || undefined,
+        email: newContactEmail.trim() || undefined,
+        designation: newContactDesignation.trim() || undefined,
+      });
+      setContacts(prev => [...prev, created]);
+      setNewContactName(''); setNewContactPhone(''); setNewContactEmail(''); setNewContactDesignation('');
+      setAddingContact(false);
+    } catch (e: any) { alert(e.message || 'Failed to add contact'); }
+    finally { setSavingContact(false); }
+  };
+
+  const handleDeleteContact = async (contactId: string) => {
+    if (!initialData?.id) return;
+    try {
+      await travelAgentApi.deleteContact(initialData.id, contactId);
+      setContacts(prev => prev.filter(c => c.id !== contactId));
+    } catch (e: any) { alert(e.message || 'Failed to delete contact'); }
   };
 
   return (
@@ -625,36 +649,90 @@ function AgentForm({ mode, initialData, onSubmit, onCancel }: AgentFormProps) {
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs font-semibold text-slate-500 mb-1.5">Contact Person</label>
-          <input type="text" value={contactPerson} onChange={e => setContactPerson(e.target.value)} className={inputCls_} />
-        </div>
-        <div>
           <label className="block text-xs font-semibold text-slate-500 mb-1.5">Email</label>
           <input type="email" value={email} onChange={e => setEmail(e.target.value)} className={inputCls_} />
         </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-xs font-semibold text-slate-500 mb-1.5">Phone</label>
           <input type="text" value={phone} onChange={e => setPhone(e.target.value)} className={inputCls_} />
         </div>
-        <div>
-          <label className="block text-xs font-semibold text-slate-500 mb-1.5">IATA Code</label>
-          <input type="text" value={iataCode} onChange={e => setIataCode(e.target.value)} placeholder="e.g. 12345678" className={inputCls_} />
-        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs font-semibold text-slate-500 mb-1.5">Commission Rate (%)</label>
-          <input type="number" min={0} max={100} step={0.01} value={commissionRate} onChange={e => setCommissionRate(e.target.value)} placeholder="e.g. 10" className={inputCls_} />
+          <label className="block text-xs font-semibold text-slate-500 mb-1.5">GSTIN</label>
+          <input type="text" value={gstin} onChange={e => setGstin(e.target.value)} placeholder="e.g. 29ABCDE1234F1Z5" className={inputCls_} />
         </div>
         <div>
           <label className="block text-xs font-semibold text-slate-500 mb-1.5">Address</label>
           <input type="text" value={address} onChange={e => setAddress(e.target.value)} className={inputCls_} />
         </div>
       </div>
+
+      {mode === 'edit' && (
+        <div className="pt-2 border-t border-slate-100">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-semibold text-slate-500">Contact Persons</p>
+            {!addingContact && (
+              <button type="button" className={btnSecondary} onClick={() => setAddingContact(true)}>+ Add Contact</button>
+            )}
+          </div>
+
+          {contacts.length === 0 && !addingContact && (
+            <p className="text-[11px] text-slate-400 italic">No contacts yet.</p>
+          )}
+
+          {contacts.length > 0 && (
+            <div className="rounded-lg border border-slate-200 divide-y divide-slate-100 mb-2">
+              {contacts.map(c => (
+                <div key={c.id} className="flex items-center justify-between px-3 py-2">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-800">{c.name}</p>
+                    <p className="text-[10px] text-slate-400">
+                      {[c.designation, c.phone, c.email].filter(Boolean).join(' · ')}
+                    </p>
+                  </div>
+                  <button type="button" onClick={() => handleDeleteContact(c.id)}
+                    className="flex h-6 w-6 items-center justify-center rounded text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-colors">
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {addingContact && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-500 mb-1">Name <span className="text-rose-500">*</span></label>
+                  <input type="text" value={newContactName} onChange={e => setNewContactName(e.target.value)} placeholder="Full name" className={inputCls_} />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-500 mb-1">Designation</label>
+                  <input type="text" value={newContactDesignation} onChange={e => setNewContactDesignation(e.target.value)} placeholder="e.g. Sales Manager" className={inputCls_} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-500 mb-1">Phone</label>
+                  <input type="text" value={newContactPhone} onChange={e => setNewContactPhone(e.target.value)} className={inputCls_} />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-500 mb-1">Email</label>
+                  <input type="email" value={newContactEmail} onChange={e => setNewContactEmail(e.target.value)} className={inputCls_} />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <button type="button" className={btnSecondary} onClick={() => { setAddingContact(false); setNewContactName(''); setNewContactPhone(''); setNewContactEmail(''); setNewContactDesignation(''); }}>Cancel</button>
+                <button type="button" className={btnPrimary} onClick={handleAddContact} disabled={savingContact || !newContactName.trim()}>
+                  {savingContact ? 'Adding…' : 'Add Contact'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
         <button type="button" className={btnSecondary} onClick={onCancel}>Cancel</button>

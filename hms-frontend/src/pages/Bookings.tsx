@@ -43,8 +43,8 @@ type PendingAction = {
 /* Context Menu                                                  */
 /* ────────────────────────────────────────────────────────────── */
 
-function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout, onEditBooking, onShiftRoom, onShowFolio, onViewBooking, onAssignRoom }: {
-  state: { x: number; y: number; booking: Booking } | null;
+function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout, onEditBooking, onShiftRoom, onShowFolio, onViewBooking, onAssignRoom, onAddRoom }: {
+  state: { x: number; y: number; booking: Booking; hasAssignment?: boolean } | null;
   propertyId: string;
   onClose: () => void;
   onAction: () => void;
@@ -54,6 +54,7 @@ function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout, onEdit
   onShowFolio: (bookingId: string, guestName: string) => void;
   onViewBooking: (booking: Booking) => void;
   onAssignRoom: (booking: Booking) => void;
+  onAddRoom: (booking: Booking) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
@@ -89,8 +90,12 @@ function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout, onEdit
     // Assign Room — surfaced when the booking has no specific room pinned (ghost bar
     // on the chart, or unassigned booking opened from elsewhere). Pins via PATCH.
     const assignableStatuses: Booking['status'][] = ['PENDING', 'CONFIRMED'];
-    if (!booking.roomId && booking.unitId && assignableStatuses.includes(booking.status)) {
+    if (!state.hasAssignment && booking.unitId && assignableStatuses.includes(booking.status)) {
       acts.push({ label: '⊕ Assign Room…', doFn: async () => { onAssignRoom(booking); onClose(); } });
+    }
+
+    if (booking.reservationId && assignableStatuses.includes(booking.status)) {
+      acts.push({ label: '⊞ Add Room to Reservation', doFn: async () => { onAddRoom(booking); onClose(); } });
     }
 
     switch (booking.status) {
@@ -281,6 +286,7 @@ export default function Bookings() {
   const [showUnassigned, setShowUnassigned] = useState(false);
   const [ghosts, setGhosts] = useState<GhostAssignmentDto[]>([]);
   const [assignRoomBooking, setAssignRoomBooking] = useState<Booking | null>(null);
+  const [addRoomBooking, setAddRoomBooking] = useState<Booking | null>(null);
   
   const [listType, setListType] = useState<StatType>('all');
   const [pfRoom, setPfRoom] = useState<Room | null>(null);
@@ -667,7 +673,7 @@ export default function Bookings() {
                     return (
                       <div key={ds} style={{ width: cellW, minWidth: cellW }}
                         className={cn('flex flex-col items-center justify-end border-b border-r border-slate-200 px-1 pb-1 pt-2 cursor-pointer transition-colors',
-                          isT && 'bg-blue-100', isSel && !isT && 'bg-blue-100 shadow-[inset_2px_0_0_0_#93c5fd,inset_-2px_0_0_0_#93c5fd]', !isT && !isSel && 'bg-slate-50')}
+                          isT && 'bg-blue-100', isSel && !isT && 'bg-blue-50/50 shadow-[inset_1px_0_0_0_#bfdbfe,inset_-1px_0_0_0_#bfdbfe]', !isT && !isSel && 'bg-slate-50')}
                         onClick={() => setSelectedDate(d)}>
                         <span className={cn('text-[10px] font-semibold', isT ? 'text-blue-600' : 'text-slate-400')}>{dayLabel(d)}</span>
                         <span className={cn('text-sm font-bold', isT ? 'text-blue-700' : 'text-slate-700')}>{d.getDate()}</span>
@@ -715,7 +721,7 @@ export default function Bookings() {
                                 <div key={ds}
                                   className={cn('border-b border-r border-slate-100 transition-colors',
                                     isT && 'bg-blue-50/30',
-                                    isSel && !isT && 'bg-blue-50/70 shadow-[inset_2px_0_0_0_#93c5fd,inset_-2px_0_0_0_#93c5fd]',
+                                    isSel && !isT && 'bg-blue-50/30 shadow-[inset_1px_0_0_0_#bfdbfe,inset_-1px_0_0_0_#bfdbfe]',
                                     !isT && !isSel && 'hover:bg-slate-50/80')}
                                   style={{ width: cellW, minWidth: cellW, height: CELL_H }}
                                   onMouseDown={e => {
@@ -805,8 +811,8 @@ export default function Bookings() {
                                     }
                                     return base;
                                   })()}
-                                  onClick={e => { e.stopPropagation(); setCtx({ x: e.clientX, y: e.clientY, booking: bk }); }}
-                                  onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtx({ x: e.clientX, y: e.clientY, booking: bk }); }}>
+                                  onClick={e => { e.stopPropagation(); setCtx({ x: e.clientX, y: e.clientY, booking: bk, hasAssignment: !isGhost }); }}
+                                  onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtx({ x: e.clientX, y: e.clientY, booking: bk, hasAssignment: !isGhost }); }}>
 
                                   {/* NO SHOW View */}
                                   {isNoShow && (
@@ -958,7 +964,8 @@ export default function Bookings() {
           onEditBooking={setEditBooking} onShiftRoom={setShiftRoomBooking}
           onShowFolio={(id, name) => setViewFolioBooking({ id, guestName: name })}
           onViewBooking={setViewBooking}
-          onAssignRoom={setAssignRoomBooking} />
+          onAssignRoom={setAssignRoomBooking}
+          onAddRoom={setAddRoomBooking} />
       )}
       {viewBooking && selectedPropId && (
         <BookingDetailModal
@@ -979,6 +986,18 @@ export default function Bookings() {
           onClose={() => setAssignRoomBooking(null)}
           onAssigned={() => { setAssignRoomBooking(null); refresh(); }}
         />
+      )}
+      {addRoomBooking && selectedPropId && addRoomBooking.reservationId && (
+        <ModalShell title="Add Room to Reservation" size="wide" onClose={() => setAddRoomBooking(null)}>
+          <BookingForm
+            propertyId={selectedPropId}
+            reservationId={addRoomBooking.reservationId}
+            initialCheckIn={dateStr(addRoomBooking.checkIn)}
+            initialCheckOut={dateStr(addRoomBooking.checkOut)}
+            onSuccess={async () => { setAddRoomBooking(null); await refresh(); }}
+            onCancel={() => setAddRoomBooking(null)}
+          />
+        </ModalShell>
       )}
     </div>
   );

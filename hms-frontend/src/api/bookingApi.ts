@@ -5,11 +5,9 @@ export type { RoomAssignmentDto } from '../types';
 
 export interface NewTravelAgentDto {
   name: string;
-  contactPerson?: string;
   email?: string;
   phone?: string;
-  iataCode?: string;
-  commissionRate?: number;
+  gstin?: string;
   address?: string;
 }
 
@@ -30,6 +28,7 @@ export interface BookingCreationDto {
   referenceNumber?: string;
   travelAgentId?: string;
   newTravelAgent?: NewTravelAgentDto;
+  contactPersonId?: string;
   mealPlanType?: string;
   mealPlanPricePerNight?: number;
   mealPlanChildrenPricePerNight?: number;
@@ -38,6 +37,7 @@ export interface BookingCreationDto {
   extraBedChargeCode?: 'ROOM_RENT' | 'MISC';
   bookingSource?: string;
   additionalGuestIds?: string[];
+  reservationId?: string;
 }
 
 export interface BookingUpdatePayload extends Omit<BookingCreationDto, 'nightlyRate'> {

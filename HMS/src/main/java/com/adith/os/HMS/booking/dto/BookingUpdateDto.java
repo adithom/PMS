@@ -53,6 +53,8 @@ public record BookingUpdateDto(
 
         Boolean clearTravelAgent,   // PATCH only: if true, explicitly removes travel agent
 
+        UUID contactPersonId,       // Optional — contact person at the travel agent for this booking
+
         MealPlanType mealPlanType,  // null = no change (PATCH)
 
         Boolean clearMealPlan,      // PATCH only: if true, explicitly removes meal plan
