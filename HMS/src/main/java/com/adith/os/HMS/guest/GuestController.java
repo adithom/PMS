@@ -2,6 +2,7 @@ package com.adith.os.HMS.guest;
 
 import com.adith.os.HMS.guest.dto.GuestCreationDto;
 import com.adith.os.HMS.guest.dto.GuestDto;
+import com.adith.os.HMS.guest.dto.GuestProfileDto;
 import com.adith.os.HMS.guest.dto.GuestUpdateDto;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -71,6 +72,12 @@ public class GuestController {
         }
 
         return ResponseEntity.ok(guests);
+    }
+
+    @GetMapping("/{id}/profile")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    public ResponseEntity<GuestProfileDto> getGuestProfile(@PathVariable UUID id) {
+        return ResponseEntity.ok(guestService.getGuestProfile(id));
     }
 
     // UPDATE

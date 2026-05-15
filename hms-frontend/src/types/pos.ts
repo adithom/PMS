@@ -90,14 +90,10 @@ export interface PosOrder {
   serviceCharge: number;
   discountRate?: number;
   discountAmount: number;
-  folioId?: string;
-  bookingId?: string;
-  roomId?: string;
   items: PosOrderItem[];
   orderType: string;
   orderDate: string;
   tableNumber?: string;
-  guestName?: string;
   specialInstructions?: string;
   createdBy?: string;
   servedBy?: string;

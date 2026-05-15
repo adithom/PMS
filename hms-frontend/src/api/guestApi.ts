@@ -1,6 +1,6 @@
 // src/api/guestApi.ts
 import api from './fetchClient';
-import type { Guest, GuestIdType } from '../types';
+import type { Guest, GuestIdType, GuestProfile } from '../types';
 
 export interface GuestCreationDto {
   firstName: string;
@@ -42,6 +42,9 @@ const guestApi = {
 
   search: (searchTerm: string) =>
     api.get<Guest[]>('/guests', { search: searchTerm }),
+
+  getProfile: (id: string) =>
+    api.get<GuestProfile>(`/guests/${id}/profile`),
 };
 
 export default guestApi;

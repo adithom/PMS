@@ -1,9 +1,6 @@
 package com.adith.os.HMS.billing.pos;
 
-import com.adith.os.HMS.billing.folio.Folio;
-import com.adith.os.HMS.booking.Booking;
 import com.adith.os.HMS.property.Property;
-import com.adith.os.HMS.room.Room;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 
@@ -33,20 +30,9 @@ public class PosOrder {
     @JoinColumn(name = "property_id", nullable = false)
     private Property property;
 
+    @NotNull
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "booking_id")
-    private Booking booking;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "folio_id")
-    private Folio folio;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "room_id")
-    private Room room;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "ticket_id")
+    @JoinColumn(name = "ticket_id", nullable = false)
     private PosTicket ticket;
 
     @Column(name = "order_type", nullable = false, length = 50)
@@ -82,9 +68,6 @@ public class PosOrder {
 
     @Column(name = "table_number", length = 20)
     private String tableNumber;
-
-    @Column(name = "guest_name", length = 200)
-    private String guestName;
 
     @Column(name = "special_instructions", columnDefinition = "TEXT")
     private String specialInstructions;
@@ -169,30 +152,6 @@ public class PosOrder {
 
     public void setProperty(Property property) {
         this.property = property;
-    }
-
-    public Booking getBooking() {
-        return booking;
-    }
-
-    public void setBooking(Booking booking) {
-        this.booking = booking;
-    }
-
-    public Folio getFolio() {
-        return folio;
-    }
-
-    public void setFolio(Folio folio) {
-        this.folio = folio;
-    }
-
-    public Room getRoom() {
-        return room;
-    }
-
-    public void setRoom(Room room) {
-        this.room = room;
     }
 
     public PosTicket getTicket() {
@@ -289,14 +248,6 @@ public class PosOrder {
 
     public void setTableNumber(String tableNumber) {
         this.tableNumber = tableNumber;
-    }
-
-    public String getGuestName() {
-        return guestName;
-    }
-
-    public void setGuestName(String guestName) {
-        this.guestName = guestName;
     }
 
     public String getSpecialInstructions() {

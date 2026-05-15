@@ -77,6 +77,34 @@ export interface GuestSummary {
   phone?: string;
 }
 
+export interface GuestBookingSummary {
+  bookingId: string;
+  reservationId?: string;
+  groupReference?: string;
+  propertyName?: string;
+  roomNumber?: string;
+  unitName?: string;
+  checkIn: string;
+  checkOut: string;
+  status: BookingStatus;
+  mealPlanType?: string;
+  role: 'PRIMARY' | 'ADDITIONAL';
+}
+
+export interface GuestPosPreference {
+  productId: string;
+  itemName: string;
+  category?: string;
+  totalQuantity: number;
+  orderCount: number;
+}
+
+export interface GuestProfile {
+  guest: Guest;
+  bookingHistory: GuestBookingSummary[];
+  posPreferences: GuestPosPreference[];
+}
+
 export interface Booking {
   id?: string;
   propertyId: string;
