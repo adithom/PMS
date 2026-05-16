@@ -3,6 +3,8 @@ import ModalShell from '../ModalShell';
 import billingApi from '../../api/billingApi';
 import type { BillDto } from '../../api/billingApi';
 import type { FolioDto } from '../../api/folioApi';
+import posApi from '../../api/posApi';
+import type { PosTicketHistory } from '../../types/pos';
 import { triggerPresignedDownload } from '../../utils/downloadUtils';
 
 interface BillViewModalProps {
@@ -13,7 +15,8 @@ interface BillViewModalProps {
 }
 
 const BILL_TYPE_LABELS: Record<string, string> = {
-  ROOM_RENT:   'Room & Meal Plan',
+  ROOM_RENT:   'Main',
+  ANCILLARY:   'Ancillary',
   RESTAURANT:  'Restaurant',
   SPA:         'Spa',
   LAUNDRY:     'Laundry',
@@ -30,6 +33,8 @@ export default function BillViewModal({ folio, bills, onClose, onBillsChanged }:
   const [downloading, setDownloading] = useState(false);
   const [voiding, setVoiding] = useState(false);
   const [localBills, setLocalBills] = useState<BillDto[]>(bills);
+  const [posTickets, setPosTickets] = useState<PosTicketHistory[]>([]);
+  const [downloadingReceiptId, setDownloadingReceiptId] = useState<string | null>(null);
 
   // Close automatically once all bills are voided
   useEffect(() => {
@@ -38,6 +43,26 @@ export default function BillViewModal({ folio, bills, onClose, onBillsChanged }:
       onClose();
     }
   }, [localBills]);
+
+  // Fetch POS receipts for this booking
+  useEffect(() => {
+    if (!folio.bookingId) return;
+    posApi.getTicketsByBookingId(folio.bookingId)
+      .then(setPosTickets)
+      .catch(() => {}); // non-critical
+  }, [folio.bookingId]);
+
+  const handleDownloadReceipt = async (ticketId: string) => {
+    setDownloadingReceiptId(ticketId);
+    try {
+      const url = await posApi.getReceiptUrl(ticketId);
+      triggerPresignedDownload(url);
+    } catch (err: any) {
+      alert(err.message || 'Failed to get receipt link.');
+    } finally {
+      setDownloadingReceiptId(null);
+    }
+  };
 
   const activeBills = localBills.filter(b => !b.isVoided);
 
@@ -114,6 +139,38 @@ export default function BillViewModal({ folio, bills, onClose, onBillsChanged }:
               </div>
             ))}
           </div>
+
+          {posTickets.length > 0 && (
+            <div className="mt-5">
+              <p className="mb-2 text-[11px] font-bold uppercase tracking-widest text-slate-400">POS Receipts</p>
+              <div className="space-y-2">
+                {posTickets.map(ticket => (
+                  <div key={ticket.id} className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div>
+                      <p className="text-sm font-bold text-slate-900">
+                        {ticket.invoiceNumber ?? ticket.id.slice(0, 8)}
+                      </p>
+                      <p className="mt-0.5 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                        {ticket.locationName ?? ticket.mealType ?? 'POS'}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <p className="text-sm font-extrabold text-slate-900">
+                        {folio.currency ?? '₹'} {ticket.totalAmount.toFixed(2)}
+                      </p>
+                      <button
+                        onClick={() => handleDownloadReceipt(ticket.id)}
+                        disabled={downloadingReceiptId === ticket.id}
+                        className="rounded-md bg-slate-100 px-2.5 py-1.5 text-[11px] font-bold text-slate-700 transition-colors hover:bg-slate-200 disabled:opacity-50"
+                      >
+                        {downloadingReceiptId === ticket.id ? '…' : 'Receipt'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="mt-4 flex items-center justify-end gap-2">
             <button

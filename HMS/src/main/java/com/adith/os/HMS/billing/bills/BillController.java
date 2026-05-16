@@ -36,9 +36,10 @@ public class BillController {
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<MultiBillDto> generateBills(
             @PathVariable UUID folioId,
-            @RequestParam(required = false) String guestGstNumber
+            @RequestParam(required = false) String guestGstNumber,
+            @RequestParam(defaultValue = "false") boolean splitAncillary
     ) {
-        return ResponseEntity.ok(billService.generateMultiBill(folioId, guestGstNumber));
+        return ResponseEntity.ok(billService.generateMultiBill(folioId, guestGstNumber, splitAncillary));
     }
 
     @PostMapping("/{billId}/void")
@@ -67,6 +68,7 @@ public class BillController {
     public ResponseEntity<String> getBillDownloadUrl(@PathVariable UUID billId) {
         return ResponseEntity.ok(billService.generateDownloadUrl(billId));
     }
+
 
     @GetMapping("/ledger")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")

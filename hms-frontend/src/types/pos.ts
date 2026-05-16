@@ -188,6 +188,7 @@ export interface OrderSummary {
 export interface PosTicketHistory {
   id: string;
   invoiceNumber: string | null;
+  locationName: string | null;
   guestName: string;
   roomNumber: string | null;
   mealType: MealType;

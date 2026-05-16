@@ -40,6 +40,9 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
   const [bills, setBills] = useState<BillDto[]>([]);
   const [downloadingBillId, setDownloadingBillId] = useState<string | null>(null);
   const [isGeneratingBill, setIsGeneratingBill] = useState(false);
+  const [showBillOptions, setShowBillOptions] = useState(false);
+  const [billOptGstNumber, setBillOptGstNumber] = useState('');
+  const [billOptSplitAncillary, setBillOptSplitAncillary] = useState(false);
 
   // Action states
   const [isProcessingId, setIsProcessingId] = useState<string | null>(null);
@@ -78,10 +81,10 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
   };
 
   const handleGenerateInvoice = async () => {
-    const gstNumber = window.prompt('Enter guest GST number (optional, leave blank to skip):') ?? '';
     setIsGeneratingBill(true);
+    setShowBillOptions(false);
     try {
-      const result = await billingApi.generateBills(folioId, gstNumber || undefined);
+      const result = await billingApi.generateBills(folioId, billOptGstNumber || undefined, billOptSplitAncillary);
       const withUrl = result.bills.filter(b => b.pdfDownloadUrl);
       if (withUrl.length === 0) {
         alert('Bill generated but PDF upload unavailable. Contact admin.');
@@ -372,9 +375,63 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
                     <FileText className="h-4 w-4" />
                     View Bill
                   </button>
+                ) : showBillOptions ? (
+                  <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+                    <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Generate Bill</p>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Guest GST Number <span className="font-normal text-slate-400">(optional)</span></label>
+                      <input
+                        type="text"
+                        value={billOptGstNumber}
+                        onChange={e => setBillOptGstNumber(e.target.value)}
+                        placeholder="e.g. 32AADCJ3244K1ZQ"
+                        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                      />
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-slate-600 mb-1.5">Ancillary Billing</p>
+                      <div className="flex gap-3">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="ancillaryMode"
+                            checked={!billOptSplitAncillary}
+                            onChange={() => setBillOptSplitAncillary(false)}
+                            className="accent-indigo-600"
+                          />
+                          <span className="text-xs text-slate-700">Consolidated <span className="text-slate-400">(one Ancillary bill)</span></span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="ancillaryMode"
+                            checked={billOptSplitAncillary}
+                            onChange={() => setBillOptSplitAncillary(true)}
+                            className="accent-indigo-600"
+                          />
+                          <span className="text-xs text-slate-700">Split <span className="text-slate-400">(per category)</span></span>
+                        </label>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        onClick={handleGenerateInvoice}
+                        disabled={isGeneratingBill}
+                        className="flex-1 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-bold text-white hover:bg-indigo-700 disabled:opacity-50"
+                      >
+                        {isGeneratingBill ? 'Generating...' : 'Confirm & Generate'}
+                      </button>
+                      <button
+                        onClick={() => setShowBillOptions(false)}
+                        className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
                 ) : (
                   <button
-                    onClick={handleGenerateInvoice}
+                    onClick={() => setShowBillOptions(true)}
                     disabled={isGeneratingBill}
                     className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-all hover:bg-slate-50 disabled:opacity-50"
                   >
@@ -398,7 +455,7 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
                           {bill.isVoided && <span className="ml-2 text-[10px] font-bold uppercase text-rose-500">Voided</span>}
                         </p>
                         <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
-                          {bill.charges?.[0]?.chargeCode === 'ROOM_RENT' ? 'Room Rent' : 'Ancillary'}
+                          {bill.category === 'ROOM_RENT' ? 'Main' : bill.category === 'ANCILLARY' ? 'Ancillary' : (bill.category ?? 'Bill')}
                         </p>
                       </div>
                       {!bill.isVoided && (

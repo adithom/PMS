@@ -45,6 +45,24 @@ public class Property {
     @Column(name = "gst_number")
     private String gstNumber;
 
+    @Column(name = "cin", length = 21)
+    private String cin;
+
+    @Column(name = "udyam_registration_no", length = 30)
+    private String udyamRegistrationNo;
+
+    @Column(name = "pan", length = 10)
+    private String pan;
+
+    @Column(name = "state_name", length = 50)
+    private String stateName;
+
+    @Column(name = "state_code", length = 4)
+    private String stateCode;
+
+    @Column(name = "fssai_number", length = 20)
+    private String fssaiNumber;
+
     @Column(name = "walk_in_guest_id")
     private java.util.UUID walkInGuestId;
 
@@ -161,6 +179,24 @@ public class Property {
     public void setGstNumber(String gstNumber) {
         this.gstNumber = gstNumber;
     }
+
+    public String getCin() { return cin; }
+    public void setCin(String cin) { this.cin = cin; }
+
+    public String getUdyamRegistrationNo() { return udyamRegistrationNo; }
+    public void setUdyamRegistrationNo(String udyamRegistrationNo) { this.udyamRegistrationNo = udyamRegistrationNo; }
+
+    public String getPan() { return pan; }
+    public void setPan(String pan) { this.pan = pan; }
+
+    public String getStateName() { return stateName; }
+    public void setStateName(String stateName) { this.stateName = stateName; }
+
+    public String getStateCode() { return stateCode; }
+    public void setStateCode(String stateCode) { this.stateCode = stateCode; }
+
+    public String getFssaiNumber() { return fssaiNumber; }
+    public void setFssaiNumber(String fssaiNumber) { this.fssaiNumber = fssaiNumber; }
 
     public java.util.UUID getWalkInGuestId() {
         return walkInGuestId;

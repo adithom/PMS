@@ -10,6 +10,7 @@ import java.util.UUID;
 public record PosTicketHistoryDto(
         UUID id,
         String invoiceNumber,
+        String locationName,
         String guestName,
         String roomNumber,
         MealType mealType,

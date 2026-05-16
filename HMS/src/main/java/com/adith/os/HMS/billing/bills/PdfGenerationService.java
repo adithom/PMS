@@ -49,7 +49,8 @@ public class PdfGenerationService {
             throw new RuntimeException("Could not create directory for invoices", e);
         }
 
-        String fileName = "INV_" + billDto.invoiceNumber() + ".pdf";
+        String fileKey = billDto.invoiceNumber() != null ? billDto.invoiceNumber().replace("/", "") : "INVOICE";
+        String fileName = "INV_" + fileKey + ".pdf";
         String fullPath = storagePath + fileName;
 
         try (PDDocument document = new PDDocument()) {
@@ -78,13 +79,39 @@ public class PdfGenerationService {
                 // Logo missing — continue without it
             }
 
-            // --- 2. HEADER BAND (logo left | property title+address center | invoice block right) ---
-            // Property name: regular weight, centered on page (A4 center = 297.5)
+            // --- 2. HEADER BAND ---
             String propName = billDto.PropertyName() != null ? billDto.PropertyName() : "HOTEL INVOICE";
             drawTextCenter(contentStream, propName, 297.5f, 778, fontSerifSemiBold, 22);
-            // Address and GSTIN: Cormorant Garamond regular, smaller, centered under title
-            drawTextCenter(contentStream, billDto.PropertyAddress() != null ? billDto.PropertyAddress() : " ", 297.5f, 761, fontSerifRegular, 11);
-            drawTextCenter(contentStream, "GSTIN: " + (billDto.gstNumber() != null ? billDto.gstNumber() : "N/A"), 297.5f, 746, fontSerifRegular, 11);
+
+            // Address centered under property name
+            if (billDto.PropertyAddress() != null && !billDto.PropertyAddress().isBlank()) {
+                drawTextCenter(contentStream, billDto.PropertyAddress(), 297.5f, 761, fontSerifRegular, 11);
+            }
+
+            // GSTIN | State Name, Code — centered
+            StringBuilder gstLine = new StringBuilder();
+            if (billDto.gstNumber() != null && !billDto.gstNumber().isBlank())
+                gstLine.append("GSTIN: ").append(billDto.gstNumber());
+            if (billDto.stateName() != null && !billDto.stateName().isBlank()) {
+                if (gstLine.length() > 0) gstLine.append("  |  ");
+                gstLine.append("State: ").append(billDto.stateName());
+                if (billDto.stateCode() != null && !billDto.stateCode().isBlank())
+                    gstLine.append(", Code: ").append(billDto.stateCode());
+            }
+            if (gstLine.length() > 0)
+                drawTextCenter(contentStream, gstLine.toString(), 297.5f, 746, fontSerifRegular, 11);
+
+            // PAN (top-left) and FSSAI (top-right) — small font, near border
+            if (billDto.pan() != null && !billDto.pan().isBlank())
+                drawText(contentStream, "PAN: " + billDto.pan(), 50, 793, fontSerifRegular, 8);
+            if (billDto.fssaiNumber() != null && !billDto.fssaiNumber().isBlank())
+                drawTextRight(contentStream, "FSSAI: " + billDto.fssaiNumber(), 545, 793, fontSerifRegular, 8);
+
+            // CIN (under PAN) and UDYAM (under FSSAI)
+            if (billDto.cin() != null && !billDto.cin().isBlank())
+                drawText(contentStream, "CIN: " + billDto.cin(), 50, 783, fontSerifRegular, 8);
+            if (billDto.udyamRegistrationNo() != null && !billDto.udyamRegistrationNo().isBlank())
+                drawTextRight(contentStream, "UDYAM: " + billDto.udyamRegistrationNo(), 545, 783, fontSerifRegular, 8);
 
             // Invoice info block: right-flush at x=455, top aligned with logo top
             drawText(contentStream, "TAX INVOICE",                                     455, 788, fontBold, 12);
@@ -123,7 +150,10 @@ public class PdfGenerationService {
 
             // Bill type title (above the table; vertical lines do NOT extend into this row)
             String billTitle = "Invoice";
-            try { billTitle = BillType.valueOf(billDto.category()).getDisplayLabel() + " Bill"; } catch (Exception ignored) {}
+            try {
+                BillType bt = BillType.valueOf(billDto.category());
+                billTitle = bt.getDisplayLabel() + " Bill";
+            } catch (Exception ignored) {}
             contentStream.setNonStrokingColor(new Color(240, 244, 248));
             contentStream.addRect(cols[0], yPosition - titleRowHeight, cols[7] - cols[0], titleRowHeight);
             contentStream.fill();
@@ -300,18 +330,27 @@ public class PdfGenerationService {
             String footerLabel = isAgentBilled
                     ? "Billed to Agent: " + billDto.travelAgentName()
                     : "Balance Due (in words): " + convertToIndianCurrency(billDto.balanceDue());
-            drawText(contentStream, footerLabel, margin, yPosition - 35, fontBold, 10);
+            drawText(contentStream, footerLabel, margin, yPosition - 20, fontBold, 10);
 
+            if (billDto.notes() != null && !billDto.notes().isBlank()) {
+                drawText(contentStream, "Notes: " + billDto.notes(), margin, yPosition - 35, fontOblique, 10);
+            }
+
+            // Guest signature box
+            contentStream.setLineWidth(0.5f);
             contentStream.moveTo(margin, 130);
             contentStream.lineTo(545, 130);
             contentStream.stroke();
 
-            drawText(contentStream, "Thank you for choosing us!", 400, 110, fontBold, 10);
-            drawText(contentStream, "This is a computer generated Invoice.", margin, 110, fontOblique, 10);
+            // Left: computer generated notice
+            drawText(contentStream, "This is a computer generated Invoice.", margin, 115, fontOblique, 9);
 
-            if (billDto.notes() != null && !billDto.notes().isBlank()) {
-                drawText(contentStream, "Notes: " + billDto.notes(), margin, 95, fontOblique, 10);
-            }
+            // Right: guest signature line
+            float sigLineX = 380f;
+            contentStream.moveTo(sigLineX, 100);
+            contentStream.lineTo(545, 100);
+            contentStream.stroke();
+            drawTextCenter(contentStream, "Guest Signature", (sigLineX + 545) / 2, 90, fontRegular, 8);
 
             contentStream.close();
 

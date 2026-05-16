@@ -20,6 +20,12 @@ public record BillDto(
         String PropertyName,
         String PropertyAddress,
         String gstNumber,
+        String stateName,
+        String stateCode,
+        String cin,
+        String udyamRegistrationNo,
+        String pan,
+        String fssaiNumber,
 
         // Invoice Info
         String invoiceNumber,

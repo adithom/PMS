@@ -86,6 +86,12 @@ const posApi = {
 
   getTicketSummary: (locationId: string, from: string, to: string) =>
     api.get<OrderSummary>('/pos/tickets/summary', { locationId, from, to }),
+
+  getTicketsByBookingId: (bookingId: string) =>
+    api.get<PosTicketHistory[]>(`/pos/tickets/booking/${bookingId}`),
+
+  getReceiptUrl: (ticketId: string) =>
+    api.get<string>(`/pos/tickets/${ticketId}/receipt-url`),
 };
 
 export default posApi;
