@@ -8,9 +8,21 @@ public record PropertyDto(
         String name,
         String code,
         String address,
+        String addressLine2,
+        String region,
+        String postalCode,
+        String phone,
         String country,
         Integer totalRooms,
         String gstNumber,
-        BigDecimal extraBedRatePerNight
+        BigDecimal extraBedRatePerNight,
+        String cin,
+        String udyamRegistrationNo,
+        String pan,
+        String stateName,
+        String stateCode,
+        String fssaiNumber,
+        String checkInTime,
+        String checkOutTime
 ) {}
 

@@ -13,7 +13,6 @@ export interface PaymentDto {
   currency?: string;
   paymentMethod?: 'CASH' | 'CREDIT_CARD' | 'DEBIT_CARD' | 'UPI' | 'BANK_TRANSFER' | 'CHEQUE' | 'DIGITAL_WALLET' | 'AGENT_BILLING';
   paymentStatus?: 'PENDING' | 'COMPLETED' | 'FAILED' | 'REFUNDED' | 'CANCELLED';
-  targetCategory?: 'ROOM_RENT' | 'ANCILLARY';
   transactionId?: string;
   cardLastFour?: string;
   cardType?: string;
@@ -34,7 +33,6 @@ export interface PaymentDto {
 export interface PaymentCreationDto {
   amount: number;
   paymentMethod: 'CASH' | 'CREDIT_CARD' | 'DEBIT_CARD' | 'UPI' | 'BANK_TRANSFER' | 'CHEQUE' | 'DIGITAL_WALLET' | 'AGENT_BILLING';
-  targetCategory: 'ROOM_RENT' | 'ANCILLARY';
   transactionId?: string;
   cardLastFour?: string;
   cardType?: string;

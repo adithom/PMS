@@ -38,6 +38,7 @@ export interface BillDto {
   category?: BillCategory;
   PropertyName?: string;
   PropertyAddress?: string;
+  PropertyAddressLine2?: string;
   gstNumber?: string;
   stateName?: string;
   stateCode?: string;

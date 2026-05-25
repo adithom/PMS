@@ -296,7 +296,7 @@ public class BookingService {
                         ? bookingCreationDto.advancePaymentMethod()
                         : PaymentMethod.CASH;
                 PaymentCreationDto paymentDto = new PaymentCreationDto(
-                        advance, method, null,
+                        advance, method,
                         null, null, null,
                         null, null, null,
                         null,

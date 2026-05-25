@@ -116,9 +116,29 @@ public class PosReceiptService {
                     ? ticket.getProperty().getName() : "Property";
             drawTextCenter(cs, propName, 297.5f, 778, fontSerif, 22);
 
+            // Address block — running y cursor, 16pt gaps
+            float addrY = 761f;
+            final float addrGap = 13f;
             String propAddress = ticket.getProperty().getAddress();
             if (propAddress != null && !propAddress.isBlank()) {
-                drawTextCenter(cs, propAddress, 297.5f, 761, fontSerifReg, 11);
+                drawTextCenter(cs, propAddress, 297.5f, addrY, fontSerifReg, 11);
+            }
+            StringBuilder posLine2 = new StringBuilder();
+            String posAddrLine2 = ticket.getProperty().getAddressLine2();
+            String posPostal    = ticket.getProperty().getPostalCode();
+            if (posAddrLine2 != null && !posAddrLine2.isBlank()) posLine2.append(posAddrLine2);
+            if (posPostal != null && !posPostal.isBlank()) {
+                if (posLine2.length() > 0) posLine2.append(" - ");
+                posLine2.append(posPostal);
+            }
+            if (posLine2.length() > 0) {
+                addrY -= addrGap;
+                drawTextCenter(cs, posLine2.toString(), 297.5f, addrY, fontSerifReg, 11);
+            }
+            String posPhone = ticket.getProperty().getPhone();
+            if (posPhone != null && !posPhone.isBlank()) {
+                addrY -= addrGap;
+                drawTextCenter(cs, posPhone, 297.5f, addrY, fontSerifReg, 11);
             }
             String gstin = ticket.getProperty().getGstNumber();
             drawTextCenter(cs, "GSTIN: " + (gstin != null ? gstin : "N/A"), 297.5f, 746, fontSerifReg, 11);

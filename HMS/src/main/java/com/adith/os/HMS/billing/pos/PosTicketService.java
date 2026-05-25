@@ -238,9 +238,11 @@ public class PosTicketService {
             String invoiceNumber = receiptService.getNextInvoiceNumber(ticket.getPosLocation());
             ticket.setInvoiceNumber(invoiceNumber);
 
-            BigDecimal ticketTotal = orders.stream()
-                    .map(PosOrder::getTotalAmount)
+            BigDecimal ticketSubtotal = orders.stream()
+                    .map(PosOrder::getSubtotal)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            BigDecimal locationTaxRate = ticket.getPosLocation().getDefaultTaxRate();
 
             UUID folioId = resolveFolioId(ticket);
             UUID propertyId = ticket.getProperty().getId();
@@ -252,9 +254,9 @@ public class PosTicketService {
                     LocalDate.now(),
                     chargeCode,
                     locationName + " - Receipt #" + invoiceNumber,
-                    ticketTotal,
+                    ticketSubtotal,
                     BigDecimal.ONE,
-                    BigDecimal.ZERO,
+                    locationTaxRate,
                     BigDecimal.ZERO,
                     "POS_TICKET",
                     ticket.getId(),

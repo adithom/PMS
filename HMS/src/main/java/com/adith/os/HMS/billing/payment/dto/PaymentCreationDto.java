@@ -1,7 +1,6 @@
 package com.adith.os.HMS.billing.payment.dto;
 
 
-import com.adith.os.HMS.billing.folio.ChargeCategory;
 import com.adith.os.HMS.billing.payment.PaymentMethod;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -16,8 +15,6 @@ public record PaymentCreationDto(
 
         @NotNull(message = "Payment method is required")
         PaymentMethod paymentMethod,
-
-        ChargeCategory targetCategory,
 
         // Card payment details
         String transactionId,

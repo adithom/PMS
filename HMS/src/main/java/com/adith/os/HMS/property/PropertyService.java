@@ -16,6 +16,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.sql.Time;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -31,6 +32,11 @@ public class PropertyService {
     public PropertyService(PropertyMapper propertyMapper, PropertyRepository propertyRepository) {
         this.propertyMapper = propertyMapper;
         this.propertyRepository = propertyRepository;
+    }
+
+    private Time parseTime(String s) {
+        if (s == null || s.isBlank()) return null;
+        return Time.valueOf(s.length() == 5 ? s + ":00" : s);
     }
 
     @Transactional
@@ -170,13 +176,20 @@ public class PropertyService {
         entity.setCode(newCode);
         entity.setRegion(dto.region());
         entity.setAddress(dto.address());
-        entity.setCheckInTime(dto.checkInTime());
-        entity.setCheckOutTime(dto.checkOutTime());
+        entity.setAddressLine2(dto.addressLine2());
+        entity.setCheckInTime(parseTime(dto.checkInTime()));
+        entity.setCheckOutTime(parseTime(dto.checkOutTime()));
         entity.setPhone(dto.phone());
         entity.setPostalCode(dto.postalCode());
         entity.setCountry(dto.country());
         entity.setGstNumber(dto.gstNumber());
         entity.setExtraBedRatePerNight(dto.extraBedRatePerNight());
+        entity.setCin(dto.cin());
+        entity.setUdyamRegistrationNo(dto.udyamRegistrationNo());
+        entity.setPan(dto.pan());
+        entity.setStateName(dto.stateName());
+        entity.setStateCode(dto.stateCode());
+        entity.setFssaiNumber(dto.fssaiNumber());
 
         Property saved = propertyRepository.save(entity);
         return propertyMapper.toDto(saved);
@@ -230,17 +243,38 @@ public class PropertyService {
         if (dto.address() != null) {
             entity.setAddress(dto.address());
         }
+        if (dto.addressLine2() != null) {
+            entity.setAddressLine2(dto.addressLine2());
+        }
         if (dto.checkInTime() != null) {
-            entity.setCheckInTime(dto.checkInTime());
+            entity.setCheckInTime(parseTime(dto.checkInTime()));
         }
         if (dto.checkOutTime() != null) {
-            entity.setCheckOutTime(dto.checkOutTime());
+            entity.setCheckOutTime(parseTime(dto.checkOutTime()));
         }
         if (dto.gstNumber() != null) {
             entity.setGstNumber(dto.gstNumber());
         }
         if (dto.extraBedRatePerNight() != null) {
             entity.setExtraBedRatePerNight(dto.extraBedRatePerNight());
+        }
+        if (dto.cin() != null) {
+            entity.setCin(dto.cin());
+        }
+        if (dto.udyamRegistrationNo() != null) {
+            entity.setUdyamRegistrationNo(dto.udyamRegistrationNo());
+        }
+        if (dto.pan() != null) {
+            entity.setPan(dto.pan());
+        }
+        if (dto.stateName() != null) {
+            entity.setStateName(dto.stateName());
+        }
+        if (dto.stateCode() != null) {
+            entity.setStateCode(dto.stateCode());
+        }
+        if (dto.fssaiNumber() != null) {
+            entity.setFssaiNumber(dto.fssaiNumber());
         }
 
         Property saved = propertyRepository.save(entity);

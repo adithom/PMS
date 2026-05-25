@@ -163,7 +163,8 @@ public class GroupBillGenerationService {
 
             GroupMultiBillDto.GroupBillSectionDto sectionDto = new GroupMultiBillDto.GroupBillSectionDto(
                     invoiceNumber, today, bt.name(),
-                    property.getName(), property.getAddress(), property.getGstNumber(),
+                    property.getName(), property.getAddress(), property.getAddressLine2(), property.getPostalCode(), property.getPhone(), property.getGstNumber(),
+                    property.getStateName(), property.getStateCode(),
                     reservation.getId(), reservation.getGroupReference(),
                     organizer.getFullName(), organizer.getPhone(), organizer.getEmail(), safeGst,
                     reservation.getCheckIn(), reservation.getCheckOut(), reservation.getCurrency(), now,

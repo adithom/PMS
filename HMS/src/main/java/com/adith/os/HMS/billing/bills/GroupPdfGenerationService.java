@@ -89,8 +89,36 @@ public class GroupPdfGenerationService {
             // Header band: property title+address centered | invoice block right-flush at x=455
             String propName = section.propertyName() != null ? section.propertyName() : "HOTEL INVOICE";
             drawTextCenter(state.cs, propName, 297.5f, 778, fontSerifSemiBold, 22);
-            drawTextCenter(state.cs, section.propertyAddress() != null ? section.propertyAddress() : " ", 297.5f, 761, fontSerifRegular, 11);
-            drawTextCenter(state.cs, "GSTIN: " + nvl(section.propertyGstNumber(), "N/A"), 297.5f, 746, fontSerifRegular, 11);
+            // Address block — running y cursor, 16pt gaps
+            float addrY = 761f;
+            final float addrGap = 13f;
+            drawTextCenter(state.cs, section.propertyAddress() != null ? section.propertyAddress() : " ", 297.5f, addrY, fontSerifRegular, 11);
+            StringBuilder grpLine2 = new StringBuilder();
+            if (section.propertyAddressLine2() != null && !section.propertyAddressLine2().isBlank())
+                grpLine2.append(section.propertyAddressLine2());
+            if (section.propertyPostalCode() != null && !section.propertyPostalCode().isBlank()) {
+                if (grpLine2.length() > 0) grpLine2.append(" - ");
+                grpLine2.append(section.propertyPostalCode());
+            }
+            if (grpLine2.length() > 0) {
+                addrY -= addrGap;
+                drawTextCenter(state.cs, grpLine2.toString(), 297.5f, addrY, fontSerifRegular, 11);
+            }
+            // State / Code centered under address — Cormorant Garamond
+            StringBuilder stateLine = new StringBuilder();
+            if (section.propertyStateName() != null && !section.propertyStateName().isBlank()) {
+                stateLine.append("State: ").append(section.propertyStateName());
+                if (section.propertyStateCode() != null && !section.propertyStateCode().isBlank())
+                    stateLine.append(", Code: ").append(section.propertyStateCode());
+            }
+            if (stateLine.length() > 0) {
+                addrY -= addrGap;
+                drawTextCenter(state.cs, stateLine.toString(), 297.5f, addrY, fontSerifRegular, 11);
+            }
+            if (section.propertyPhone() != null && !section.propertyPhone().isBlank()) {
+                addrY -= addrGap;
+                drawTextCenter(state.cs, section.propertyPhone(), 297.5f, addrY, fontSerifRegular, 11);
+            }
 
             String billTypeLabel;
             try {
@@ -99,8 +127,10 @@ public class GroupPdfGenerationService {
                 billTypeLabel = section.category() + " INVOICE";
             }
             drawText(state.cs, "GROUP " + billTypeLabel,                                                                          455, 788, fontBold, 12);
-            drawText(state.cs, "Invoice #: " + section.invoiceNumber(),                                                     455, 767, fontRegular, 10);
-            drawText(state.cs, "Date: " + (section.invoiceDate() != null ? section.invoiceDate().format(DATE_FMT) : "N/A"), 455, 747, fontRegular, 10);
+            drawText(state.cs, "Invoice #: " + section.invoiceNumber(),                                                     455, 775, fontRegular, 10);
+            if (section.propertyGstNumber() != null && !section.propertyGstNumber().isBlank())
+                drawText(state.cs, "GSTIN: " + section.propertyGstNumber(),                                                 455, 762, fontRegular, 10);
+            drawText(state.cs, "Date: " + (section.invoiceDate() != null ? section.invoiceDate().format(DATE_FMT) : "N/A"), 455, 749, fontRegular, 10);
 
             // Bill To (left col x=50 | right col x=455 under invoice block)
             drawText(state.cs, "Bill To (Group Organizer):", 50, 685, fontBold, 11);

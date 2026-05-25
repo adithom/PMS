@@ -29,6 +29,10 @@ public class Property {
     private String code;
 
     private String address;
+
+    @Column(name = "address_line2")
+    private String addressLine2;
+
     private String region;
 
     @Column(nullable = false, columnDefinition = "text default 'IN'")
@@ -131,6 +135,9 @@ public class Property {
     public void setAddress(String address) {
         this.address = address;
     }
+
+    public String getAddressLine2() { return addressLine2; }
+    public void setAddressLine2(String addressLine2) { this.addressLine2 = addressLine2; }
 
     public String getRegion() {
         return region;

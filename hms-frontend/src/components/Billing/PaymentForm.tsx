@@ -22,7 +22,6 @@ export default function PaymentForm({ propertyId, folioId, balanceDue = 0, onSuc
   const [formData, setFormData] = useState<Partial<PaymentCreationDto>>({
     amount: balanceDue > 0 ? balanceDue : 0,
     paymentMethod: 'CREDIT_CARD',
-    targetCategory: 'ROOM_RENT', // Defaulting to F&B/Room Rent routing
   });
   
   const [error, setError] = useState('');
@@ -103,13 +102,6 @@ export default function PaymentForm({ propertyId, folioId, balanceDue = 0, onSuc
           </select>
         </label>
 
-        <label>
-          <span className={labelCls}>Target Category *</span>
-          <select name="targetCategory" value={formData.targetCategory} onChange={handleChange} disabled={submitting} className={inputCls} required>
-            <option value="ROOM_RENT">Room Rent & Taxes</option>
-            <option value="ANCILLARY">Ancillaries (F&B, Spa, etc.)</option>
-          </select>
-        </label>
       </div>
 
       {/* Conditional Fields based on Payment Method */}

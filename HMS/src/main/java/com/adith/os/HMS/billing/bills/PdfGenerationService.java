@@ -83,40 +83,56 @@ public class PdfGenerationService {
             String propName = billDto.PropertyName() != null ? billDto.PropertyName() : "HOTEL INVOICE";
             drawTextCenter(contentStream, propName, 297.5f, 778, fontSerifSemiBold, 22);
 
-            // Address centered under property name
+            // Address block — running y cursor, 16pt gaps
+            float addrY = 761f;
+            final float addrGap = 13f;
             if (billDto.PropertyAddress() != null && !billDto.PropertyAddress().isBlank()) {
-                drawTextCenter(contentStream, billDto.PropertyAddress(), 297.5f, 761, fontSerifRegular, 11);
+                drawTextCenter(contentStream, billDto.PropertyAddress(), 297.5f, addrY, fontSerifRegular, 11);
             }
-
-            // GSTIN | State Name, Code — centered
-            StringBuilder gstLine = new StringBuilder();
-            if (billDto.gstNumber() != null && !billDto.gstNumber().isBlank())
-                gstLine.append("GSTIN: ").append(billDto.gstNumber());
+            StringBuilder line2Builder = new StringBuilder();
+            if (billDto.PropertyAddressLine2() != null && !billDto.PropertyAddressLine2().isBlank())
+                line2Builder.append(billDto.PropertyAddressLine2());
+            if (billDto.PropertyPostalCode() != null && !billDto.PropertyPostalCode().isBlank()) {
+                if (line2Builder.length() > 0) line2Builder.append(" - ");
+                line2Builder.append(billDto.PropertyPostalCode());
+            }
+            if (line2Builder.length() > 0) {
+                addrY -= addrGap;
+                drawTextCenter(contentStream, line2Builder.toString(), 297.5f, addrY, fontSerifRegular, 11);
+            }
+            StringBuilder stateLine = new StringBuilder();
             if (billDto.stateName() != null && !billDto.stateName().isBlank()) {
-                if (gstLine.length() > 0) gstLine.append("  |  ");
-                gstLine.append("State: ").append(billDto.stateName());
+                stateLine.append("State: ").append(billDto.stateName());
                 if (billDto.stateCode() != null && !billDto.stateCode().isBlank())
-                    gstLine.append(", Code: ").append(billDto.stateCode());
+                    stateLine.append(", Code: ").append(billDto.stateCode());
             }
-            if (gstLine.length() > 0)
-                drawTextCenter(contentStream, gstLine.toString(), 297.5f, 746, fontSerifRegular, 11);
+            if (stateLine.length() > 0) {
+                addrY -= addrGap;
+                drawTextCenter(contentStream, stateLine.toString(), 297.5f, addrY, fontSerifRegular, 11);
+            }
+            if (billDto.PropertyPhone() != null && !billDto.PropertyPhone().isBlank()) {
+                addrY -= addrGap;
+                drawTextCenter(contentStream, billDto.PropertyPhone(), 297.5f, addrY, fontSerifRegular, 11);
+            }
 
-            // PAN (top-left) and FSSAI (top-right) — small font, near border
+            // PAN (top-left) and FSSAI (top-right) — 8pt margin from all edges, body font
             if (billDto.pan() != null && !billDto.pan().isBlank())
-                drawText(contentStream, "PAN: " + billDto.pan(), 50, 793, fontSerifRegular, 8);
+                drawText(contentStream, "PAN: " + billDto.pan(), 8, 826, fontRegular, 7);
             if (billDto.fssaiNumber() != null && !billDto.fssaiNumber().isBlank())
-                drawTextRight(contentStream, "FSSAI: " + billDto.fssaiNumber(), 545, 793, fontSerifRegular, 8);
+                drawTextRight(contentStream, "FSSAI: " + billDto.fssaiNumber(), 587, 826, fontRegular, 7);
 
             // CIN (under PAN) and UDYAM (under FSSAI)
             if (billDto.cin() != null && !billDto.cin().isBlank())
-                drawText(contentStream, "CIN: " + billDto.cin(), 50, 783, fontSerifRegular, 8);
+                drawText(contentStream, "CIN: " + billDto.cin(), 8, 817, fontRegular, 7);
             if (billDto.udyamRegistrationNo() != null && !billDto.udyamRegistrationNo().isBlank())
-                drawTextRight(contentStream, "UDYAM: " + billDto.udyamRegistrationNo(), 545, 783, fontSerifRegular, 8);
+                drawTextRight(contentStream, "UDYAM: " + billDto.udyamRegistrationNo(), 587, 817, fontRegular, 7);
 
-            // Invoice info block: right-flush at x=455, top aligned with logo top
+            // Invoice info block: 4 lines, 13pt spacing — TAX INVOICE / No / GSTIN / Date
             drawText(contentStream, "TAX INVOICE",                                     455, 788, fontBold, 12);
-            drawText(contentStream, billDto.invoiceNumber(),                            455, 767, fontRegular, 10);
-            drawText(contentStream, "Date: " + billDto.invoiceDate().format(DATE_FMT), 455, 747, fontRegular, 10);
+            drawText(contentStream, billDto.invoiceNumber(),                            455, 775, fontRegular, 10);
+            if (billDto.gstNumber() != null && !billDto.gstNumber().isBlank())
+                drawText(contentStream, "GSTIN: " + billDto.gstNumber(),               455, 762, fontRegular, 10);
+            drawText(contentStream, "Date: " + billDto.invoiceDate().format(DATE_FMT), 455, 749, fontRegular, 10);
 
             // --- 3. BILL TO (left col x=50 | right col x=455 under invoice block) ---
             drawText(contentStream, "Bill To:", 50, 685, fontBold, 12);
@@ -141,7 +157,7 @@ public class PdfGenerationService {
             drawText(contentStream, "Check-Out: " + (billDto.checkOut() != null ? billDto.checkOut().format(DATE_FMT) : "N/A"), 455, 640, fontRegular, 10);
 
             // --- 4. CHARGES TABLE ---
-            float yPosition = 555f;
+            float yPosition = 585f;
             float rowHeight = 20f;
             float margin    = 50f;
             float titleRowHeight = 30f;

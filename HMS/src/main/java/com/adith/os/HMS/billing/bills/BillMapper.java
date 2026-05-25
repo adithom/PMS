@@ -95,36 +95,35 @@ public class BillMapper {
 
         // --- DYNAMIC PAYMENT & BALANCE CALCULATIONS ---
         // Payments are queried by bookingId (the folio's booking) — not via folio.payments.
-        // Map legacy ChargeCategory targeting onto BillType for payment-to-bill matching.
+        // Main bill absorbs payments up to its total; remainder flows to the ancillary bill.
         List<Payment> bookingPayments = booking != null
                 ? paymentRepository.findByBookingId(booking.getId())
                 : List.of();
 
-        BigDecimal categoryAmountPaid = bookingPayments.stream()
+        BigDecimal totalPaid = bookingPayments.stream()
                 .filter(p -> p.getPaymentStatus() == PaymentStatus.COMPLETED || p.getPaymentStatus() == PaymentStatus.REFUNDED)
-                .filter(p -> {
-                    ChargeCategory t = p.getTargetCategory();
-                    if (t == null) return true;
-                    if (bill.getBillType() == BillType.ROOM_RENT)
-                        return t == ChargeCategory.ROOM_RENT || t == ChargeCategory.MEAL_PLAN;
-                    return t == ChargeCategory.ANCILLARY;
-                })
                 .map(Payment::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        BigDecimal categoryRefunds = bookingPayments.stream()
+        BigDecimal totalRefunds = bookingPayments.stream()
                 .filter(p -> p.getPaymentStatus() == PaymentStatus.COMPLETED || p.getPaymentStatus() == PaymentStatus.REFUNDED)
-                .filter(p -> {
-                    ChargeCategory t = p.getTargetCategory();
-                    if (t == null) return true;
-                    if (bill.getBillType() == BillType.ROOM_RENT)
-                        return t == ChargeCategory.ROOM_RENT || t == ChargeCategory.MEAL_PLAN;
-                    return t == ChargeCategory.ANCILLARY;
-                })
                 .map(p -> p.getRefundedAmount() != null ? p.getRefundedAmount() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        BigDecimal finalAmountPaid = categoryAmountPaid.subtract(categoryRefunds);
+        BigDecimal totalNetPaid = totalPaid.subtract(totalRefunds);
+
+        BigDecimal finalAmountPaid;
+        if (bill.getBillType() == BillType.ROOM_RENT) {
+            finalAmountPaid = totalNetPaid.min(totals.total());
+        } else {
+            BigDecimal roomRentTotal = folio.getCharges().stream()
+                    .filter(c -> !c.isVoided())
+                    .filter(c -> c.getChargeCode().getCategory() == ChargeCategory.ROOM_RENT
+                              || c.getChargeCode().getCategory() == ChargeCategory.MEAL_PLAN)
+                    .map(c -> c.getTotalAmount())
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            finalAmountPaid = totalNetPaid.subtract(roomRentTotal).max(BigDecimal.ZERO);
+        }
 
         // Apply the booking's share of reservation-level payments (master credit) on the
         // designated bill (typically ROOM_RENT, the first bill in a multi-bill batch).
@@ -146,6 +145,9 @@ public class BillMapper {
 
                 property.getName(),
                 property.getAddress(),
+                property.getAddressLine2(),
+                property.getPostalCode(),
+                property.getPhone(),
                 property.getGstNumber(),
                 property.getStateName(),
                 property.getStateCode(),
@@ -258,6 +260,9 @@ public class BillMapper {
 
                 property.getName(),
                 property.getAddress(),
+                property.getAddressLine2(),
+                property.getPostalCode(),
+                property.getPhone(),
                 property.getGstNumber(),
                 property.getStateName(),
                 property.getStateCode(),

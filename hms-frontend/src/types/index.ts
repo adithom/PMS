@@ -5,9 +5,22 @@ export interface Property {
   name: string;
   code: string;
   address: string;
+  addressLine2?: string;
+  region?: string;
+  postalCode?: string;
+  phone?: string;
   country: string;
   totalRooms: number;
   extraBedRatePerNight?: number;
+  gstNumber?: string;
+  cin?: string;
+  udyamRegistrationNo?: string;
+  pan?: string;
+  stateName?: string;
+  stateCode?: string;
+  fssaiNumber?: string;
+  checkInTime?: string;
+  checkOutTime?: string;
 }
 
 export type MealPlanType = 'CP' | 'MAP' | 'AP';

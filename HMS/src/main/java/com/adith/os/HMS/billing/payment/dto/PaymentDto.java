@@ -1,6 +1,5 @@
 package com.adith.os.HMS.billing.payment.dto;
 
-import com.adith.os.HMS.billing.folio.ChargeCategory;
 import com.adith.os.HMS.billing.payment.PaymentMethod;
 import com.adith.os.HMS.billing.payment.PaymentStatus;
 import jakarta.validation.constraints.NotNull;
@@ -18,8 +17,6 @@ public record PaymentDto(
         String currency,
         PaymentMethod paymentMethod,
         PaymentStatus paymentStatus,
-
-        ChargeCategory targetCategory,
 
         // Card details (masked)
         String transactionId,

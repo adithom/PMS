@@ -557,7 +557,7 @@ export default function Rooms() {
                     </span>
                   </div>
                   <p className="mt-1 truncate text-sm text-slate-500">
-                    {property.address || 'No address specified'}
+                    {property.address || 'No address specified'}{property.addressLine2 ? `, ${property.addressLine2}` : ''}
                   </p>
                   <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 text-xs font-semibold text-slate-500">
                     <span className="flex items-center gap-1.5">
