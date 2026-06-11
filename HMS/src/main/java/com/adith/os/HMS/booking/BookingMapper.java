@@ -98,6 +98,7 @@ public class BookingMapper {
                 booking.getCreatedAt(),
                 booking.getPaymentProgress(),
                 booking.getReservation() != null ? booking.getReservation().getId() : null,
+                booking.getReservation() != null ? booking.getReservation().getReservationNumber() : null,
                 booking.isTwinBed(),
                 booking.getReferenceNumber(),
                 booking.getTravelAgent() != null ? booking.getTravelAgent().getId() : null,

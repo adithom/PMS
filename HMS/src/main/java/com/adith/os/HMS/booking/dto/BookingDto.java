@@ -74,6 +74,7 @@ public record BookingDto(
         Double paymentProgress,
 
         UUID reservationId,
+        String reservationNumber,
 
         Boolean isTwinBed,
 

@@ -2,6 +2,7 @@ package com.adith.os.HMS.booking;
 
 import com.adith.os.HMS.booking.dto.GroupBookingCreationDto;
 import com.adith.os.HMS.booking.dto.GroupBookingSummaryDto;
+import com.adith.os.HMS.booking.dto.RescheduleReservationDto;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -107,6 +108,19 @@ public class GroupBookingController {
             @PathVariable UUID reservationId,
             @PathVariable UUID bookingId) {
         return ResponseEntity.ok(groupBookingService.checkOutBooking(propertyId, reservationId, bookingId));
+    }
+
+    // -------------------------------------------------------------------------
+    // RESCHEDULE
+    // -------------------------------------------------------------------------
+
+    @PatchMapping("/{reservationId}/reschedule")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    public ResponseEntity<GroupBookingSummaryDto> rescheduleReservation(
+            @PathVariable UUID propertyId,
+            @PathVariable UUID reservationId,
+            @Valid @RequestBody RescheduleReservationDto dto) {
+        return ResponseEntity.ok(groupBookingService.rescheduleReservation(propertyId, reservationId, dto));
     }
 
     // -------------------------------------------------------------------------

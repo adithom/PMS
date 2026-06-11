@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import ModalShell from '../ModalShell';
 import BookingDetailModal from '../Booking/BookingDetailModal';
-import BookingForm from '../Booking/BookingForm';
+import AddRoomModal from '../Booking/AddRoomModal';
+import RescheduleModal from './RescheduleModal';
 import reservationApi from '../../api/reservationApi';
 import type { GroupBookingSummaryDto, BookingSummaryDto } from '../../api/reservationApi';
 import bookingApi from '../../api/bookingApi';
@@ -41,6 +42,7 @@ export default function ReservationDetailModal({ propertyId, reservationId, onCl
   const [error, setError] = useState<string | null>(null);
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [showAddRoom, setShowAddRoom] = useState(false);
+  const [showReschedule, setShowReschedule] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -113,7 +115,11 @@ export default function ReservationDetailModal({ propertyId, reservationId, onCl
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Reservation</p>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                    Reservation{reservation.reservationNumber && (
+                      <span className="ml-2 font-mono text-slate-400">#{reservation.reservationNumber}</span>
+                    )}
+                  </p>
                   <h2 className="mt-1 text-xl font-extrabold text-slate-900">
                     {reservation.organizerGuestName}
                     {reservation.groupReference && (
@@ -146,15 +152,17 @@ export default function ReservationDetailModal({ propertyId, reservationId, onCl
                   <div className="mt-0.5 text-slate-700">{fmtDate(reservation.createdAt)}</div>
                 </div>
               </div>
-              <div className="mt-3">
-                <button
-                  type="button"
-                  className="w-full rounded-full border border-indigo-200 bg-indigo-50 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100 transition-colors"
-                  onClick={handleToggleBilling}
-                >
-                  Switch to {reservation.billingMode === 'CONSOLIDATED' ? 'Separate' : 'Consolidated'} billing
-                </button>
-              </div>
+              {reservation.totalRooms > 1 && (
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    className="w-full rounded-full border border-indigo-200 bg-indigo-50 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100 transition-colors"
+                    onClick={handleToggleBilling}
+                  >
+                    Switch to {reservation.billingMode === 'CONSOLIDATED' ? 'Separate' : 'Consolidated'} billing
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Member bookings */}
@@ -242,12 +250,15 @@ export default function ReservationDetailModal({ propertyId, reservationId, onCl
                   Add Room
                 </button>
               )}
-              <button
-                type="button"
-                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
-              >
-                Edit Reservation
-              </button>
+              {(reservation.overallStatus === 'PENDING' || reservation.overallStatus === 'CONFIRMED') && (
+                <button
+                  type="button"
+                  onClick={() => setShowReschedule(true)}
+                  className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
+                >
+                  Reschedule
+                </button>
+              )}
               {reservation.overallStatus !== 'CANCELLED' && reservation.overallStatus !== 'CHECKED_OUT' && (
                 <button
                   type="button"
@@ -271,23 +282,34 @@ export default function ReservationDetailModal({ propertyId, reservationId, onCl
         onOpenFolio={() => setSelectedBookingId(null)}
       />
     )}
-    {showAddRoom && (
-      <ModalShell isOpen={true} onClose={() => setShowAddRoom(false)} title="Add Room to Reservation">
-        <div className="p-6">
-          <BookingForm
-            propertyId={propertyId}
-            reservationId={reservationId}
-            initialCheckIn={reservation?.checkIn}
-            initialCheckOut={reservation?.checkOut}
-            onSuccess={() => {
-              setShowAddRoom(false);
-              fetchData();
-              onUpdated?.();
-            }}
-            onCancel={() => setShowAddRoom(false)}
-          />
-        </div>
-      </ModalShell>
+    {showAddRoom && reservation && (
+      <AddRoomModal
+        propertyId={propertyId}
+        reservationId={reservationId}
+        checkIn={reservation.checkIn}
+        checkOut={reservation.checkOut}
+        organizerGuestId={reservation.organizerGuestId}
+        organizerGuestName={reservation.organizerGuestName}
+        status={reservation.overallStatus}
+        onClose={() => setShowAddRoom(false)}
+        onSuccess={() => {
+          setShowAddRoom(false);
+          fetchData();
+          onUpdated?.();
+        }}
+      />
+    )}
+    {showReschedule && reservation && (
+      <RescheduleModal
+        reservation={reservation}
+        propertyId={propertyId}
+        onClose={() => setShowReschedule(false)}
+        onRescheduled={() => {
+          setShowReschedule(false);
+          fetchData();
+          onUpdated?.();
+        }}
+      />
     )}
     </>
   );

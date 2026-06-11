@@ -2,6 +2,8 @@ package com.adith.os.HMS.booking;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Set;
@@ -31,6 +33,8 @@ import com.adith.os.HMS.property.Property;
 import com.adith.os.HMS.property.PropertyRepository;
 import com.adith.os.HMS.reservation.Reservation;
 import com.adith.os.HMS.reservation.ReservationRepository;
+import com.adith.os.HMS.reservation.ReservationSequence;
+import com.adith.os.HMS.reservation.ReservationSequenceRepository;
 import com.adith.os.HMS.reservation.ReservationStatus;
 import com.adith.os.HMS.room.Room;
 import com.adith.os.HMS.room.RoomRepository;
@@ -73,6 +77,7 @@ public class BookingService {
     private final ContactPersonRepository contactPersonRepository;
     private final PropertyMealPlanRepository mealPlanRepository;
     private final ReservationRepository reservationRepository;
+    private final ReservationSequenceRepository reservationSequenceRepository;
 
     // Active statuses for room assignments
     private static final List<RoomAssignmentStatus> ACTIVE_ASSIGNMENT_STATUSES =
@@ -91,7 +96,8 @@ public class BookingService {
                           TravelAgentService travelAgentService,
                           ContactPersonRepository contactPersonRepository,
                           PropertyMealPlanRepository mealPlanRepository,
-                          ReservationRepository reservationRepository) {
+                          ReservationRepository reservationRepository,
+                          ReservationSequenceRepository reservationSequenceRepository) {
         this.propertyRepository = propertyRepository;
         this.roomRepository = roomRepository;
         this.guestRepository = guestRepository;
@@ -106,6 +112,7 @@ public class BookingService {
         this.contactPersonRepository = contactPersonRepository;
         this.mealPlanRepository = mealPlanRepository;
         this.reservationRepository = reservationRepository;
+        this.reservationSequenceRepository = reservationSequenceRepository;
     }
 
     @Transactional
@@ -262,6 +269,8 @@ public class BookingService {
                 if (travelAgent != null) {
                     reservation.setTravelAgent(travelAgent);
                 }
+                reservation.setReservationNumber(
+                        generateReservationNumber(property, LocalDate.now(ZoneId.of("Asia/Kolkata"))));
                 savedReservation = reservationRepository.save(reservation);
             }
             booking.setReservation(savedReservation);
@@ -1455,5 +1464,16 @@ public class BookingService {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
                     "Failed to fetch overlapping bookings: " + e.getMessage());
         }
+    }
+
+    private String generateReservationNumber(Property property, LocalDate date) {
+        LocalDate monthStart = date.withDayOfMonth(1);
+        ReservationSequence seq = reservationSequenceRepository
+                .findByPropertyAndMonthWithLock(property.getId(), monthStart)
+                .orElse(new ReservationSequence(property, monthStart, 1));
+        int current = seq.getNextVal();
+        seq.setNextVal(current + 1);
+        reservationSequenceRepository.save(seq);
+        return date.format(DateTimeFormatter.ofPattern("yyyyMM")) + String.format("%04d", current);
     }
 }

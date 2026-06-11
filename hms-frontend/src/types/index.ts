@@ -141,6 +141,7 @@ export interface Booking {
   specialRequests?: string;
   createdAt?: string;
   reservationId?: string;
+  reservationNumber?: string | null;
   isTwinBed: boolean;
   referenceNumber?: string;
   travelAgentId?: string;

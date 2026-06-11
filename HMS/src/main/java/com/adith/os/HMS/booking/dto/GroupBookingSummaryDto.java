@@ -17,6 +17,7 @@ public record GroupBookingSummaryDto(
 
         // --- Reservation info ---
         UUID reservationId,
+        String reservationNumber,
         String groupReference,
         UUID organizerGuestId,
         String organizerGuestName,
@@ -51,6 +52,8 @@ public record GroupBookingSummaryDto(
             UUID folioId,
             String folioNumber,
             String specialRequests,
-            Boolean isTwinBed
+            Boolean isTwinBed,
+            BigDecimal unitBaseRate,            // baseRate of first active room in unit — for estimate
+            BigDecimal mealPlanPricePerNight    // from booking.mealPlanPricePerNight
     ) {}
 }

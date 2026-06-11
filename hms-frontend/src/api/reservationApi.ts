@@ -42,11 +42,14 @@ export interface BookingSummaryDto {
   folioNumber: string | null;
   specialRequests: string | null;
   isTwinBed: boolean;
+  unitBaseRate: number | null;
+  mealPlanPricePerNight: number | null;
 }
 
 // Reservation = the group container (also wraps single bookings as 1-member reservations).
 export interface GroupBookingSummaryDto {
   reservationId: string;
+  reservationNumber: string | null;
   groupReference: string | null;
   organizerGuestId: string;
   organizerGuestName: string;
@@ -105,6 +108,15 @@ const reservationApi = {
   // CANCEL
   cancelReservation: async (propertyId: string, reservationId: string): Promise<GroupBookingSummaryDto> => {
     return fetchClient.post(`/properties/${propertyId}/reservations/${reservationId}/cancel`);
+  },
+
+  // RESCHEDULE
+  reschedule: async (
+    propertyId: string,
+    reservationId: string,
+    dto: { newCheckIn: string; newCheckOut: string; reason?: string }
+  ): Promise<GroupBookingSummaryDto> => {
+    return fetchClient.patch(`/properties/${propertyId}/reservations/${reservationId}/reschedule`, dto);
   },
 };
 

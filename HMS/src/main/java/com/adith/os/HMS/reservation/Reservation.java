@@ -14,7 +14,10 @@ import java.util.List;
 import java.util.UUID;
 
 @Entity
-@Table(name = "reservation")
+@Table(name = "reservation", uniqueConstraints = {
+        @UniqueConstraint(name = "uq_reservation_property_number",
+                columnNames = {"property_id", "reservation_number"})
+})
 public class Reservation {
 
     @Id
@@ -38,6 +41,9 @@ public class Reservation {
     @NotNull
     @Column(name = "check_out", nullable = false)
     private LocalDate checkOut;
+
+    @Column(name = "reservation_number", length = 10)
+    private String reservationNumber;
 
     @Column(name = "group_reference", length = 100)
     private String groupReference;
@@ -91,6 +97,9 @@ public class Reservation {
 
     public LocalDate getCheckOut() { return checkOut; }
     public void setCheckOut(LocalDate checkOut) { this.checkOut = checkOut; }
+
+    public String getReservationNumber() { return reservationNumber; }
+    public void setReservationNumber(String reservationNumber) { this.reservationNumber = reservationNumber; }
 
     public String getGroupReference() { return groupReference; }
     public void setGroupReference(String groupReference) { this.groupReference = groupReference; }

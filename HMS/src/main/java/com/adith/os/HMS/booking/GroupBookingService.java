@@ -9,15 +9,20 @@ import com.adith.os.HMS.property.Property;
 import com.adith.os.HMS.property.PropertyRepository;
 import com.adith.os.HMS.reservation.Reservation;
 import com.adith.os.HMS.reservation.ReservationRepository;
+import com.adith.os.HMS.reservation.ReservationSequence;
+import com.adith.os.HMS.reservation.ReservationSequenceRepository;
 import com.adith.os.HMS.reservation.ReservationStatus;
 import com.adith.os.HMS.room.Room;
 import com.adith.os.HMS.room.RoomRepository;
 import com.adith.os.HMS.room.RoomStatus;
+import com.adith.os.HMS.roomassignment.RoomAssignment;
+import com.adith.os.HMS.roomassignment.RoomAssignmentRepository;
+import com.adith.os.HMS.roomassignment.RoomAssignmentStatus;
 import com.adith.os.HMS.travelagent.TravelAgent;
 import com.adith.os.HMS.travelagent.TravelAgentService;
 import com.adith.os.HMS.unit.Unit;
 import com.adith.os.HMS.unit.UnitRepository;
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -25,6 +30,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -41,6 +48,8 @@ public class GroupBookingService {
     private final TravelAgentService travelAgentService;
     private final ReservationRepository reservationRepository;
     private final FolioChargeRepository folioChargeRepository;
+    private final RoomAssignmentRepository roomAssignmentRepository;
+    private final ReservationSequenceRepository reservationSequenceRepository;
 
     public GroupBookingService(
             PropertyRepository propertyRepository,
@@ -51,7 +60,9 @@ public class GroupBookingService {
             FolioService folioService,
             TravelAgentService travelAgentService,
             ReservationRepository reservationRepository,
-            FolioChargeRepository folioChargeRepository) {
+            FolioChargeRepository folioChargeRepository,
+            RoomAssignmentRepository roomAssignmentRepository,
+            ReservationSequenceRepository reservationSequenceRepository) {
         this.propertyRepository = propertyRepository;
         this.guestRepository = guestRepository;
         this.unitRepository = unitRepository;
@@ -61,6 +72,8 @@ public class GroupBookingService {
         this.travelAgentService = travelAgentService;
         this.reservationRepository = reservationRepository;
         this.folioChargeRepository = folioChargeRepository;
+        this.roomAssignmentRepository = roomAssignmentRepository;
+        this.reservationSequenceRepository = reservationSequenceRepository;
     }
 
     // =========================================================================
@@ -98,8 +111,7 @@ public class GroupBookingService {
         List<ValidatedRoomRequest> validated = validateAndResolveRoomRequests(
                 propertyId, dto, organizer);
 
-        TravelAgent travelAgent = travelAgentService.resolveOrCreate(
-                dto.travelAgentId(), dto.newTravelAgent());
+        TravelAgent travelAgent = travelAgentService.resolveOrCreate(dto.travelAgentId(), null);
 
         // ---- Create the Reservation ----
         Reservation reservation = new Reservation();
@@ -116,6 +128,8 @@ public class GroupBookingService {
         if (travelAgent != null) {
             reservation.setTravelAgent(travelAgent);
         }
+        reservation.setReservationNumber(
+                generateReservationNumber(property, LocalDate.now(ZoneId.of("Asia/Kolkata"))));
         Reservation savedReservation = reservationRepository.save(reservation);
 
         // ---- Create one Booking per room request, plus a folio for each ----
@@ -361,8 +375,97 @@ public class GroupBookingService {
     }
 
     // =========================================================================
+    // RESCHEDULE
+    // =========================================================================
+
+    @Transactional
+    public GroupBookingSummaryDto rescheduleReservation(UUID propertyId,
+                                                        UUID reservationId,
+                                                        RescheduleReservationDto dto) {
+        Reservation reservation = getValidatedReservation(propertyId, reservationId);
+        List<Booking> bookings = bookingRepository.findByReservationId(reservationId);
+
+        for (Booking b : bookings) {
+            if (b.getStatus() == BookingStatus.CHECKED_IN
+                    || b.getStatus() == BookingStatus.CHECKED_OUT
+                    || b.getStatus() == BookingStatus.CANCELLED
+                    || b.getStatus() == BookingStatus.NO_SHOW) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Cannot reschedule: booking " + b.getId() + " has status " + b.getStatus());
+            }
+        }
+
+        if (dto.newCheckIn().isBefore(LocalDate.now())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "New check-in cannot be in the past");
+        }
+        if (!dto.newCheckOut().isAfter(dto.newCheckIn())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Check-out must be after check-in");
+        }
+
+        long newNights = ChronoUnit.DAYS.between(dto.newCheckIn(), dto.newCheckOut());
+
+        reservation.setCheckIn(dto.newCheckIn());
+        reservation.setCheckOut(dto.newCheckOut());
+        reservationRepository.save(reservation);
+
+        for (Booking booking : bookings) {
+            if (booking.getOriginalCheckIn() == null) {
+                booking.setOriginalCheckIn(booking.getCheckIn());
+                booking.setOriginalCheckOut(booking.getCheckOut());
+            }
+            booking.setCheckIn(dto.newCheckIn());
+            booking.setCheckOut(dto.newCheckOut());
+            if (dto.reason() != null && !dto.reason().isBlank()) {
+                booking.setRescheduleReason(dto.reason());
+            }
+            booking.setRoom(null);
+
+            BigDecimal newTotal = BigDecimal.ZERO;
+            if (booking.getUnit() != null) {
+                List<Room> activeRooms = roomRepository.findByUnitIdAndStatus(
+                        booking.getUnit().getId(), RoomStatus.ACTIVE);
+                if (!activeRooms.isEmpty()) {
+                    newTotal = activeRooms.get(0).getBaseRate().multiply(BigDecimal.valueOf(newNights));
+                }
+            }
+            if (booking.getMealPlanPricePerNight() != null) {
+                newTotal = newTotal.add(
+                        booking.getMealPlanPricePerNight().multiply(BigDecimal.valueOf(newNights)));
+            }
+            booking.setTotalPrice(newTotal);
+
+            List<RoomAssignment> scheduled = roomAssignmentRepository
+                    .findByBookingId(booking.getId()).stream()
+                    .filter(ra -> ra.getStatus() == RoomAssignmentStatus.SCHEDULED)
+                    .toList();
+            for (RoomAssignment ra : scheduled) {
+                ra.setStatus(RoomAssignmentStatus.CANCELLED);
+            }
+            roomAssignmentRepository.saveAll(scheduled);
+
+            bookingRepository.save(booking);
+        }
+
+        List<Booking> updated = bookingRepository.findByReservationId(reservationId);
+        return buildReservationSummary(reservation, updated);
+    }
+
+    // =========================================================================
     // PRIVATE HELPERS
     // =========================================================================
+
+    private String generateReservationNumber(Property property, LocalDate date) {
+        LocalDate monthStart = date.withDayOfMonth(1);
+        ReservationSequence seq = reservationSequenceRepository
+                .findByPropertyAndMonthWithLock(property.getId(), monthStart)
+                .orElse(new ReservationSequence(property, monthStart, 1));
+        int current = seq.getNextVal();
+        seq.setNextVal(current + 1);
+        reservationSequenceRepository.save(seq);
+        return date.format(DateTimeFormatter.ofPattern("yyyyMM")) + String.format("%04d", current);
+    }
 
     private List<ValidatedRoomRequest> validateAndResolveRoomRequests(
             UUID propertyId,
@@ -459,6 +562,14 @@ public class GroupBookingService {
         List<GroupBookingSummaryDto.BookingSummaryDto> bookingDtos = bookings.stream()
                 .map(b -> {
                     Folio folio = b.getFolio();
+                    BigDecimal unitBaseRate = null;
+                    if (b.getUnit() != null) {
+                        List<Room> activeRooms = roomRepository.findByUnitIdAndStatus(
+                                b.getUnit().getId(), RoomStatus.ACTIVE);
+                        if (!activeRooms.isEmpty()) {
+                            unitBaseRate = activeRooms.get(0).getBaseRate();
+                        }
+                    }
                     return new GroupBookingSummaryDto.BookingSummaryDto(
                             b.getId(),
                             b.getGuest().getId(),
@@ -472,7 +583,9 @@ public class GroupBookingService {
                             folio != null ? folio.getId() : null,
                             folio != null ? folio.getFolioNumber() : null,
                             b.getSpecialRequests(),
-                            b.isTwinBed()
+                            b.isTwinBed(),
+                            unitBaseRate,
+                            b.getMealPlanPricePerNight()
                     );
                 })
                 .collect(Collectors.toList());
@@ -481,6 +594,7 @@ public class GroupBookingService {
 
         return new GroupBookingSummaryDto(
                 reservation.getId(),
+                reservation.getReservationNumber(),
                 reservation.getGroupReference(),
                 reservation.getOrganizerGuest().getId(),
                 reservation.getOrganizerGuest().getFullName(),

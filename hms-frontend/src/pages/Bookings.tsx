@@ -5,7 +5,11 @@ import propertyApi from '../api/propertyApi';
 import roomApi from '../api/roomApi';
 import bookingApi from '../api/bookingApi';
 import availabilityApi from '../api/availabilityApi';
+import reservationApi from '../api/reservationApi';
+import type { GroupBookingSummaryDto } from '../api/reservationApi';
+import RescheduleModal from '../components/Reservation/RescheduleModal';
 import BookingForm from '../components/Booking/BookingForm';
+import AddRoomModal from '../components/Booking/AddRoomModal';
 import BookingsList from '../components/Booking/BookingsList';
 import GroupBookingModal from '../components/Booking/GroupBookingModal';
 import EarlyCheckoutModal from '../components/Booking/EarlyCheckoutModal';
@@ -43,7 +47,7 @@ type PendingAction = {
 /* Context Menu                                                  */
 /* ────────────────────────────────────────────────────────────── */
 
-function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout, onEditBooking, onShiftRoom, onShowFolio, onViewBooking, onAssignRoom, onAddRoom }: {
+function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout, onEditBooking, onShiftRoom, onShowFolio, onViewBooking, onAssignRoom, onAddRoom, onReschedule }: {
   state: { x: number; y: number; booking: Booking; hasAssignment?: boolean } | null;
   propertyId: string;
   onClose: () => void;
@@ -55,6 +59,7 @@ function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout, onEdit
   onViewBooking: (booking: Booking) => void;
   onAssignRoom: (booking: Booking) => void;
   onAddRoom: (booking: Booking) => void;
+  onReschedule: (booking: Booking) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
@@ -96,6 +101,7 @@ function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout, onEdit
 
     if (booking.reservationId && assignableStatuses.includes(booking.status)) {
       acts.push({ label: '⊞ Add Room to Reservation', doFn: async () => { onAddRoom(booking); onClose(); } });
+      acts.push({ label: '⟳ Reschedule Reservation', doFn: async () => { onReschedule(booking); onClose(); } });
     }
 
     switch (booking.status) {
@@ -287,6 +293,8 @@ export default function Bookings() {
   const [ghosts, setGhosts] = useState<GhostAssignmentDto[]>([]);
   const [assignRoomBooking, setAssignRoomBooking] = useState<Booking | null>(null);
   const [addRoomBooking, setAddRoomBooking] = useState<Booking | null>(null);
+  const [addRoomReservation, setAddRoomReservation] = useState<GroupBookingSummaryDto | null>(null);
+  const [rescheduleReservation, setRescheduleReservation] = useState<GroupBookingSummaryDto | null>(null);
   
   const [listType, setListType] = useState<StatType>('all');
   const [pfRoom, setPfRoom] = useState<Room | null>(null);
@@ -965,7 +973,18 @@ export default function Bookings() {
           onShowFolio={(id, name) => setViewFolioBooking({ id, guestName: name })}
           onViewBooking={setViewBooking}
           onAssignRoom={setAssignRoomBooking}
-          onAddRoom={setAddRoomBooking} />
+          onAddRoom={async (booking) => {
+            setAddRoomBooking(booking);
+            if (booking.reservationId) {
+              const res = await reservationApi.getReservation(selectedPropId, booking.reservationId).catch(() => null);
+              setAddRoomReservation(res);
+            }
+          }}
+          onReschedule={async (booking) => {
+            if (!booking.reservationId) return;
+            const res = await reservationApi.getReservation(selectedPropId, booking.reservationId);
+            setRescheduleReservation(res);
+          }} />
       )}
       {viewBooking && selectedPropId && (
         <BookingDetailModal
@@ -988,16 +1007,25 @@ export default function Bookings() {
         />
       )}
       {addRoomBooking && selectedPropId && addRoomBooking.reservationId && (
-        <ModalShell title="Add Room to Reservation" size="wide" onClose={() => setAddRoomBooking(null)}>
-          <BookingForm
-            propertyId={selectedPropId}
-            reservationId={addRoomBooking.reservationId}
-            initialCheckIn={dateStr(addRoomBooking.checkIn)}
-            initialCheckOut={dateStr(addRoomBooking.checkOut)}
-            onSuccess={async () => { setAddRoomBooking(null); await refresh(); }}
-            onCancel={() => setAddRoomBooking(null)}
-          />
-        </ModalShell>
+        <AddRoomModal
+          propertyId={selectedPropId}
+          reservationId={addRoomBooking.reservationId}
+          checkIn={dateStr(addRoomBooking.checkIn)}
+          checkOut={dateStr(addRoomBooking.checkOut)}
+          organizerGuestId={addRoomReservation?.organizerGuestId}
+          organizerGuestName={addRoomReservation?.organizerGuestName}
+          status={addRoomReservation?.overallStatus}
+          onClose={() => { setAddRoomBooking(null); setAddRoomReservation(null); }}
+          onSuccess={async () => { setAddRoomBooking(null); setAddRoomReservation(null); await refresh(); }}
+        />
+      )}
+      {rescheduleReservation && selectedPropId && (
+        <RescheduleModal
+          reservation={rescheduleReservation}
+          propertyId={selectedPropId}
+          onClose={() => setRescheduleReservation(null)}
+          onRescheduled={() => { setRescheduleReservation(null); refresh(); }}
+        />
       )}
     </div>
   );
