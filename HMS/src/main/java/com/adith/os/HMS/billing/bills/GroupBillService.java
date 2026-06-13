@@ -163,6 +163,7 @@ public class GroupBillService {
                 charge.getPostingDate(),
                 charge.getChargeCode(),
                 charge.getDescription(),
+                charge.getReferenceType(),
                 charge.getQuantity(),
                 charge.getUnitPrice(),
                 charge.getSubtotal(),

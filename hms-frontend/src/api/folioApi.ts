@@ -8,8 +8,9 @@ export interface ChargeDto {
   id: string;
   chargeDate: string;
   postingDate?: string;
-  chargeCode: 'ROOM_RENT' | 'RESTAURANT' | 'LAUNDRY' | 'SPA' | 'TRAVEL_DESK' | 'SHOP' | 'MISC';
+  chargeCode: 'ROOM_RENT' | 'MEAL_PLAN' | 'RESTAURANT' | 'LAUNDRY' | 'SPA' | 'TRAVEL_DESK' | 'SHOP' | 'MISC';
   description?: string;
+  referenceType?: string;
   quantity?: number;
   unitPrice?: number;
   subtotal?: number;
@@ -20,6 +21,21 @@ export interface ChargeDto {
   isVoided?: boolean;
   voidReason?: string;
   notes?: string;
+}
+
+export interface ChargeUpdateDto {
+  description: string;
+  unitPrice: number;
+  quantity: number;
+  taxRate: number;
+}
+
+export type DiscountType = 'FLAT' | 'PERCENTAGE';
+export type DiscountBillType = 'room' | 'ancillary';
+
+export interface FolioDiscountDto {
+  discountType: DiscountType;
+  value: number;
 }
 
 export interface FolioDto {
@@ -46,6 +62,12 @@ export interface FolioDto {
   roomNumber?: string;
   travelAgentId?: string;
   travelAgentName?: string;
+  roomDiscountType?: DiscountType;
+  roomDiscountValue?: number;
+  roomDiscountAmount?: number;
+  ancillaryDiscountType?: DiscountType;
+  ancillaryDiscountValue?: number;
+  ancillaryDiscountAmount?: number;
 }
 
 export interface FolioDetailDto extends FolioDto {
@@ -137,10 +159,19 @@ const folioApi = {
     return fetchClient.delete(`/properties/${propertyId}/folios/${id}/charges/${chargeId}/void?${params.toString()}`);
   },
 
+  updateCharge: async (
+    propertyId: string,
+    id: string,
+    chargeId: string,
+    data: ChargeUpdateDto
+  ): Promise<FolioDto> => {
+    return fetchClient.patch(`/properties/${propertyId}/folios/${id}/charges/${chargeId}`, data);
+  },
+
   routeCharge: async (
-    propertyId: string, 
-    id: string, 
-    chargeId: string, 
+    propertyId: string,
+    id: string,
+    chargeId: string,
     targetFolioId?: string
   ): Promise<FolioDto> => {
     const params = new URLSearchParams();
@@ -149,7 +180,24 @@ const folioApi = {
     }
     const queryString = params.toString() ? `?${params.toString()}` : '';
     return fetchClient.post(`/properties/${propertyId}/folios/${id}/charges/${chargeId}/route${queryString}`);
-  }
+  },
+
+  setDiscount: async (
+    propertyId: string,
+    id: string,
+    billType: DiscountBillType,
+    data: FolioDiscountDto
+  ): Promise<FolioDto> => {
+    return fetchClient.put(`/properties/${propertyId}/folios/${id}/discounts/${billType}`, data);
+  },
+
+  deleteDiscount: async (
+    propertyId: string,
+    id: string,
+    billType: DiscountBillType
+  ): Promise<FolioDto> => {
+    return fetchClient.delete(`/properties/${propertyId}/folios/${id}/discounts/${billType}`);
+  },
 };
 
 export default folioApi;

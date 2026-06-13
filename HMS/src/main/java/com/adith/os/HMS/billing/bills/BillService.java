@@ -1,6 +1,7 @@
 package com.adith.os.HMS.billing.bills;
 
 import com.adith.os.HMS.billing.folio.*;
+import com.adith.os.HMS.billing.folio.FolioDiscountCalculator;
 import com.adith.os.HMS.billing.folio.dto.ChargeDto;
 import com.adith.os.HMS.billing.bills.dto.*;
 import com.adith.os.HMS.billing.payment.PaymentRepository;
@@ -110,7 +111,6 @@ public class BillService {
         List<FolioCharge> unbilledCharges = folio.getCharges().stream()
                 .filter(c -> c.getBill() == null && c.getGroupBill() == null)
                 .filter(c -> !c.isRouteToMaster())
-                .filter(c -> !c.isVoided())
                 .toList();
 
         if (unbilledCharges.isEmpty()) {
@@ -314,10 +314,12 @@ public class BillService {
         BigDecimal discount = activeCharges.stream().map(FolioCharge::getDiscountAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal total    = activeCharges.stream().map(FolioCharge::getTotalAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
 
+        BigDecimal folioDiscount = FolioDiscountCalculator.computeDiscountForBill(folio, billType, total);
+
         bill.setSubtotal(subtotal);
         bill.setTaxAmount(tax);
-        bill.setDiscountAmount(discount);
-        bill.setTotalAmount(total);
+        bill.setDiscountAmount(discount.add(folioDiscount));
+        bill.setTotalAmount(total.subtract(folioDiscount).max(BigDecimal.ZERO));
 
         Bill savedBill = billRepository.save(bill);
 
@@ -357,6 +359,7 @@ public class BillService {
         sequence.setNextVal(current + 1);
         sequenceRepository.save(sequence);
 
-        return "FO" + String.format("%05d", current);
+        String fy = String.format("%02d%02d", fyStart.getYear() % 100, (fyStart.getYear() + 1) % 100);
+        return "FO/" + fy + "/" + String.format("%05d", current);
     }
 }

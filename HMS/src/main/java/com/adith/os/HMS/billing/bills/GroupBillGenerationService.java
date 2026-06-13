@@ -113,7 +113,7 @@ public class GroupBillGenerationService {
 
             List<FolioCharge> validCharges = folio.getCharges() == null ? List.of()
                     : folio.getCharges().stream()
-                           .filter(c -> !c.isVoided() && c.getBill() == null && c.getGroupBill() == null)
+                           .filter(c -> c.getBill() == null && c.getGroupBill() == null)
                            .filter(FolioCharge::isRouteToMaster)
                            .toList();
 
@@ -359,7 +359,7 @@ public class GroupBillGenerationService {
     private ChargeDto toChargeDto(FolioCharge c) {
         return new ChargeDto(
                 c.getId(), c.getChargeDate(), c.getPostingDate(),
-                c.getChargeCode(), c.getDescription(),
+                c.getChargeCode(), c.getDescription(), c.getReferenceType(),
                 c.getQuantity(), c.getUnitPrice(), c.getSubtotal(),
                 c.getTaxRate(), c.getTaxAmount(), c.getDiscountAmount(),
                 c.getTotalAmount(), c.isVoided(), c.getVoidReason(), c.getNotes()
@@ -377,7 +377,8 @@ public class GroupBillGenerationService {
         int current = seq.getNextVal();
         seq.setNextVal(current + 1);
         sequenceRepository.save(seq);
-        return "FO" + String.format("%05d", current);
+        String fy = String.format("%02d%02d", fyStart.getYear() % 100, (fyStart.getYear() + 1) % 100);
+        return "FO/" + fy + "/" + String.format("%05d", current);
     }
 
     // =========================================================================

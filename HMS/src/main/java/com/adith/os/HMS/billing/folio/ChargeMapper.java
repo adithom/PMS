@@ -27,6 +27,7 @@ public class ChargeMapper {
                 charge.getPostingDate(),
                 charge.getChargeCode(),
                 charge.getDescription(),
+                charge.getReferenceType(),
                 charge.getQuantity(),
                 charge.getUnitPrice(),
                 charge.getSubtotal(),

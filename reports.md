@@ -27,6 +27,5 @@ if split - b, c, d
 
 add discount to any bill - only visible in pdf if discount added
 edit charges in folio
-
 replace thank you with guest sign
 replace tax with cgst, sgst @ x%

@@ -1,5 +1,6 @@
 package com.adith.os.HMS.billing.folio.dto;
 
+import com.adith.os.HMS.billing.folio.DiscountType;
 import com.adith.os.HMS.billing.folio.FolioStatus;
 
 import java.math.BigDecimal;
@@ -28,5 +29,11 @@ public record FolioDto(
         LocalDate checkOutDate,
         String roomNumber,
         UUID travelAgentId,
-        String travelAgentName
+        String travelAgentName,
+        DiscountType roomDiscountType,
+        BigDecimal roomDiscountValue,
+        BigDecimal roomDiscountAmount,
+        DiscountType ancillaryDiscountType,
+        BigDecimal ancillaryDiscountValue,
+        BigDecimal ancillaryDiscountAmount
 ) {}

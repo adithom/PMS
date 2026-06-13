@@ -6,12 +6,15 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
 @Repository
 public interface BillRepository extends JpaRepository<Bill, UUID> {
     boolean existsByFolioId(UUID folioId);
+
+    boolean existsByFolioIdAndBillTypeInAndIsVoidedFalse(UUID folioId, Collection<BillType> billTypes);
 
     long countByFolioIdAndIsVoidedFalse(java.util.UUID folioId);
 

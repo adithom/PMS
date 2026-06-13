@@ -319,14 +319,18 @@ public class GroupPdfGenerationService {
                                  PDFont fontBold, PDFont fontRegular) throws IOException {
         float y = state.y - 10; // gap before totals block
 
-        String[] labels = {"Subtotal", "Tax", "Grand Total", "Amount Paid", "Balance Due"};
-        BigDecimal[] amounts = {
-                nvlDec(section.groupSubtotal()),
-                nvlDec(section.groupTaxAmount()),
-                nvlDec(section.groupGrandTotal()),
-                nvlDec(section.groupAmountPaid()),
-                nvlDec(section.groupBalanceDue())
-        };
+        boolean hasDiscount = section.groupDiscountAmount() != null
+                && section.groupDiscountAmount().compareTo(java.math.BigDecimal.ZERO) > 0;
+
+        java.util.List<String[]> rows = new java.util.ArrayList<>();
+        rows.add(new String[]{"Subtotal",    fmt2(nvlDec(section.groupSubtotal()))});
+        rows.add(new String[]{"Tax",         fmt2(nvlDec(section.groupTaxAmount()))});
+        if (hasDiscount) {
+            rows.add(new String[]{"Discount", "-" + fmt2(nvlDec(section.groupDiscountAmount()))});
+        }
+        rows.add(new String[]{"Grand Total", fmt2(nvlDec(section.groupGrandTotal()))});
+        rows.add(new String[]{"Amount Paid", fmt2(nvlDec(section.groupAmountPaid()))});
+        rows.add(new String[]{"Balance Due", fmt2(nvlDec(section.groupBalanceDue()))});
 
         // Top border of full-width totals block
         state.cs.setLineWidth(0.5f);
@@ -334,12 +338,13 @@ public class GroupPdfGenerationService {
         state.cs.lineTo(COLS[7], y);
         state.cs.stroke();
 
-        for (int i = 0; i < labels.length; i++) {
-            boolean isBold = (i == 2 || i == 4);
+        for (int i = 0; i < rows.size(); i++) {
+            String rowLabel = rows.get(i)[0];
+            String rowValue = rows.get(i)[1];
+            boolean isBold = "Grand Total".equals(rowLabel) || "Balance Due".equals(rowLabel);
             PDFont f  = isBold ? fontBold : fontRegular;
             int    sz = isBold ? 11 : 10;
 
-            // Light tint for Grand Total and Balance Due rows
             if (isBold) {
                 state.cs.setNonStrokingColor(new Color(240, 244, 248));
                 state.cs.addRect(COLS[0], y - ROW_H, COLS[7] - COLS[0], ROW_H);
@@ -353,8 +358,8 @@ public class GroupPdfGenerationService {
             state.cs.stroke();
             drawVerticalLines(state.cs, new float[]{COLS[0], COLS[6], COLS[7]}, y, y - ROW_H);
 
-            drawTextRight(state.cs, labels[i], COLS[6] - 5, y - 14, fontBold, sz);
-            drawTextRight(state.cs, fmt2(amounts[i]), COLS[7] - 5, y - 14, f, sz);
+            drawTextRight(state.cs, rowLabel, COLS[6] - 5, y - 14, fontBold, sz);
+            drawTextRight(state.cs, rowValue, COLS[7] - 5, y - 14, f, sz);
 
             y -= ROW_H;
         }

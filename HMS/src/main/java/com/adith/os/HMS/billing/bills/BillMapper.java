@@ -2,6 +2,7 @@ package com.adith.os.HMS.billing.bills;
 
 import com.adith.os.HMS.billing.folio.ChargeCategory;
 import com.adith.os.HMS.billing.folio.Folio;
+import com.adith.os.HMS.billing.folio.FolioDiscountCalculator;
 import com.adith.os.HMS.billing.folio.dto.ChargeDto;
 import com.adith.os.HMS.billing.bills.dto.BillBatchRowDto;
 import com.adith.os.HMS.billing.bills.dto.BillDto;
@@ -67,7 +68,7 @@ public class BillMapper {
         List<ChargeDto> validCharges = charges.stream()
                 .map(c -> c.isVoided()
                         ? new ChargeDto(c.id(), c.chargeDate(), c.postingDate(), c.chargeCode(),
-                                c.description() + " [VOID]", c.quantity(), c.unitPrice(),
+                                c.description() + " [VOID]", c.referenceType(), c.quantity(), c.unitPrice(),
                                 BigDecimal.ZERO, c.taxRate(), BigDecimal.ZERO,
                                 BigDecimal.ZERO, BigDecimal.ZERO,
                                 true, c.voidReason(), c.notes())
@@ -75,6 +76,10 @@ public class BillMapper {
                 .toList();
 
         var totals = BillTotalCalculator.calculate(validCharges);
+
+        // Folio-level discount for this bill type
+        BigDecimal folioDiscount = FolioDiscountCalculator.computeDiscountForBill(
+                folio, bill.getBillType(), totals.total());
 
         Guest guest = folio.getGuest();
         Property property = folio.getProperty();
@@ -112,17 +117,21 @@ public class BillMapper {
 
         BigDecimal totalNetPaid = totalPaid.subtract(totalRefunds);
 
+        BigDecimal grandTotal = totals.total().subtract(folioDiscount).max(BigDecimal.ZERO);
+
         BigDecimal finalAmountPaid;
         if (bill.getBillType() == BillType.ROOM_RENT) {
-            finalAmountPaid = totalNetPaid.min(totals.total());
+            finalAmountPaid = totalNetPaid.min(grandTotal);
         } else {
-            BigDecimal roomRentTotal = folio.getCharges().stream()
+            BigDecimal roomRentChargesTotal = folio.getCharges().stream()
                     .filter(c -> !c.isVoided())
                     .filter(c -> c.getChargeCode().getCategory() == ChargeCategory.ROOM_RENT
                               || c.getChargeCode().getCategory() == ChargeCategory.MEAL_PLAN)
                     .map(c -> c.getTotalAmount())
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
-            finalAmountPaid = totalNetPaid.subtract(roomRentTotal).max(BigDecimal.ZERO);
+            BigDecimal roomFolioDiscount = FolioDiscountCalculator.computeRoomDiscountAmount(folio);
+            BigDecimal effectiveRoomTotal = roomRentChargesTotal.subtract(roomFolioDiscount).max(BigDecimal.ZERO);
+            finalAmountPaid = totalNetPaid.subtract(effectiveRoomTotal).max(BigDecimal.ZERO);
         }
 
         // Apply the booking's share of reservation-level payments (master credit) on the
@@ -130,8 +139,6 @@ public class BillMapper {
         if (appliedMasterCredit != null && appliedMasterCredit.compareTo(BigDecimal.ZERO) > 0) {
             finalAmountPaid = finalAmountPaid.add(appliedMasterCredit);
         }
-
-        BigDecimal grandTotal = totals.total();
 
         // .max(BigDecimal.ZERO) so overpayments show 0.00 instead of negative.
         BigDecimal balanceDue = grandTotal.subtract(finalAmountPaid).max(BigDecimal.ZERO);
@@ -173,7 +180,7 @@ public class BillMapper {
 
                 totals.subtotal(),
                 totals.tax(),
-                totals.discount(),
+                totals.discount().add(folioDiscount),
                 grandTotal,
 
                 finalAmountPaid,

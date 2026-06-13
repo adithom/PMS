@@ -292,14 +292,24 @@ public class PdfGenerationService {
 
             boolean isAgentBilled = billDto.travelAgentName() != null && !billDto.travelAgentName().isBlank()
                     && billDto.balanceDue() != null && billDto.balanceDue().compareTo(BigDecimal.ZERO) == 0;
-            String[] labels = {"Subtotal", "Tax", "Grand Total", "Amount Paid", isAgentBilled ? "Billed to Agent" : "Balance Due"};
-            String[] values = {
-                    billDto.subtotal()   != null ? billDto.subtotal().setScale(2, RoundingMode.HALF_UP).toString()   : "0.00",
-                    billDto.totalTax()   != null ? billDto.totalTax().setScale(2, RoundingMode.HALF_UP).toString()   : "0.00",
-                    billDto.grandTotal() != null ? billDto.grandTotal().setScale(2, RoundingMode.HALF_UP).toString() : "0.00",
-                    billDto.amountPaid() != null ? billDto.amountPaid().setScale(2, RoundingMode.HALF_UP).toString() : "0.00",
-                    billDto.balanceDue() != null ? billDto.balanceDue().setScale(2, RoundingMode.HALF_UP).toString() : "0.00"
-            };
+            boolean hasDiscount = billDto.totalDiscount() != null
+                    && billDto.totalDiscount().compareTo(BigDecimal.ZERO) > 0;
+
+            java.util.List<String[]> totalRows = new java.util.ArrayList<>();
+            totalRows.add(new String[]{"Subtotal",
+                    billDto.subtotal()   != null ? billDto.subtotal().setScale(2, RoundingMode.HALF_UP).toString()   : "0.00"});
+            totalRows.add(new String[]{"Tax",
+                    billDto.totalTax()   != null ? billDto.totalTax().setScale(2, RoundingMode.HALF_UP).toString()   : "0.00"});
+            if (hasDiscount) {
+                totalRows.add(new String[]{"Discount",
+                        "-" + billDto.totalDiscount().setScale(2, RoundingMode.HALF_UP).toString()});
+            }
+            totalRows.add(new String[]{"Grand Total",
+                    billDto.grandTotal() != null ? billDto.grandTotal().setScale(2, RoundingMode.HALF_UP).toString() : "0.00"});
+            totalRows.add(new String[]{"Amount Paid",
+                    billDto.amountPaid() != null ? billDto.amountPaid().setScale(2, RoundingMode.HALF_UP).toString() : "0.00"});
+            totalRows.add(new String[]{isAgentBilled ? "Billed to Agent" : "Balance Due",
+                    billDto.balanceDue() != null ? billDto.balanceDue().setScale(2, RoundingMode.HALF_UP).toString() : "0.00"});
 
             // Top border of totals block
             contentStream.setLineWidth(0.5f);
@@ -307,7 +317,12 @@ public class PdfGenerationService {
             contentStream.lineTo(cols[7], yPosition);
             contentStream.stroke();
 
-            for (int i = 0; i < 5; i++) {
+            for (int i = 0; i < totalRows.size(); i++) {
+                String rowLabel = totalRows.get(i)[0];
+                String rowValue = totalRows.get(i)[1];
+                boolean isBoldRow = "Grand Total".equals(rowLabel) || "Balance Due".equals(rowLabel)
+                        || "Billed to Agent".equals(rowLabel);
+
                 if (yPosition < 150) {
                     contentStream.close();
                     PDPage newPage = new PDPage(PDRectangle.A4);
@@ -317,8 +332,7 @@ public class PdfGenerationService {
                     yPosition = 780;
                 }
 
-                // Light tint for Grand Total and Balance Due rows
-                if (i == 2 || i == 4) {
+                if (isBoldRow) {
                     contentStream.setNonStrokingColor(new Color(240, 244, 248));
                     contentStream.addRect(cols[0], yPosition - rowHeight, cols[7] - cols[0], rowHeight);
                     contentStream.fill();
@@ -329,15 +343,14 @@ public class PdfGenerationService {
                 contentStream.lineTo(cols[7], yPosition - rowHeight);
                 contentStream.stroke();
 
-                // Full-width box: left wall | label separator | right wall
                 float[] borderCols = {cols[0], cols[6], cols[7]};
                 drawVerticalLines(contentStream, borderCols, yPosition, yPosition - rowHeight);
 
-                PDFont f = (i == 2 || i == 4) ? fontBold : fontRegular;
-                int    s = (i == 2 || i == 4) ? 11 : 10;
+                PDFont f = isBoldRow ? fontBold : fontRegular;
+                int    s = isBoldRow ? 11 : 10;
 
-                drawTextRight(contentStream, labels[i], cols[6] - 5, yPosition - 14, fontBold, s);
-                drawTextRight(contentStream, values[i], cols[7] - 5, yPosition - 14, f, s);
+                drawTextRight(contentStream, rowLabel, cols[6] - 5, yPosition - 14, fontBold, s);
+                drawTextRight(contentStream, rowValue, cols[7] - 5, yPosition - 14, f, s);
 
                 yPosition -= rowHeight;
             }
