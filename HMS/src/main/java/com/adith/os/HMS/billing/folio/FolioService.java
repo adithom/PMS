@@ -323,6 +323,12 @@ public class FolioService {
             } else {
                 routeToMaster = false;
             }
+            // A single-room reservation has no separate "master" folio to route to —
+            // routing there would orphan the charge from billing entirely.
+            if (routeToMaster && folio.getBooking() != null && folio.getBooking().getReservation() != null
+                    && bookingRepository.countByReservationId(folio.getBooking().getReservation().getId()) <= 1) {
+                routeToMaster = false;
+            }
             charge.setRouteToMaster(routeToMaster);
 
             folioChargeRepository.save(charge);
@@ -436,6 +442,12 @@ public class FolioService {
         if (folioHasActiveBill) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Cannot reroute charges on a folio with an active bill. Void the bill first.");
+        }
+
+        if (routeToMaster && folio.getBooking() != null && folio.getBooking().getReservation() != null
+                && bookingRepository.countByReservationId(folio.getBooking().getReservation().getId()) <= 1) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Cannot route a charge to master for a single-room reservation");
         }
 
         charge.setRouteToMaster(routeToMaster);

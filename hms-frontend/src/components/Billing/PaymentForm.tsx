@@ -12,13 +12,14 @@ const labelCls = 'mb-1.5 block text-sm font-medium text-slate-700';
 
 interface PaymentFormProps {
   propertyId: string;
-  folioId: string;
+  folioId?: string;
+  reservationId?: string; // If set, records a reservation-level (master) payment instead of a folio payment
   balanceDue?: number; // Pre-fill amount
   onSuccess: () => void;
   onCancel: () => void;
 }
 
-export default function PaymentForm({ propertyId, folioId, balanceDue = 0, onSuccess, onCancel }: PaymentFormProps) {
+export default function PaymentForm({ propertyId, folioId, reservationId, balanceDue = 0, onSuccess, onCancel }: PaymentFormProps) {
   const [formData, setFormData] = useState<Partial<PaymentCreationDto>>({
     amount: balanceDue > 0 ? balanceDue : 0,
     paymentMethod: 'CREDIT_CARD',
@@ -52,7 +53,11 @@ export default function PaymentForm({ propertyId, folioId, balanceDue = 0, onSuc
 
     setSubmitting(true);
     try {
-      await paymentApi.recordPayment(propertyId, folioId, formData as PaymentCreationDto);
+      if (reservationId) {
+        await paymentApi.recordReservationPayment(propertyId, reservationId, formData as PaymentCreationDto);
+      } else {
+        await paymentApi.recordPayment(propertyId, folioId!, formData as PaymentCreationDto);
+      }
       onSuccess();
     } catch (err: any) {
       setError(err.message || 'Failed to process payment');

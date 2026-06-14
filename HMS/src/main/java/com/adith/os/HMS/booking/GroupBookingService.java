@@ -123,8 +123,11 @@ public class GroupBookingService {
         reservation.setSpecialRequests(dto.specialRequests());
         reservation.setGroupReference(dto.groupReference());
         reservation.setStatus(ReservationStatus.PENDING);
+        // Consolidated billing only makes sense with multiple rooms — a single-room
+        // reservation has no separate "master" to route charges to.
         reservation.setDefaultRouteToMaster(
-                dto.billingMode() == GroupBookingCreationDto.GroupBillingMode.CONSOLIDATED);
+                dto.billingMode() == GroupBookingCreationDto.GroupBillingMode.CONSOLIDATED
+                        && validated.size() > 1);
         if (travelAgent != null) {
             reservation.setTravelAgent(travelAgent);
         }
@@ -215,6 +218,10 @@ public class GroupBookingService {
     @Transactional
     public GroupBookingSummaryDto consolidateBilling(UUID propertyId, UUID reservationId) {
         Reservation reservation = getValidatedReservation(propertyId, reservationId);
+        if (bookingRepository.countByReservationId(reservationId) <= 1) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Consolidated billing requires more than one room in the reservation");
+        }
         reservation.setDefaultRouteToMaster(true);
         reservationRepository.save(reservation);
 

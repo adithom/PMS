@@ -4,6 +4,7 @@ import BookingDetailModal from '../Booking/BookingDetailModal';
 import AddRoomModal from '../Booking/AddRoomModal';
 import RescheduleModal from './RescheduleModal';
 import EditReservationModal from './EditReservationModal';
+import PaymentForm from '../Billing/PaymentForm';
 import reservationApi from '../../api/reservationApi';
 import type { GroupBookingSummaryDto, BookingSummaryDto } from '../../api/reservationApi';
 import bookingApi from '../../api/bookingApi';
@@ -45,6 +46,7 @@ export default function ReservationDetailModal({ propertyId, reservationId, onCl
   const [showAddRoom, setShowAddRoom] = useState(false);
   const [showReschedule, setShowReschedule] = useState(false);
   const [showEditReservation, setShowEditReservation] = useState(false);
+  const [showAddPayment, setShowAddPayment] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -104,6 +106,14 @@ export default function ReservationDetailModal({ propertyId, reservationId, onCl
 
   const selectedBooking = selectedBookingId ? bookings.find(b => b.id === selectedBookingId) ?? null : null;
 
+  const isSingleRoom = reservation?.totalRooms === 1;
+  const paymentFolioId = isSingleRoom ? reservation?.bookings[0]?.folioId ?? null : null;
+  const paymentBalanceDue = reservation
+    ? (isSingleRoom
+        ? (reservation.bookings[0]?.balanceDue ?? 0)
+        : reservation.bookings.reduce((sum, b) => sum + (b.balanceDue ?? 0), 0))
+    : 0;
+
   return (
     <>
     <ModalShell onClose={onClose} title="Reservation" subtitle={reservation?.reservationNumber ? `#${reservation.reservationNumber}` : undefined} className="max-w-6xl">
@@ -134,15 +144,17 @@ export default function ReservationDetailModal({ propertyId, reservationId, onCl
                 </span>
               </div>
 
-              <div className="mt-4 grid grid-cols-3 divide-x divide-slate-200 rounded-xl border border-slate-200 bg-white/70 py-3 text-sm">
+              <div className={cn('mt-4 grid divide-x divide-slate-200 rounded-xl border border-slate-200 bg-white/70 py-3 text-sm', reservation.totalRooms > 1 ? 'grid-cols-3' : 'grid-cols-2')}>
                 <div className="px-4 text-center">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total</div>
                   <div className="mt-1 font-bold text-slate-900">{reservation.currency} {reservation.totalGroupPrice.toFixed(2)}</div>
                 </div>
-                <div className="px-4 text-center">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Billing</div>
-                  <div className="mt-1 font-bold text-slate-900">{reservation.billingMode}</div>
-                </div>
+                {reservation.totalRooms > 1 && (
+                  <div className="px-4 text-center">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Billing</div>
+                    <div className="mt-1 font-bold text-slate-900">{reservation.billingMode}</div>
+                  </div>
+                )}
                 <div className="px-4 text-center">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Created</div>
                   <div className="mt-1 font-bold text-slate-700">{fmtDate(reservation.createdAt)}</div>
@@ -237,43 +249,57 @@ export default function ReservationDetailModal({ propertyId, reservationId, onCl
             })()}
 
             {/* Footer actions */}
-            <div className="mt-6 flex items-center gap-2 border-t border-slate-100 pt-5">
-              {reservation.overallStatus !== 'CANCELLED' && reservation.overallStatus !== 'CHECKED_OUT' && (
-                <button
-                  type="button"
-                  onClick={() => setShowAddRoom(true)}
-                  className="whitespace-nowrap rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-bold text-indigo-700 hover:bg-indigo-100 transition-colors"
-                >
-                  Add Room
-                </button>
-              )}
-              {reservation.overallStatus !== 'CANCELLED' && (
-                <button
-                  type="button"
-                  onClick={() => setShowEditReservation(true)}
-                  className="whitespace-nowrap rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors"
-                >
-                  Edit
-                </button>
-              )}
-              {(reservation.overallStatus === 'PENDING' || reservation.overallStatus === 'CONFIRMED') && (
-                <button
-                  type="button"
-                  onClick={() => setShowReschedule(true)}
-                  className="whitespace-nowrap rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors"
-                >
-                  Reschedule
-                </button>
-              )}
-              {reservation.overallStatus !== 'CANCELLED' && reservation.overallStatus !== 'CHECKED_OUT' && (
-                <button
-                  type="button"
-                  onClick={handleCancelReservation}
-                  className="whitespace-nowrap rounded-lg bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700 hover:bg-rose-100 transition-colors"
-                >
-                  Cancel Reservation
-                </button>
-              )}
+            <div className="mt-6 border-t border-slate-100 pt-5">
+              <div className="flex items-center gap-2">
+                {reservation.overallStatus !== 'CANCELLED' && reservation.overallStatus !== 'CHECKED_OUT' && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAddRoom(true)}
+                    className="flex-1 whitespace-nowrap rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-bold text-indigo-700 hover:bg-indigo-100 transition-colors"
+                  >
+                    Add Room
+                  </button>
+                )}
+                {reservation.overallStatus !== 'CANCELLED' && (
+                  <button
+                    type="button"
+                    onClick={() => setShowEditReservation(true)}
+                    className="flex-1 whitespace-nowrap rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors"
+                  >
+                    Edit
+                  </button>
+                )}
+                {reservation.overallStatus !== 'CANCELLED' && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAddPayment(true)}
+                    disabled={isSingleRoom && !paymentFolioId}
+                    className="flex-1 whitespace-nowrap rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-100 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Record Payment
+                  </button>
+                )}
+              </div>
+              <div className="mt-2 flex items-center gap-2">
+                {(reservation.overallStatus === 'PENDING' || reservation.overallStatus === 'CONFIRMED') && (
+                  <button
+                    type="button"
+                    onClick={() => setShowReschedule(true)}
+                    className="flex-1 whitespace-nowrap rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors"
+                  >
+                    Reschedule
+                  </button>
+                )}
+                {reservation.overallStatus !== 'CANCELLED' && reservation.overallStatus !== 'CHECKED_OUT' && (
+                  <button
+                    type="button"
+                    onClick={handleCancelReservation}
+                    className="flex-1 whitespace-nowrap rounded-lg bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700 hover:bg-rose-100 transition-colors"
+                  >
+                    Cancel Reservation
+                  </button>
+                )}
+              </div>
             </div>
           </>
         )}
@@ -328,6 +354,22 @@ export default function ReservationDetailModal({ propertyId, reservationId, onCl
           onUpdated?.();
         }}
       />
+    )}
+    {showAddPayment && reservation && (
+      <ModalShell title="Record Payment" onClose={() => setShowAddPayment(false)}>
+        <PaymentForm
+          propertyId={propertyId}
+          folioId={isSingleRoom ? paymentFolioId ?? undefined : undefined}
+          reservationId={isSingleRoom ? undefined : reservation.reservationId}
+          balanceDue={paymentBalanceDue}
+          onSuccess={() => {
+            setShowAddPayment(false);
+            fetchData();
+            onUpdated?.();
+          }}
+          onCancel={() => setShowAddPayment(false)}
+        />
+      </ModalShell>
     )}
     </>
   );
