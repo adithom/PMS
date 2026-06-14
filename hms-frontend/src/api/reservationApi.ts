@@ -36,22 +36,28 @@ export interface BookingSummaryDto {
   unitName: string;
   roomNumber: string | null;
   status: BookingStatus;
+  adults: number;
+  children: number;
   totalPrice: number;
   balanceDue: number;
   folioId: string | null;
   folioNumber: string | null;
   specialRequests: string | null;
   isTwinBed: boolean;
+  unitBaseRate: number | null;
+  mealPlanPricePerNight: number | null;
 }
 
 // Reservation = the group container (also wraps single bookings as 1-member reservations).
 export interface GroupBookingSummaryDto {
   reservationId: string;
+  reservationNumber: string | null;
   groupReference: string | null;
   organizerGuestId: string;
   organizerGuestName: string;
   checkIn: string;
   checkOut: string;
+  specialRequests: string | null;
   overallStatus: BookingStatus;
   totalRooms: number;
   totalGroupPrice: number;
@@ -59,6 +65,21 @@ export interface GroupBookingSummaryDto {
   createdAt: string;
   billingMode: 'SEPARATE' | 'CONSOLIDATED';
   bookings: BookingSummaryDto[];
+}
+
+export interface BookingOccupancyUpdateDto {
+  bookingId: string;
+  guestId: string;
+  adults: number;
+  children: number;
+  nightlyRate?: number;
+}
+
+export interface ReservationUpdateDto {
+  organizerGuestId: string;
+  groupReference?: string;
+  specialRequests?: string;
+  bookingUpdates: BookingOccupancyUpdateDto[];
 }
 
 /* ────────────────────────────────────────────────────────────── */
@@ -105,6 +126,24 @@ const reservationApi = {
   // CANCEL
   cancelReservation: async (propertyId: string, reservationId: string): Promise<GroupBookingSummaryDto> => {
     return fetchClient.post(`/properties/${propertyId}/reservations/${reservationId}/cancel`);
+  },
+
+  // RESCHEDULE
+  reschedule: async (
+    propertyId: string,
+    reservationId: string,
+    dto: { newCheckIn: string; newCheckOut: string; reason?: string }
+  ): Promise<GroupBookingSummaryDto> => {
+    return fetchClient.patch(`/properties/${propertyId}/reservations/${reservationId}/reschedule`, dto);
+  },
+
+  // UPDATE METADATA
+  updateReservation: async (
+    propertyId: string,
+    reservationId: string,
+    dto: ReservationUpdateDto
+  ): Promise<GroupBookingSummaryDto> => {
+    return fetchClient.patch(`/properties/${propertyId}/reservations/${reservationId}`, dto);
   },
 };
 

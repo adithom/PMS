@@ -27,10 +27,6 @@ public class PaymentMapper {
         // Default to COMPLETED for the 1-step payment flow
         payment.setPaymentStatus(PaymentStatus.COMPLETED);
 
-        if (dto.targetCategory() != null) {
-            payment.setTargetCategory(dto.targetCategory());
-        }
-
         if (dto.transactionId() != null && !dto.transactionId().isBlank()) {
             payment.setTransactionId(dto.transactionId().trim());
         }
@@ -77,7 +73,6 @@ public class PaymentMapper {
                 payment.getCurrency(),
                 payment.getPaymentMethod(),
                 payment.getPaymentStatus(),
-                payment.getTargetCategory(),
                 payment.getTransactionId(),
                 payment.getCardLastFour(),
                 payment.getCardType(),

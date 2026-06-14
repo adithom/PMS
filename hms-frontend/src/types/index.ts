@@ -5,9 +5,22 @@ export interface Property {
   name: string;
   code: string;
   address: string;
+  addressLine2?: string;
+  region?: string;
+  postalCode?: string;
+  phone?: string;
   country: string;
   totalRooms: number;
   extraBedRatePerNight?: number;
+  gstNumber?: string;
+  cin?: string;
+  udyamRegistrationNo?: string;
+  pan?: string;
+  stateName?: string;
+  stateCode?: string;
+  fssaiNumber?: string;
+  checkInTime?: string;
+  checkOutTime?: string;
 }
 
 export type MealPlanType = 'CP' | 'MAP' | 'AP';
@@ -77,6 +90,34 @@ export interface GuestSummary {
   phone?: string;
 }
 
+export interface GuestBookingSummary {
+  bookingId: string;
+  reservationId?: string;
+  groupReference?: string;
+  propertyName?: string;
+  roomNumber?: string;
+  unitName?: string;
+  checkIn: string;
+  checkOut: string;
+  status: BookingStatus;
+  mealPlanType?: string;
+  role: 'PRIMARY' | 'ADDITIONAL';
+}
+
+export interface GuestPosPreference {
+  productId: string;
+  itemName: string;
+  category?: string;
+  totalQuantity: number;
+  orderCount: number;
+}
+
+export interface GuestProfile {
+  guest: Guest;
+  bookingHistory: GuestBookingSummary[];
+  posPreferences: GuestPosPreference[];
+}
+
 export interface Booking {
   id?: string;
   propertyId: string;
@@ -100,11 +141,13 @@ export interface Booking {
   specialRequests?: string;
   createdAt?: string;
   reservationId?: string;
+  reservationNumber?: string | null;
   isTwinBed: boolean;
   referenceNumber?: string;
   travelAgentId?: string;
   travelAgentName?: string;
-  commissionRate?: number;
+  contactPersonId?: string;
+  contactPersonName?: string;
   mealPlanType?: MealPlanType;
   mealPlanDisplayName?: string;
   mealPlanPricePerNight?: number;
@@ -174,18 +217,25 @@ export interface TapeChartDto {
   ghostAssignments: GhostAssignmentDto[];
 }
 
+export interface ContactPerson {
+  id: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  designation?: string;
+}
+
 export interface TravelAgent {
   id: string;
   name: string;
-  contactPerson?: string;
   email?: string;
   phone?: string;
-  iataCode?: string;
-  commissionRate?: number;
+  gstin?: string;
   active: boolean;
   address?: string;
   createdAt?: string;
   updatedAt?: string;
+  contactPersons?: ContactPerson[];
 }
 
 export type BookingStatus =

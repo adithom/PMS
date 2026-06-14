@@ -1,6 +1,8 @@
 package com.adith.os.HMS.travelagent;
 
 import com.adith.os.HMS.booking.dto.BookingDto;
+import com.adith.os.HMS.travelagent.dto.ContactPersonCreationDto;
+import com.adith.os.HMS.travelagent.dto.ContactPersonDto;
 import com.adith.os.HMS.travelagent.dto.TravelAgentCreationDto;
 import com.adith.os.HMS.travelagent.dto.TravelAgentDto;
 import com.adith.os.HMS.travelagent.dto.TravelAgentUpdateDto;
@@ -30,7 +32,7 @@ public class TravelAgentController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<List<TravelAgentDto>> list(
             @RequestParam(defaultValue = "false") boolean activeOnly,
             @RequestParam(required = false) String search) {
@@ -41,15 +43,9 @@ public class TravelAgentController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<TravelAgentDto> getById(@PathVariable UUID id) {
         return ResponseEntity.ok(travelAgentService.getTravelAgentById(id));
-    }
-
-    @GetMapping("/iata/{iataCode}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
-    public ResponseEntity<TravelAgentDto> getByIataCode(@PathVariable String iataCode) {
-        return ResponseEntity.ok(travelAgentService.getTravelAgentByIataCode(iataCode));
     }
 
     @PutMapping("/{id}")
@@ -89,5 +85,27 @@ public class TravelAgentController {
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<List<BookingDto>> getBookings(@PathVariable UUID id) {
         return ResponseEntity.ok(travelAgentService.getBookingsForAgent(id));
+    }
+
+    @PostMapping("/{id}/contacts")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<ContactPersonDto> addContact(@PathVariable UUID id,
+                                                        @Valid @RequestBody ContactPersonCreationDto dto) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(travelAgentService.addContactPerson(id, dto));
+    }
+
+    @PutMapping("/{id}/contacts/{contactId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<ContactPersonDto> updateContact(@PathVariable UUID id,
+                                                           @PathVariable UUID contactId,
+                                                           @Valid @RequestBody ContactPersonCreationDto dto) {
+        return ResponseEntity.ok(travelAgentService.updateContactPerson(id, contactId, dto));
+    }
+
+    @DeleteMapping("/{id}/contacts/{contactId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<Void> deleteContact(@PathVariable UUID id, @PathVariable UUID contactId) {
+        travelAgentService.deleteContactPerson(id, contactId);
+        return ResponseEntity.noContent().build();
     }
 }

@@ -7,7 +7,11 @@ import type { Guest } from '../../types';
 import bookingApi from '../../api/bookingApi';
 import folioApi from '../../api/folioApi';
 import guestApi from '../../api/guestApi';
+import reservationApi from '../../api/reservationApi';
+import type { GroupBookingSummaryDto } from '../../api/reservationApi';
 import { fmtDate, diffDays } from '../../utils/dateHelpers';
+import GuestDetailModal from '../Guest/GuestDetailModal';
+import RescheduleModal from '../Reservation/RescheduleModal';
 
 function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(' ');
@@ -44,9 +48,11 @@ interface Props {
   onOpenFolio: (bookingId: string, guestName: string) => void;
 }
 
-export default function BookingDetailModal({ booking, propertyId, onClose, onEditBooking, onOpenFolio }: Props) {
+export default function BookingDetailModal({ booking: bookingProp, propertyId, onClose, onEditBooking, onOpenFolio }: Props) {
+  const [booking, setBooking] = useState<Booking>(bookingProp);
   const [guest, setGuest] = useState<Guest | null>(null);
   const [loadingGuest, setLoadingGuest] = useState(true);
+  const [guestDetailId, setGuestDetailId] = useState<string | null>(null);
 
   const [assignments, setAssignments] = useState<RoomAssignmentDto[]>([]);
   const [loadingAssignments, setLoadingAssignments] = useState(true);
@@ -54,24 +60,30 @@ export default function BookingDetailModal({ booking, propertyId, onClose, onEdi
   const [folios, setFolios] = useState<FolioDto[]>([]);
   const [loadingFolios, setLoadingFolios] = useState(true);
 
-  useEffect(() => {
-    if (!booking.id) return;
+  const [rescheduleReservation, setRescheduleReservation] = useState<GroupBookingSummaryDto | null>(null);
 
-    guestApi.getById(booking.guestId)
+  useEffect(() => {
+    if (!bookingProp.id) return;
+
+    bookingApi.getById(propertyId, bookingProp.id)
+      .then(setBooking)
+      .catch(() => {});
+
+    guestApi.getById(bookingProp.guestId)
       .then(setGuest)
       .catch(() => setGuest(null))
       .finally(() => setLoadingGuest(false));
 
-    bookingApi.getRoomAssignments(propertyId, booking.id)
+    bookingApi.getRoomAssignments(propertyId, bookingProp.id)
       .then(setAssignments)
       .catch(() => setAssignments([]))
       .finally(() => setLoadingAssignments(false));
 
-    folioApi.getAllFoliosByBooking(propertyId, booking.id)
+    folioApi.getAllFoliosByBooking(propertyId, bookingProp.id)
       .then(setFolios)
       .catch(() => setFolios([]))
       .finally(() => setLoadingFolios(false));
-  }, [booking.id, booking.guestId, propertyId]);
+  }, [bookingProp.id, bookingProp.guestId, propertyId]);
 
   const nights = diffDays(booking.checkIn.split('T')[0], booking.checkOut.split('T')[0]);
 
@@ -88,6 +100,7 @@ export default function BookingDetailModal({ booking, propertyId, onClose, onEdi
   const editableStatuses: Booking['status'][] = ['PENDING', 'CONFIRMED', 'CHECKED_IN'];
 
   return (
+    <>
     <ModalShell
       title={`Booking — ${booking.guestName}`}
       subtitle={booking.referenceNumber ? `Ref: ${booking.referenceNumber}` : undefined}
@@ -103,6 +116,11 @@ export default function BookingDetailModal({ booking, propertyId, onClose, onEdi
             <span className={cn('rounded-md border px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider', STATUS_BADGE[booking.status] ?? 'bg-slate-100 text-slate-600 border-slate-200')}>
               {booking.status.replace('_', ' ')}
             </span>
+            {booking.reservationNumber && (
+              <span className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-mono text-slate-600">
+                #{booking.reservationNumber}
+              </span>
+            )}
             {booking.referenceNumber && (
               <span className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-mono text-slate-600">
                 {booking.referenceNumber}
@@ -265,7 +283,12 @@ export default function BookingDetailModal({ booking, propertyId, onClose, onEdi
               <p className="text-xs text-slate-400">Loading…</p>
             ) : guest ? (
               <div className="space-y-2 text-sm">
-                <p className="font-bold text-slate-800">{guest.fullName}</p>
+                <button
+                  onClick={() => setGuestDetailId(guest.id)}
+                  className="font-bold text-slate-800 hover:text-blue-600 hover:underline text-left"
+                >
+                  {guest.fullName}
+                </button>
                 {guest.email && (
                   <div className="flex items-start gap-2">
                     <span className="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 w-12 shrink-0">Email</span>
@@ -308,13 +331,32 @@ export default function BookingDetailModal({ booking, propertyId, onClose, onEdi
             )}
           </div>
 
+          {/* Additional Guests */}
+          {booking.additionalGuests && booking.additionalGuests.length > 0 && (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">Additional Guests</p>
+              <div className="space-y-1.5">
+                {booking.additionalGuests.map((ag) => (
+                  <button
+                    key={ag.id}
+                    onClick={() => setGuestDetailId(ag.id)}
+                    className="block w-full text-left text-sm font-medium text-slate-700 hover:text-blue-600 hover:underline"
+                  >
+                    {ag.fullName}
+                    {ag.email && <span className="ml-2 text-xs font-normal text-slate-400">{ag.email}</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Travel Agent */}
           {booking.travelAgentName && (
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
               <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">Travel Agent</p>
               <p className="text-sm font-semibold text-slate-800">{booking.travelAgentName}</p>
-              {booking.commissionRate != null && (
-                <p className="mt-1 text-xs text-slate-500">Commission: {booking.commissionRate}%</p>
+              {booking.contactPersonName && (
+                <p className="mt-1 text-xs text-slate-500">Contact: {booking.contactPersonName}</p>
               )}
             </div>
           )}
@@ -414,6 +456,18 @@ export default function BookingDetailModal({ booking, propertyId, onClose, onEdi
                 ✎ Edit Booking
               </button>
             )}
+            {(booking.status === 'PENDING' || booking.status === 'CONFIRMED') && booking.reservationId && (
+              <button
+                type="button"
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+                onClick={async () => {
+                  const res = await reservationApi.getReservation(propertyId, booking.reservationId!);
+                  setRescheduleReservation(res);
+                }}
+              >
+                Reschedule Reservation
+              </button>
+            )}
             <button
               type="button"
               className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-500 transition-colors hover:bg-slate-50"
@@ -426,5 +480,24 @@ export default function BookingDetailModal({ booking, propertyId, onClose, onEdi
         </div>
       </div>
     </ModalShell>
+
+    {guestDetailId && (
+      <GuestDetailModal
+        guestId={guestDetailId}
+        onClose={() => setGuestDetailId(null)}
+      />
+    )}
+    {rescheduleReservation && (
+      <RescheduleModal
+        reservation={rescheduleReservation}
+        propertyId={propertyId}
+        onClose={() => setRescheduleReservation(null)}
+        onRescheduled={() => {
+          setRescheduleReservation(null);
+          onClose();
+        }}
+      />
+    )}
+  </>
   );
 }

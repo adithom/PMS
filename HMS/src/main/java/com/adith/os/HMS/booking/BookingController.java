@@ -25,7 +25,7 @@ public class BookingController {
 
     // CREATE
     @PostMapping()
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<BookingDto> createBooking(
             @PathVariable UUID propertyId,
             @Valid @RequestBody BookingCreationDto bookingCreationDto) {
@@ -35,7 +35,7 @@ public class BookingController {
 
     // READ
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK', 'AGENCY')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<BookingDto> getBookingById(
             @PathVariable UUID propertyId,
             @PathVariable UUID id) {
@@ -44,7 +44,7 @@ public class BookingController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK', 'AGENCY', 'POS')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'POS')")
     public ResponseEntity<List<BookingDto>> getAllBookingsForProperty(
             @PathVariable UUID propertyId,
             @RequestParam(required = false) String status,
@@ -69,7 +69,7 @@ public class BookingController {
     }
 
     @GetMapping("/guest/{guestId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK', 'AGENCY')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<List<BookingDto>> getBookingsByGuest(
             @PathVariable UUID propertyId,
             @PathVariable UUID guestId) {
@@ -78,7 +78,7 @@ public class BookingController {
     }
 
     @GetMapping("/room/{roomId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK', 'AGENCY')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<List<BookingDto>> getBookingsByRoom(
             @PathVariable UUID propertyId,
             @PathVariable UUID roomId) {
@@ -87,7 +87,7 @@ public class BookingController {
     }
 
     @GetMapping("/unit/{unitId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK', 'AGENCY')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<List<BookingDto>> getBookingsByUnit(
             @PathVariable UUID propertyId,
             @PathVariable UUID unitId) {
@@ -100,7 +100,7 @@ public class BookingController {
      * GET /api/properties/{propertyId}/bookings/date?date=2025-12-15&includeAll=false
      */
     @GetMapping("/date")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK', 'AGENCY')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<List<BookingDto>> getBookingsByDate(
             @PathVariable UUID propertyId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
@@ -120,7 +120,7 @@ public class BookingController {
      * GET /api/properties/{propertyId}/bookings/range?from=2026-03-01&to=2026-03-15
      */
     @GetMapping("/range")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK', 'AGENCY')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<List<BookingDto>> getBookingsByDateRange(
             @PathVariable UUID propertyId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
@@ -132,7 +132,7 @@ public class BookingController {
 
     // UPDATE
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<BookingDto> updateBooking(
             @PathVariable UUID propertyId,
             @PathVariable UUID id,
@@ -142,7 +142,7 @@ public class BookingController {
     }
 
     @PatchMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<BookingDto> partialUpdateBooking(
             @PathVariable UUID propertyId,
             @PathVariable UUID id,
@@ -152,7 +152,7 @@ public class BookingController {
     }
 
     @PatchMapping("/{id}/status/{status}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<BookingDto> updateBookingStatus(
             @PathVariable UUID propertyId,
             @PathVariable UUID id,
@@ -164,7 +164,7 @@ public class BookingController {
 
     // DELETE
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<Void> deleteBooking(
             @PathVariable UUID propertyId,
             @PathVariable UUID id) {
@@ -175,7 +175,7 @@ public class BookingController {
     // SPECIAL OPERATIONS
 
     @PostMapping("/{id}/assign-room")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<BookingDto> assignRoomToBooking(
             @PathVariable UUID propertyId,
             @PathVariable UUID id,
@@ -185,7 +185,7 @@ public class BookingController {
     }
 
     @PostMapping("/{id}/check-in")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<BookingDto> checkInBooking(
             @PathVariable UUID propertyId,
             @PathVariable UUID id) {
@@ -206,7 +206,7 @@ public class BookingController {
 
     // Check-out endpoint
     @PostMapping("/{bookingId}/checkout")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<BookingDto> checkoutBooking(
             @PathVariable UUID propertyId,
             @PathVariable UUID bookingId) {
@@ -220,7 +220,7 @@ public class BookingController {
 
     // Early check-out endpoint
     @PostMapping("/{bookingId}/checkout-early")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<BookingDto> checkoutEarly(
             @PathVariable UUID propertyId,
             @PathVariable UUID bookingId,

@@ -4,6 +4,8 @@ import com.adith.os.HMS.booking.Booking;
 import com.adith.os.HMS.booking.BookingMapper;
 import com.adith.os.HMS.booking.BookingRepository;
 import com.adith.os.HMS.booking.dto.BookingDto;
+import com.adith.os.HMS.travelagent.dto.ContactPersonCreationDto;
+import com.adith.os.HMS.travelagent.dto.ContactPersonDto;
 import com.adith.os.HMS.travelagent.dto.TravelAgentCreationDto;
 import com.adith.os.HMS.travelagent.dto.TravelAgentDto;
 import com.adith.os.HMS.travelagent.dto.TravelAgentUpdateDto;
@@ -23,15 +25,18 @@ public class TravelAgentService {
     private final TravelAgentMapper travelAgentMapper;
     private final BookingRepository bookingRepository;
     private final BookingMapper bookingMapper;
+    private final ContactPersonRepository contactPersonRepository;
 
     public TravelAgentService(TravelAgentRepository travelAgentRepository,
                               TravelAgentMapper travelAgentMapper,
                               BookingRepository bookingRepository,
-                              BookingMapper bookingMapper) {
+                              BookingMapper bookingMapper,
+                              ContactPersonRepository contactPersonRepository) {
         this.travelAgentRepository = travelAgentRepository;
         this.travelAgentMapper = travelAgentMapper;
         this.bookingRepository = bookingRepository;
         this.bookingMapper = bookingMapper;
+        this.contactPersonRepository = contactPersonRepository;
     }
 
     /**
@@ -51,10 +56,6 @@ public class TravelAgentService {
                             "Travel agent not found: " + travelAgentId));
         }
         if (newAgent != null) {
-            if (newAgent.iataCode() != null && travelAgentRepository.existsByIataCode(newAgent.iataCode().trim().toUpperCase())) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT,
-                        "Travel agent with IATA code " + newAgent.iataCode() + " already exists. Use travelAgentId to reference the existing agent.");
-            }
             if (newAgent.email() != null && travelAgentRepository.existsByEmail(newAgent.email().trim().toLowerCase())) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
                         "Travel agent with email " + newAgent.email() + " already exists. Use travelAgentId to reference the existing agent.");
@@ -67,10 +68,6 @@ public class TravelAgentService {
 
     @Transactional
     public TravelAgentDto createTravelAgent(@Valid TravelAgentCreationDto dto) {
-        if (dto.iataCode() != null && travelAgentRepository.existsByIataCode(dto.iataCode().trim().toUpperCase())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Travel agent with IATA code " + dto.iataCode() + " already exists");
-        }
         if (dto.email() != null && travelAgentRepository.existsByEmail(dto.email().trim().toLowerCase())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Travel agent with email " + dto.email() + " already exists");
@@ -81,13 +78,6 @@ public class TravelAgentService {
 
     public TravelAgentDto getTravelAgentById(UUID id) {
         return travelAgentMapper.toDto(findOrThrow(id));
-    }
-
-    public TravelAgentDto getTravelAgentByIataCode(String iataCode) {
-        return travelAgentRepository.findByIataCode(iataCode.trim().toUpperCase())
-                .map(travelAgentMapper::toDto)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Travel agent with IATA code " + iataCode + " not found"));
     }
 
     public List<TravelAgentDto> getAllTravelAgents(boolean activeOnly) {
@@ -107,10 +97,6 @@ public class TravelAgentService {
         if (dto.name() == null || dto.name().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Agent name is required");
         }
-        if (dto.iataCode() != null && travelAgentRepository.existsByIataCodeAndIdNot(dto.iataCode().trim().toUpperCase(), id)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Another travel agent with IATA code " + dto.iataCode() + " already exists");
-        }
         if (dto.email() != null && travelAgentRepository.existsByEmailAndIdNot(dto.email().trim().toLowerCase(), id)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Another travel agent with email " + dto.email() + " already exists");
@@ -122,20 +108,14 @@ public class TravelAgentService {
     @Transactional
     public TravelAgentDto partialUpdateTravelAgent(UUID id, TravelAgentUpdateDto dto) {
         TravelAgent agent = findOrThrow(id);
-        if (dto.iataCode() != null && travelAgentRepository.existsByIataCodeAndIdNot(dto.iataCode().trim().toUpperCase(), id)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Another travel agent with IATA code " + dto.iataCode() + " already exists");
-        }
         if (dto.email() != null && travelAgentRepository.existsByEmailAndIdNot(dto.email().trim().toLowerCase(), id)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Another travel agent with email " + dto.email() + " already exists");
         }
         if (dto.name() != null && !dto.name().isBlank()) agent.setName(dto.name().trim());
-        if (dto.contactPerson() != null) agent.setContactPerson(dto.contactPerson().trim());
         if (dto.email() != null) agent.setEmail(dto.email().trim().toLowerCase());
         if (dto.phone() != null) agent.setPhone(dto.phone());
-        if (dto.iataCode() != null) agent.setIataCode(dto.iataCode().trim().toUpperCase());
-        if (dto.commissionRate() != null) agent.setCommissionRate(dto.commissionRate());
+        if (dto.gstin() != null) agent.setGstin(dto.gstin().trim().toUpperCase());
         if (dto.active() != null) agent.setActive(dto.active());
         if (dto.address() != null) agent.setAddress(dto.address());
         return travelAgentMapper.toDto(travelAgentRepository.save(agent));
@@ -171,6 +151,46 @@ public class TravelAgentService {
         return bookingMapper.toDtoList(bookings);
     }
 
+    @Transactional
+    public ContactPersonDto addContactPerson(UUID agentId, @Valid ContactPersonCreationDto dto) {
+        TravelAgent agent = findOrThrow(agentId);
+        ContactPerson cp = new ContactPerson();
+        cp.setName(dto.name().trim());
+        cp.setPhone(dto.phone());
+        cp.setEmail(dto.email() != null ? dto.email().trim().toLowerCase() : null);
+        cp.setDesignation(dto.designation());
+        cp.setTravelAgent(agent);
+        return travelAgentMapper.toContactPersonDto(contactPersonRepository.save(cp));
+    }
+
+    @Transactional
+    public ContactPersonDto updateContactPerson(UUID agentId, UUID contactId, @Valid ContactPersonCreationDto dto) {
+        findOrThrow(agentId);
+        ContactPerson cp = contactPersonRepository.findById(contactId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Contact person not found: " + contactId));
+        if (!cp.getTravelAgent().getId().equals(agentId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Contact does not belong to this agent");
+        }
+        cp.setName(dto.name().trim());
+        cp.setPhone(dto.phone());
+        cp.setEmail(dto.email() != null ? dto.email().trim().toLowerCase() : null);
+        cp.setDesignation(dto.designation());
+        return travelAgentMapper.toContactPersonDto(contactPersonRepository.save(cp));
+    }
+
+    @Transactional
+    public void deleteContactPerson(UUID agentId, UUID contactId) {
+        findOrThrow(agentId);
+        ContactPerson cp = contactPersonRepository.findById(contactId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Contact person not found: " + contactId));
+        if (!cp.getTravelAgent().getId().equals(agentId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Contact does not belong to this agent");
+        }
+        contactPersonRepository.deleteById(contactId);
+    }
+
     private TravelAgent findOrThrow(UUID id) {
         return travelAgentRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
@@ -179,11 +199,9 @@ public class TravelAgentService {
 
     private void applyUpdate(TravelAgent agent, TravelAgentUpdateDto dto) {
         agent.setName(dto.name().trim());
-        agent.setContactPerson(dto.contactPerson() != null ? dto.contactPerson().trim() : null);
         agent.setEmail(dto.email() != null ? dto.email().trim().toLowerCase() : null);
         agent.setPhone(dto.phone());
-        agent.setIataCode(dto.iataCode() != null ? dto.iataCode().trim().toUpperCase() : null);
-        agent.setCommissionRate(dto.commissionRate());
+        agent.setGstin(dto.gstin() != null ? dto.gstin().trim().toUpperCase() : null);
         agent.setAddress(dto.address());
         if (dto.active() != null) agent.setActive(dto.active());
     }

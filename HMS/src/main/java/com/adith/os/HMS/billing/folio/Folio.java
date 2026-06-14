@@ -83,6 +83,20 @@ public class Folio {
     @Column(name = "updated_by")
     private String updatedBy;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "room_discount_type")
+    private DiscountType roomDiscountType;
+
+    @Column(name = "room_discount_value", precision = 10, scale = 2)
+    private BigDecimal roomDiscountValue;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "ancillary_discount_type")
+    private DiscountType ancillaryDiscountType;
+
+    @Column(name = "ancillary_discount_value", precision = 10, scale = 2)
+    private BigDecimal ancillaryDiscountValue;
+
     @OneToMany(mappedBy = "folio", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<FolioCharge> charges = new ArrayList<>();
 
@@ -336,4 +350,16 @@ public class Folio {
     public java.util.List<com.adith.os.HMS.billing.bills.Bill> getBills() { return bills; }
 
     public void setBills(java.util.List<com.adith.os.HMS.billing.bills.Bill> bills) { this.bills = bills; }
+
+    public DiscountType getRoomDiscountType() { return roomDiscountType; }
+    public void setRoomDiscountType(DiscountType roomDiscountType) { this.roomDiscountType = roomDiscountType; }
+
+    public BigDecimal getRoomDiscountValue() { return roomDiscountValue; }
+    public void setRoomDiscountValue(BigDecimal roomDiscountValue) { this.roomDiscountValue = roomDiscountValue; }
+
+    public DiscountType getAncillaryDiscountType() { return ancillaryDiscountType; }
+    public void setAncillaryDiscountType(DiscountType ancillaryDiscountType) { this.ancillaryDiscountType = ancillaryDiscountType; }
+
+    public BigDecimal getAncillaryDiscountValue() { return ancillaryDiscountValue; }
+    public void setAncillaryDiscountValue(BigDecimal ancillaryDiscountValue) { this.ancillaryDiscountValue = ancillaryDiscountValue; }
 }

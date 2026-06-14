@@ -95,9 +95,10 @@ public class AvailabilityController {
     public ResponseEntity<List<AvailableRoomDto>> searchAvailableRoomsByUnit(
             @PathVariable UUID unitId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate checkIn,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate checkOut
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate checkOut,
+            @RequestParam(required = false) UUID excludeBookingId
     ) {
-        List<AvailableRoomDto> result = availabilityService.searchAvailableRoomsByUnit(unitId, checkIn, checkOut);
+        List<AvailableRoomDto> result = availabilityService.searchAvailableRoomsByUnit(unitId, checkIn, checkOut, excludeBookingId);
         return ResponseEntity.ok(result);
     }
 

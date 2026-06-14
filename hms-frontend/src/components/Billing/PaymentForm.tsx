@@ -12,17 +12,17 @@ const labelCls = 'mb-1.5 block text-sm font-medium text-slate-700';
 
 interface PaymentFormProps {
   propertyId: string;
-  folioId: string;
+  folioId?: string;
+  reservationId?: string; // If set, records a reservation-level (master) payment instead of a folio payment
   balanceDue?: number; // Pre-fill amount
   onSuccess: () => void;
   onCancel: () => void;
 }
 
-export default function PaymentForm({ propertyId, folioId, balanceDue = 0, onSuccess, onCancel }: PaymentFormProps) {
+export default function PaymentForm({ propertyId, folioId, reservationId, balanceDue = 0, onSuccess, onCancel }: PaymentFormProps) {
   const [formData, setFormData] = useState<Partial<PaymentCreationDto>>({
     amount: balanceDue > 0 ? balanceDue : 0,
     paymentMethod: 'CREDIT_CARD',
-    targetCategory: 'ROOM_RENT', // Defaulting to F&B/Room Rent routing
   });
   
   const [error, setError] = useState('');
@@ -53,7 +53,11 @@ export default function PaymentForm({ propertyId, folioId, balanceDue = 0, onSuc
 
     setSubmitting(true);
     try {
-      await paymentApi.recordPayment(propertyId, folioId, formData as PaymentCreationDto);
+      if (reservationId) {
+        await paymentApi.recordReservationPayment(propertyId, reservationId, formData as PaymentCreationDto);
+      } else {
+        await paymentApi.recordPayment(propertyId, folioId!, formData as PaymentCreationDto);
+      }
       onSuccess();
     } catch (err: any) {
       setError(err.message || 'Failed to process payment');
@@ -103,13 +107,6 @@ export default function PaymentForm({ propertyId, folioId, balanceDue = 0, onSuc
           </select>
         </label>
 
-        <label>
-          <span className={labelCls}>Target Category *</span>
-          <select name="targetCategory" value={formData.targetCategory} onChange={handleChange} disabled={submitting} className={inputCls} required>
-            <option value="ROOM_RENT">Room Rent & Taxes</option>
-            <option value="ANCILLARY">Ancillaries (F&B, Spa, etc.)</option>
-          </select>
-        </label>
       </div>
 
       {/* Conditional Fields based on Payment Method */}

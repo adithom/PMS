@@ -19,7 +19,16 @@ public record BillDto(
         // Hotel
         String PropertyName,
         String PropertyAddress,
+        String PropertyAddressLine2,
+        String PropertyPostalCode,
+        String PropertyPhone,
         String gstNumber,
+        String stateName,
+        String stateCode,
+        String cin,
+        String udyamRegistrationNo,
+        String pan,
+        String fssaiNumber,
 
         // Invoice Info
         String invoiceNumber,

@@ -2,6 +2,7 @@ package com.adith.os.HMS.guest;
 
 import com.adith.os.HMS.guest.dto.GuestCreationDto;
 import com.adith.os.HMS.guest.dto.GuestDto;
+import com.adith.os.HMS.guest.dto.GuestProfileDto;
 import com.adith.os.HMS.guest.dto.GuestUpdateDto;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -23,7 +24,7 @@ public class GuestController {
 
     // CREATE
     @PostMapping()
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<GuestDto> createGuest(@Valid @RequestBody GuestCreationDto guestCreationDto) {
         GuestDto createdGuest = guestService.createGuest(guestCreationDto);
         return new ResponseEntity<>(createdGuest, HttpStatus.CREATED);
@@ -31,35 +32,35 @@ public class GuestController {
 
     // READ
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<GuestDto> getGuestById(@PathVariable UUID id) {
         GuestDto guestDto = guestService.getGuestById(id);
         return ResponseEntity.ok(guestDto);
     }
 
     @GetMapping("/email/{email}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<GuestDto> getGuestByEmail(@PathVariable String email) {
         GuestDto guestDto = guestService.getGuestByEmail(email);
         return ResponseEntity.ok(guestDto);
     }
 
     @GetMapping("/phone/{phone}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<GuestDto> getGuestByPhone(@PathVariable String phone) {
         GuestDto guestDto = guestService.getGuestByPhone(phone);
         return ResponseEntity.ok(guestDto);
     }
 
     @GetMapping("/doc/{docId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<GuestDto> getGuestByDocId(@PathVariable String docId) {
         GuestDto guestDto = guestService.getGuestByDocId(docId);
         return ResponseEntity.ok(guestDto);
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<List<GuestDto>> getAllGuests(
             @RequestParam(required = false) String search) {
         List<GuestDto> guests;
@@ -73,9 +74,15 @@ public class GuestController {
         return ResponseEntity.ok(guests);
     }
 
+    @GetMapping("/{id}/profile")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    public ResponseEntity<GuestProfileDto> getGuestProfile(@PathVariable UUID id) {
+        return ResponseEntity.ok(guestService.getGuestProfile(id));
+    }
+
     // UPDATE
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<GuestDto> updateGuest(
             @PathVariable UUID id,
             @Valid @RequestBody GuestUpdateDto guestUpdateDto) {
@@ -84,7 +91,7 @@ public class GuestController {
     }
 
     @PatchMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<GuestDto> partialUpdateGuest(
             @PathVariable UUID id,
             @RequestBody GuestUpdateDto guestUpdateDto) {

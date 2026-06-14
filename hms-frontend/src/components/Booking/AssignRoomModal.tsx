@@ -24,7 +24,7 @@ export default function AssignRoomModal({ propertyId, bookingId, unitId, checkIn
   useEffect(() => {
     const fetchRooms = async () => {
       try {
-        const availableRooms = await availabilityApi.searchAvailableRoomsByUnit(unitId, checkIn, checkOut);
+        const availableRooms = await availabilityApi.searchAvailableRoomsByUnit(unitId, checkIn, checkOut, bookingId);
         setRooms(availableRooms);
       } catch (err: any) {
         setError(err.message || "Failed to fetch available rooms");

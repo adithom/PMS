@@ -1,6 +1,7 @@
 package com.adith.os.HMS.billing.bills;
 
 import com.adith.os.HMS.billing.folio.*;
+import com.adith.os.HMS.billing.folio.FolioDiscountCalculator;
 import com.adith.os.HMS.billing.folio.dto.ChargeDto;
 import com.adith.os.HMS.billing.bills.dto.*;
 import com.adith.os.HMS.billing.payment.PaymentRepository;
@@ -94,7 +95,7 @@ public class BillService {
     }
 
     @Transactional
-    public MultiBillDto generateMultiBill(UUID folioId, String guestGstNumber) {
+    public MultiBillDto generateMultiBill(UUID folioId, String guestGstNumber, boolean splitAncillary) {
 
         Folio folio = folioRepository.findById(folioId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Folio not found"));
@@ -109,8 +110,7 @@ public class BillService {
 
         List<FolioCharge> unbilledCharges = folio.getCharges().stream()
                 .filter(c -> c.getBill() == null && c.getGroupBill() == null)
-                .filter(c -> !c.isRouteToMaster())   // Phase B: charges flagged for the master bill don't appear on a booking bill
-                .filter(c -> !c.isVoided())
+                .filter(c -> !c.isRouteToMaster())
                 .toList();
 
         if (unbilledCharges.isEmpty()) {
@@ -121,34 +121,60 @@ public class BillService {
         Property property = folio.getProperty();
         String baseInvoiceNumber = generateInvoiceNumber(property);
 
-        // Phase B: compute reservation master-credit share for this booking — applied to the first bill only.
         BigDecimal masterCreditPool = computeMasterCreditShareForBooking(folio.getBooking());
 
         List<BillDto> generatedBills = new ArrayList<>();
         int suffixIdx = 0;
 
-        for (BillType bt : BillType.values()) {
-            List<FolioCharge> charges = unbilledCharges.stream()
-                    .filter(c -> BillType.forChargeCode(c.getChargeCode()) == bt)
-                    .toList();
-            if (charges.isEmpty()) continue;
+        if (splitAncillary) {
+            // Split mode: one bill per granular charge-code group (RESTAURANT, SPA, LAUNDRY, etc.)
+            // ROOM_RENT first, then remaining types in declaration order.
+            for (BillType bt : BillType.values()) {
+                if (bt == BillType.ANCILLARY) continue; // skip consolidated umbrella type in split mode
+                List<FolioCharge> charges = unbilledCharges.stream()
+                        .filter(c -> BillType.forChargeCode(c.getChargeCode()) == bt)
+                        .toList();
+                if (charges.isEmpty()) continue;
 
-            String invoiceNumber = suffixIdx == 0
-                    ? baseInvoiceNumber
-                    : baseInvoiceNumber + (char) ('a' + suffixIdx - 1);
-            BigDecimal creditForThisBill = (suffixIdx == 0) ? masterCreditPool : BigDecimal.ZERO;
-            suffixIdx++;
+                // Every bill gets a letter suffix: /A, /B, /C, …
+                String invoiceNumber = baseInvoiceNumber + "/" + (char) ('A' + suffixIdx);
+                BigDecimal creditForThisBill = (suffixIdx == 0) ? masterCreditPool : BigDecimal.ZERO;
+                suffixIdx++;
 
-            Bill bill = createAndSaveBill(folio, charges, bt, invoiceNumber, guestGstNumber, batchId);
+                Bill bill = createAndSaveBill(folio, charges, bt, invoiceNumber, guestGstNumber, batchId);
+                List<ChargeDto> chargeDtos = chargeMapper.toDtos(charges);
+                BillDto dtoForPdf = billMapper.toBillDto(bill, folio, chargeDtos, guestGstNumber, null, creditForThisBill);
+                String localPath = pdfGenerationService.generateInvoicePdf(dtoForPdf);
+                String fileKey = invoiceNumber.replace("/", "");
+                String objectKey = "invoices/" + fileKey + ".pdf";
+                String signedUrl = uploadToR2WithFallback(localPath, objectKey, "INV_" + fileKey + ".pdf");
+                bill.setPdfFilePath(objectKey);
+                billRepository.save(bill);
+                generatedBills.add(billMapper.toBillDto(bill, folio, chargeDtos, guestGstNumber, signedUrl, creditForThisBill));
+            }
+        } else {
+            // Consolidated (default): two bills — ROOM_RENT (/A) and ANCILLARY (/B).
+            for (BillType bt : List.of(BillType.ROOM_RENT, BillType.ANCILLARY)) {
+                List<FolioCharge> charges = unbilledCharges.stream()
+                        .filter(c -> BillType.consolidatedTypeFor(c.getChargeCode()) == bt)
+                        .toList();
+                if (charges.isEmpty()) continue;
 
-            List<ChargeDto> chargeDtos = chargeMapper.toDtos(charges);
-            BillDto dtoForPdf = billMapper.toBillDto(bill, folio, chargeDtos, guestGstNumber, null, creditForThisBill);
-            String localPath = pdfGenerationService.generateInvoicePdf(dtoForPdf);
-            String objectKey = "invoices/" + bill.getInvoiceNumber() + ".pdf";
-            String signedUrl = uploadToR2WithFallback(localPath, objectKey, "INV_" + bill.getInvoiceNumber() + ".pdf");
-            bill.setPdfFilePath(objectKey);
-            billRepository.save(bill);
-            generatedBills.add(billMapper.toBillDto(bill, folio, chargeDtos, guestGstNumber, signedUrl, creditForThisBill));
+                String invoiceNumber = baseInvoiceNumber + "/" + (char) ('A' + suffixIdx);
+                BigDecimal creditForThisBill = (suffixIdx == 0) ? masterCreditPool : BigDecimal.ZERO;
+                suffixIdx++;
+
+                Bill bill = createAndSaveBill(folio, charges, bt, invoiceNumber, guestGstNumber, batchId);
+                List<ChargeDto> chargeDtos = chargeMapper.toDtos(charges);
+                BillDto dtoForPdf = billMapper.toBillDto(bill, folio, chargeDtos, guestGstNumber, null, creditForThisBill);
+                String localPath = pdfGenerationService.generateInvoicePdf(dtoForPdf);
+                String fileKey = invoiceNumber.replace("/", "");
+                String objectKey = "invoices/" + fileKey + ".pdf";
+                String signedUrl = uploadToR2WithFallback(localPath, objectKey, "INV_" + fileKey + ".pdf");
+                bill.setPdfFilePath(objectKey);
+                billRepository.save(bill);
+                generatedBills.add(billMapper.toBillDto(bill, folio, chargeDtos, guestGstNumber, signedUrl, creditForThisBill));
+            }
         }
 
         return new MultiBillDto(generatedBills);
@@ -169,7 +195,8 @@ public class BillService {
         if (bill.getPdfFilePath() == null || bill.getPdfFilePath().isBlank()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No PDF available for this bill");
         }
-        String fileName = "INV_" + bill.getInvoiceNumber() + ".pdf";
+        String fileKey = bill.getInvoiceNumber().replace("/", "");
+        String fileName = "INV_" + fileKey + ".pdf";
         return r2StorageService.generatePresignedDownloadUrl(bill.getPdfFilePath(), fileName);
     }
 
@@ -287,10 +314,12 @@ public class BillService {
         BigDecimal discount = activeCharges.stream().map(FolioCharge::getDiscountAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal total    = activeCharges.stream().map(FolioCharge::getTotalAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
 
+        BigDecimal folioDiscount = FolioDiscountCalculator.computeDiscountForBill(folio, billType, total);
+
         bill.setSubtotal(subtotal);
         bill.setTaxAmount(tax);
-        bill.setDiscountAmount(discount);
-        bill.setTotalAmount(total);
+        bill.setDiscountAmount(discount.add(folioDiscount));
+        bill.setTotalAmount(total.subtract(folioDiscount).max(BigDecimal.ZERO));
 
         Bill savedBill = billRepository.save(bill);
 
@@ -317,16 +346,20 @@ public class BillService {
 
     private String generateInvoiceNumber(Property property) {
         LocalDate today = LocalDate.now(ZoneId.of("Asia/Kolkata"));
+        // Financial year runs 1 Apr – 31 Mar; use FY start as the sequence key.
+        LocalDate fyStart = today.getMonthValue() >= 4
+                ? LocalDate.of(today.getYear(), 4, 1)
+                : LocalDate.of(today.getYear() - 1, 4, 1);
+
         PropertyInvoiceSequence sequence = sequenceRepository
-                .findByPropertyAndDateWithLock(property.getId(), today)
-                .orElse(new PropertyInvoiceSequence(property, today, 1));
+                .findByPropertyAndDateWithLock(property.getId(), fyStart)
+                .orElse(new PropertyInvoiceSequence(property, fyStart, 1));
 
         int current = sequence.getNextVal();
         sequence.setNextVal(current + 1);
         sequenceRepository.save(sequence);
 
-        return property.getCode().toUpperCase()
-                + today.format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd"))
-                + String.format("%04d", current);
+        String fy = String.format("%02d%02d", fyStart.getYear() % 100, (fyStart.getYear() + 1) % 100);
+        return "FO/" + fy + "/" + String.format("%05d", current);
     }
 }

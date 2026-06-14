@@ -90,14 +90,10 @@ export interface PosOrder {
   serviceCharge: number;
   discountRate?: number;
   discountAmount: number;
-  folioId?: string;
-  bookingId?: string;
-  roomId?: string;
   items: PosOrderItem[];
   orderType: string;
   orderDate: string;
   tableNumber?: string;
-  guestName?: string;
   specialInstructions?: string;
   createdBy?: string;
   servedBy?: string;
@@ -192,6 +188,7 @@ export interface OrderSummary {
 export interface PosTicketHistory {
   id: string;
   invoiceNumber: string | null;
+  locationName: string | null;
   guestName: string;
   roomNumber: string | null;
   mealType: MealType;

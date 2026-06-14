@@ -81,6 +81,16 @@ public class FolioController {
         return ResponseEntity.ok(updatedFolio);
     }
 
+    @PatchMapping("/{id}/charges/{chargeId}")
+    public ResponseEntity<FolioDto> updateCharge(
+            @PathVariable UUID propertyId,
+            @PathVariable UUID id,
+            @PathVariable UUID chargeId,
+            @Valid @RequestBody ChargeUpdateDto dto) {
+        FolioDto updatedFolio = folioService.updateCharge(propertyId, id, chargeId, dto);
+        return ResponseEntity.ok(updatedFolio);
+    }
+
     @DeleteMapping("/{id}/charges/{chargeId}/void")
     public ResponseEntity<FolioDto> voidCharge(
             @PathVariable UUID propertyId,
@@ -104,6 +114,24 @@ public class FolioController {
             @Valid @RequestBody ChargeRouteUpdateDto dto) {
         FolioDto updatedFolio = folioService.setChargeRoute(propertyId, id, chargeId, dto.routeToMaster());
         return ResponseEntity.ok(updatedFolio);
+    }
+
+    // DISCOUNTS
+    @PutMapping("/{id}/discounts/{billType}")
+    public ResponseEntity<FolioDto> setDiscount(
+            @PathVariable UUID propertyId,
+            @PathVariable UUID id,
+            @PathVariable String billType,
+            @Valid @RequestBody FolioDiscountDto dto) {
+        return ResponseEntity.ok(folioService.setDiscount(propertyId, id, billType, dto));
+    }
+
+    @DeleteMapping("/{id}/discounts/{billType}")
+    public ResponseEntity<FolioDto> deleteDiscount(
+            @PathVariable UUID propertyId,
+            @PathVariable UUID id,
+            @PathVariable String billType) {
+        return ResponseEntity.ok(folioService.deleteDiscount(propertyId, id, billType));
     }
 
     // STATUS CHANGES

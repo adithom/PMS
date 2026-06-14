@@ -161,10 +161,10 @@ const availabilityApi = {
    * 6. Search available rooms by unit
    * GET /api/availability/units/{unitId}?checkIn=2025-11-01&checkOut=2025-11-05
    */
-  searchAvailableRoomsByUnit: (unitId: string, checkIn: string, checkOut: string) =>
+  searchAvailableRoomsByUnit: (unitId: string, checkIn: string, checkOut: string, excludeBookingId?: string) =>
     api.get<AvailableRoomDto[]>(
       `/availability/units/${unitId}`,
-      { checkIn, checkOut }
+      excludeBookingId ? { checkIn, checkOut, excludeBookingId } : { checkIn, checkOut }
     ),
 
   /**

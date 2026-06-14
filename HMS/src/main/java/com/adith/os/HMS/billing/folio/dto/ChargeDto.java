@@ -13,6 +13,7 @@ public record ChargeDto(
         OffsetDateTime postingDate,
         ChargeCode chargeCode,
         String description,
+        String referenceType,
         BigDecimal quantity,
         BigDecimal unitPrice,
         BigDecimal subtotal,

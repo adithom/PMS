@@ -4,6 +4,8 @@ import com.adith.os.HMS.billing.folio.dto.ChargeDto;
 import com.adith.os.HMS.billing.folio.dto.FolioCreationDto;
 import com.adith.os.HMS.billing.folio.dto.FolioDetailDto;
 import com.adith.os.HMS.billing.folio.dto.FolioDto;
+
+import java.math.BigDecimal;
 import com.adith.os.HMS.billing.payment.Payment;
 import com.adith.os.HMS.billing.payment.PaymentMapper;
 import com.adith.os.HMS.billing.payment.PaymentRepository;
@@ -55,6 +57,9 @@ public class FolioMapper {
         String roomNumber = extractRoomNumber(booking);
         TravelAgent agent = (booking != null) ? booking.getTravelAgent() : null;
 
+        BigDecimal roomDiscAmt = FolioDiscountCalculator.computeRoomDiscountAmount(folio);
+        BigDecimal ancDiscAmt  = FolioDiscountCalculator.computeAncillaryDiscountAmount(folio);
+
         return new FolioDto(
                 folio.getId(),
                 folio.getFolioNumber(),
@@ -76,7 +81,13 @@ public class FolioMapper {
                 checkOutDate,
                 roomNumber,
                 agent != null ? agent.getId() : null,
-                agent != null ? agent.getName() : null
+                agent != null ? agent.getName() : null,
+                folio.getRoomDiscountType(),
+                folio.getRoomDiscountValue(),
+                roomDiscAmt.compareTo(BigDecimal.ZERO) > 0 ? roomDiscAmt : null,
+                folio.getAncillaryDiscountType(),
+                folio.getAncillaryDiscountValue(),
+                ancDiscAmt.compareTo(BigDecimal.ZERO) > 0 ? ancDiscAmt : null
         );
     }
 
@@ -109,6 +120,9 @@ public class FolioMapper {
         String roomNumber = extractRoomNumber(booking);
         TravelAgent agent = (booking != null) ? booking.getTravelAgent() : null;
 
+        BigDecimal roomDiscAmt = FolioDiscountCalculator.computeRoomDiscountAmount(folio);
+        BigDecimal ancDiscAmt  = FolioDiscountCalculator.computeAncillaryDiscountAmount(folio);
+
         return new FolioDetailDto(
                 folio.getId(),
                 folio.getFolioNumber(),
@@ -131,7 +145,13 @@ public class FolioMapper {
                 chargeDtos,
                 paymentDtos,
                 agent != null ? agent.getId() : null,
-                agent != null ? agent.getName() : null
+                agent != null ? agent.getName() : null,
+                folio.getRoomDiscountType(),
+                folio.getRoomDiscountValue(),
+                roomDiscAmt.compareTo(BigDecimal.ZERO) > 0 ? roomDiscAmt : null,
+                folio.getAncillaryDiscountType(),
+                folio.getAncillaryDiscountValue(),
+                ancDiscAmt.compareTo(BigDecimal.ZERO) > 0 ? ancDiscAmt : null
         );
     }
 
@@ -144,6 +164,7 @@ public class FolioMapper {
                 charge.getPostingDate(),
                 charge.getChargeCode(),
                 charge.getDescription(),
+                charge.getReferenceType(),
                 charge.getQuantity(),
                 charge.getUnitPrice(),
                 charge.getSubtotal(),

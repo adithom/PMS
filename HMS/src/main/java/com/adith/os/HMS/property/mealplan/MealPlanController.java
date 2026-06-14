@@ -22,19 +22,19 @@ public class MealPlanController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public List<MealPlanDto> getMealPlans(@PathVariable UUID propertyId) {
         return mealPlanService.getMealPlans(propertyId);
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public MealPlanDto getMealPlan(@PathVariable UUID propertyId, @PathVariable UUID id) {
         return mealPlanService.getMealPlan(propertyId, id);
     }
 
     @GetMapping("/type/{mealPlanType}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public MealPlanDto getMealPlanByType(@PathVariable UUID propertyId,
                                          @PathVariable MealPlanType mealPlanType) {
         return mealPlanService.getMealPlanByType(propertyId, mealPlanType);

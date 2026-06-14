@@ -1,9 +1,13 @@
 package com.adith.os.HMS.billing.folio;
 
 
+import com.adith.os.HMS.billing.bills.BillRepository;
+import com.adith.os.HMS.billing.bills.BillType;
 import com.adith.os.HMS.billing.folio.dto.ChargeCreationDto;
+import com.adith.os.HMS.billing.folio.dto.ChargeUpdateDto;
 import com.adith.os.HMS.billing.folio.dto.FolioCreationDto;
 import com.adith.os.HMS.billing.folio.dto.FolioDetailDto;
+import com.adith.os.HMS.billing.folio.dto.FolioDiscountDto;
 import com.adith.os.HMS.billing.folio.dto.FolioDto;
 import com.adith.os.HMS.billing.payment.PaymentRepository;
 import com.adith.os.HMS.booking.Booking;
@@ -22,6 +26,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -34,6 +39,10 @@ public class FolioService {
     private final BookingRepository bookingRepository;
     private final FolioMapper folioMapper;
     private final PaymentRepository paymentRepository;
+    private final BillRepository billRepository;
+
+    private static final Set<BillType> CUMULATIVE_BILL_TYPES =
+            Set.of(BillType.ROOM_RENT, BillType.ANCILLARY);
 
     public FolioService(
             FolioRepository folioRepository,
@@ -42,7 +51,8 @@ public class FolioService {
             GuestRepository guestRepository,
             BookingRepository bookingRepository,
             FolioMapper folioMapper,
-            PaymentRepository paymentRepository) {
+            PaymentRepository paymentRepository,
+            BillRepository billRepository) {
         this.folioRepository = folioRepository;
         this.folioChargeRepository = folioChargeRepository;
         this.propertyRepository = propertyRepository;
@@ -50,6 +60,7 @@ public class FolioService {
         this.bookingRepository = bookingRepository;
         this.folioMapper = folioMapper;
         this.paymentRepository = paymentRepository;
+        this.billRepository = billRepository;
     }
 
     /**
@@ -64,11 +75,21 @@ public class FolioService {
     @Transactional
     public Folio recomputeFolioTotals(Folio folio) {
         folio.recalculateTotals();
+
+        // Apply folio-level discounts on top of per-charge discounts
+        BigDecimal roomDisc = FolioDiscountCalculator.computeRoomDiscountAmount(folio);
+        BigDecimal ancDisc  = FolioDiscountCalculator.computeAncillaryDiscountAmount(folio);
+        BigDecimal folioDiscount = roomDisc.add(ancDisc);
+        if (folioDiscount.compareTo(BigDecimal.ZERO) > 0) {
+            folio.setDiscountAmount(folio.getDiscountAmount().add(folioDiscount));
+            folio.setTotalAmount(folio.getTotalAmount().subtract(folioDiscount).max(BigDecimal.ZERO));
+        }
+
         BigDecimal paid = folio.getBooking() != null
                 ? paymentRepository.sumCompletedByBookingId(folio.getBooking().getId())
                 : BigDecimal.ZERO;
         if (paid == null) paid = BigDecimal.ZERO;
-        BigDecimal balance = folio.getSettleableTotal().subtract(paid).max(BigDecimal.ZERO);
+        BigDecimal balance = folio.getSettleableTotal().subtract(folioDiscount).subtract(paid).max(BigDecimal.ZERO);
         folio.setPaidAmount(paid);
         folio.setBalanceDue(balance);
         return folioRepository.save(folio);
@@ -302,6 +323,12 @@ public class FolioService {
             } else {
                 routeToMaster = false;
             }
+            // A single-room reservation has no separate "master" folio to route to —
+            // routing there would orphan the charge from billing entirely.
+            if (routeToMaster && folio.getBooking() != null && folio.getBooking().getReservation() != null
+                    && bookingRepository.countByReservationId(folio.getBooking().getReservation().getId()) <= 1) {
+                routeToMaster = false;
+            }
             charge.setRouteToMaster(routeToMaster);
 
             folioChargeRepository.save(charge);
@@ -318,6 +345,66 @@ public class FolioService {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
                     "Failed to add charge: " + e.getMessage());
         }
+    }
+
+    /**
+     * Edit mutable fields on an existing charge.
+     *
+     * Editable charges: anything without referenceType "POS_TICKET" (room rent, meal plan,
+     * extra bed, and manually posted charges all qualify). POS ticket charges are excluded.
+     *
+     * Blocked when: charge is voided, folio is not OPEN, or the folio has any active
+     * (non-voided) ROOM_RENT or ANCILLARY bill — void the bill first.
+     *
+     * Night audit safety: the audit deduplicates by existence (existsByFolio…AndChargeDate…).
+     * Editing a charge does not void it, so the existence check still finds it and night audit
+     * will not re-post the same date.
+     */
+    @Transactional
+    public FolioDto updateCharge(UUID propertyId, UUID folioId, UUID chargeId, @Valid ChargeUpdateDto dto) {
+        if (propertyId == null || folioId == null || chargeId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Property, folio, and charge IDs are required");
+        }
+
+        Folio folio = folioRepository.findById(folioId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Folio not found"));
+        if (!folio.getProperty().getId().equals(propertyId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Folio does not belong to the specified property");
+        }
+        if (folio.getStatus() != FolioStatus.OPEN) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Cannot edit charges on a closed or posted folio");
+        }
+
+        FolioCharge charge = folioChargeRepository.findById(chargeId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Charge not found"));
+        if (!charge.getFolio().getId().equals(folioId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Charge does not belong to the specified folio");
+        }
+        if (charge.isVoided()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot edit a voided charge");
+        }
+        if ("POS_TICKET".equals(charge.getReferenceType())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "POS ticket charges cannot be edited directly");
+        }
+
+        if (billRepository.existsByFolioIdAndBillTypeInAndIsVoidedFalse(folioId, CUMULATIVE_BILL_TYPES)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Cannot edit charges while a Main or Ancillary bill is active. Void the bill first.");
+        }
+
+        charge.setDescription(dto.description());
+        charge.setUnitPrice(dto.unitPrice());
+        charge.setQuantity(dto.quantity());
+        charge.setTaxRate(dto.taxRate());
+        folioChargeRepository.save(charge);
+
+        Folio savedFolio = recomputeFolioTotals(folio);
+        return folioMapper.toDto(savedFolio);
     }
 
     /**
@@ -355,6 +442,12 @@ public class FolioService {
         if (folioHasActiveBill) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Cannot reroute charges on a folio with an active bill. Void the bill first.");
+        }
+
+        if (routeToMaster && folio.getBooking() != null && folio.getBooking().getReservation() != null
+                && bookingRepository.countByReservationId(folio.getBooking().getReservation().getId()) <= 1) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Cannot route a charge to master for a single-room reservation");
         }
 
         charge.setRouteToMaster(routeToMaster);
@@ -548,6 +641,66 @@ public class FolioService {
         }
 
         return folioNumber;
+    }
+
+    /**
+     * Set or replace a folio-level discount for the given bill type ("room" or "ancillary").
+     * Only allowed while the folio is OPEN.
+     */
+    @Transactional
+    public FolioDto setDiscount(UUID propertyId, UUID folioId, String billType, @Valid FolioDiscountDto dto) {
+        Folio folio = loadFolioForProperty(propertyId, folioId);
+        if (folio.getStatus() != FolioStatus.OPEN) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Discounts can only be set on open folios");
+        }
+        if ("room".equalsIgnoreCase(billType)) {
+            folio.setRoomDiscountType(dto.discountType());
+            folio.setRoomDiscountValue(dto.value());
+        } else if ("ancillary".equalsIgnoreCase(billType)) {
+            folio.setAncillaryDiscountType(dto.discountType());
+            folio.setAncillaryDiscountValue(dto.value());
+        } else {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "billType must be 'room' or 'ancillary'");
+        }
+        Folio saved = recomputeFolioTotals(folio);
+        return folioMapper.toDto(saved);
+    }
+
+    /**
+     * Remove a folio-level discount for the given bill type ("room" or "ancillary").
+     * Only allowed while the folio is OPEN.
+     */
+    @Transactional
+    public FolioDto deleteDiscount(UUID propertyId, UUID folioId, String billType) {
+        Folio folio = loadFolioForProperty(propertyId, folioId);
+        if (folio.getStatus() != FolioStatus.OPEN) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Discounts can only be removed from open folios");
+        }
+        if ("room".equalsIgnoreCase(billType)) {
+            folio.setRoomDiscountType(null);
+            folio.setRoomDiscountValue(null);
+        } else if ("ancillary".equalsIgnoreCase(billType)) {
+            folio.setAncillaryDiscountType(null);
+            folio.setAncillaryDiscountValue(null);
+        } else {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "billType must be 'room' or 'ancillary'");
+        }
+        Folio saved = recomputeFolioTotals(folio);
+        return folioMapper.toDto(saved);
+    }
+
+    private Folio loadFolioForProperty(UUID propertyId, UUID folioId) {
+        Folio folio = folioRepository.findById(folioId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Folio not found"));
+        if (!folio.getProperty().getId().equals(propertyId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Folio does not belong to the specified property");
+        }
+        return folio;
     }
 
     /**

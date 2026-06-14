@@ -33,12 +33,13 @@ public class BillController {
     }
 
     @PostMapping("/generate/{folioId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<MultiBillDto> generateBills(
             @PathVariable UUID folioId,
-            @RequestParam(required = false) String guestGstNumber
+            @RequestParam(required = false) String guestGstNumber,
+            @RequestParam(defaultValue = "false") boolean splitAncillary
     ) {
-        return ResponseEntity.ok(billService.generateMultiBill(folioId, guestGstNumber));
+        return ResponseEntity.ok(billService.generateMultiBill(folioId, guestGstNumber, splitAncillary));
     }
 
     @PostMapping("/{billId}/void")
@@ -57,16 +58,17 @@ public class BillController {
     }
 
     @GetMapping("/folio/{folioId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<List<BillDto>> getBillsForFolio(@PathVariable UUID folioId) {
         return ResponseEntity.ok(billService.getBillsForFolio(folioId));
     }
 
     @GetMapping("/{billId}/download-url")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<String> getBillDownloadUrl(@PathVariable UUID billId) {
         return ResponseEntity.ok(billService.generateDownloadUrl(billId));
     }
+
 
     @GetMapping("/ledger")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")

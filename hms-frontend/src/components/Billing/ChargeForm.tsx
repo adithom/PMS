@@ -17,6 +17,17 @@ interface ChargeFormProps {
   onCancel: () => void;
 }
 
+const CHARGE_CODE_DEFAULT_TAX_RATES: Record<string, number> = {
+  ROOM_RENT: 5,
+  MEAL_PLAN: 5,
+  RESTAURANT: 5,
+  LAUNDRY: 18,
+  SPA: 18,
+  TRAVEL_DESK: 18,
+  SHOP: 18,
+  MISC: 18,
+};
+
 export default function ChargeForm({ propertyId, folioId, onSuccess, onCancel }: ChargeFormProps) {
   const [formData, setFormData] = useState<Partial<ChargeCreationDto>>({
     chargeCode: 'MISC',
@@ -24,7 +35,7 @@ export default function ChargeForm({ propertyId, folioId, onSuccess, onCancel }:
     description: '',
     unitPrice: 0,
     quantity: 1,
-    taxRate: 0, // e.g., 18 for 18%
+    taxRate: CHARGE_CODE_DEFAULT_TAX_RATES['MISC'],
     notes: ''
   });
   const [error, setError] = useState('');
@@ -32,10 +43,16 @@ export default function ChargeForm({ propertyId, folioId, onSuccess, onCancel }:
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'number' ? (value === '' ? undefined : parseFloat(value)) : value
-    }));
+    setFormData(prev => {
+      const updated: Partial<ChargeCreationDto> = {
+        ...prev,
+        [name]: type === 'number' ? (value === '' ? undefined : parseFloat(value)) : value,
+      };
+      if (name === 'chargeCode') {
+        updated.taxRate = CHARGE_CODE_DEFAULT_TAX_RATES[value] ?? 0;
+      }
+      return updated;
+    });
     setError('');
   };
 

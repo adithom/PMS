@@ -49,7 +49,8 @@ public class PdfGenerationService {
             throw new RuntimeException("Could not create directory for invoices", e);
         }
 
-        String fileName = "INV_" + billDto.invoiceNumber() + ".pdf";
+        String fileKey = billDto.invoiceNumber() != null ? billDto.invoiceNumber().replace("/", "") : "INVOICE";
+        String fileName = "INV_" + fileKey + ".pdf";
         String fullPath = storagePath + fileName;
 
         try (PDDocument document = new PDDocument()) {
@@ -78,18 +79,60 @@ public class PdfGenerationService {
                 // Logo missing — continue without it
             }
 
-            // --- 2. HEADER BAND (logo left | property title+address center | invoice block right) ---
-            // Property name: regular weight, centered on page (A4 center = 297.5)
+            // --- 2. HEADER BAND ---
             String propName = billDto.PropertyName() != null ? billDto.PropertyName() : "HOTEL INVOICE";
             drawTextCenter(contentStream, propName, 297.5f, 778, fontSerifSemiBold, 22);
-            // Address and GSTIN: Cormorant Garamond regular, smaller, centered under title
-            drawTextCenter(contentStream, billDto.PropertyAddress() != null ? billDto.PropertyAddress() : " ", 297.5f, 761, fontSerifRegular, 11);
-            drawTextCenter(contentStream, "GSTIN: " + (billDto.gstNumber() != null ? billDto.gstNumber() : "N/A"), 297.5f, 746, fontSerifRegular, 11);
 
-            // Invoice info block: right-flush at x=455, top aligned with logo top
+            // Address block — running y cursor, 16pt gaps
+            float addrY = 761f;
+            final float addrGap = 13f;
+            if (billDto.PropertyAddress() != null && !billDto.PropertyAddress().isBlank()) {
+                drawTextCenter(contentStream, billDto.PropertyAddress(), 297.5f, addrY, fontSerifRegular, 11);
+            }
+            StringBuilder line2Builder = new StringBuilder();
+            if (billDto.PropertyAddressLine2() != null && !billDto.PropertyAddressLine2().isBlank())
+                line2Builder.append(billDto.PropertyAddressLine2());
+            if (billDto.PropertyPostalCode() != null && !billDto.PropertyPostalCode().isBlank()) {
+                if (line2Builder.length() > 0) line2Builder.append(" - ");
+                line2Builder.append(billDto.PropertyPostalCode());
+            }
+            if (line2Builder.length() > 0) {
+                addrY -= addrGap;
+                drawTextCenter(contentStream, line2Builder.toString(), 297.5f, addrY, fontSerifRegular, 11);
+            }
+            StringBuilder stateLine = new StringBuilder();
+            if (billDto.stateName() != null && !billDto.stateName().isBlank()) {
+                stateLine.append("State: ").append(billDto.stateName());
+                if (billDto.stateCode() != null && !billDto.stateCode().isBlank())
+                    stateLine.append(", Code: ").append(billDto.stateCode());
+            }
+            if (stateLine.length() > 0) {
+                addrY -= addrGap;
+                drawTextCenter(contentStream, stateLine.toString(), 297.5f, addrY, fontSerifRegular, 11);
+            }
+            if (billDto.PropertyPhone() != null && !billDto.PropertyPhone().isBlank()) {
+                addrY -= addrGap;
+                drawTextCenter(contentStream, billDto.PropertyPhone(), 297.5f, addrY, fontSerifRegular, 11);
+            }
+
+            // PAN (top-left) and FSSAI (top-right) — 8pt margin from all edges, body font
+            if (billDto.pan() != null && !billDto.pan().isBlank())
+                drawText(contentStream, "PAN: " + billDto.pan(), 8, 826, fontRegular, 7);
+            if (billDto.fssaiNumber() != null && !billDto.fssaiNumber().isBlank())
+                drawTextRight(contentStream, "FSSAI: " + billDto.fssaiNumber(), 587, 826, fontRegular, 7);
+
+            // CIN (under PAN) and UDYAM (under FSSAI)
+            if (billDto.cin() != null && !billDto.cin().isBlank())
+                drawText(contentStream, "CIN: " + billDto.cin(), 8, 817, fontRegular, 7);
+            if (billDto.udyamRegistrationNo() != null && !billDto.udyamRegistrationNo().isBlank())
+                drawTextRight(contentStream, "UDYAM: " + billDto.udyamRegistrationNo(), 587, 817, fontRegular, 7);
+
+            // Invoice info block: 4 lines, 13pt spacing — TAX INVOICE / No / GSTIN / Date
             drawText(contentStream, "TAX INVOICE",                                     455, 788, fontBold, 12);
-            drawText(contentStream, billDto.invoiceNumber(),                            455, 767, fontRegular, 10);
-            drawText(contentStream, "Date: " + billDto.invoiceDate().format(DATE_FMT), 455, 747, fontRegular, 10);
+            drawText(contentStream, billDto.invoiceNumber(),                            455, 775, fontRegular, 10);
+            if (billDto.gstNumber() != null && !billDto.gstNumber().isBlank())
+                drawText(contentStream, "GSTIN: " + billDto.gstNumber(),               455, 762, fontRegular, 10);
+            drawText(contentStream, "Date: " + billDto.invoiceDate().format(DATE_FMT), 455, 749, fontRegular, 10);
 
             // --- 3. BILL TO (left col x=50 | right col x=455 under invoice block) ---
             drawText(contentStream, "Bill To:", 50, 685, fontBold, 12);
@@ -114,7 +157,7 @@ public class PdfGenerationService {
             drawText(contentStream, "Check-Out: " + (billDto.checkOut() != null ? billDto.checkOut().format(DATE_FMT) : "N/A"), 455, 640, fontRegular, 10);
 
             // --- 4. CHARGES TABLE ---
-            float yPosition = 555f;
+            float yPosition = 585f;
             float rowHeight = 20f;
             float margin    = 50f;
             float titleRowHeight = 30f;
@@ -123,7 +166,10 @@ public class PdfGenerationService {
 
             // Bill type title (above the table; vertical lines do NOT extend into this row)
             String billTitle = "Invoice";
-            try { billTitle = BillType.valueOf(billDto.category()).getDisplayLabel() + " Bill"; } catch (Exception ignored) {}
+            try {
+                BillType bt = BillType.valueOf(billDto.category());
+                billTitle = bt.getDisplayLabel() + " Bill";
+            } catch (Exception ignored) {}
             contentStream.setNonStrokingColor(new Color(240, 244, 248));
             contentStream.addRect(cols[0], yPosition - titleRowHeight, cols[7] - cols[0], titleRowHeight);
             contentStream.fill();
@@ -246,14 +292,24 @@ public class PdfGenerationService {
 
             boolean isAgentBilled = billDto.travelAgentName() != null && !billDto.travelAgentName().isBlank()
                     && billDto.balanceDue() != null && billDto.balanceDue().compareTo(BigDecimal.ZERO) == 0;
-            String[] labels = {"Subtotal", "Tax", "Grand Total", "Amount Paid", isAgentBilled ? "Billed to Agent" : "Balance Due"};
-            String[] values = {
-                    billDto.subtotal()   != null ? billDto.subtotal().setScale(2, RoundingMode.HALF_UP).toString()   : "0.00",
-                    billDto.totalTax()   != null ? billDto.totalTax().setScale(2, RoundingMode.HALF_UP).toString()   : "0.00",
-                    billDto.grandTotal() != null ? billDto.grandTotal().setScale(2, RoundingMode.HALF_UP).toString() : "0.00",
-                    billDto.amountPaid() != null ? billDto.amountPaid().setScale(2, RoundingMode.HALF_UP).toString() : "0.00",
-                    billDto.balanceDue() != null ? billDto.balanceDue().setScale(2, RoundingMode.HALF_UP).toString() : "0.00"
-            };
+            boolean hasDiscount = billDto.totalDiscount() != null
+                    && billDto.totalDiscount().compareTo(BigDecimal.ZERO) > 0;
+
+            java.util.List<String[]> totalRows = new java.util.ArrayList<>();
+            totalRows.add(new String[]{"Subtotal",
+                    billDto.subtotal()   != null ? billDto.subtotal().setScale(2, RoundingMode.HALF_UP).toString()   : "0.00"});
+            totalRows.add(new String[]{"Tax",
+                    billDto.totalTax()   != null ? billDto.totalTax().setScale(2, RoundingMode.HALF_UP).toString()   : "0.00"});
+            if (hasDiscount) {
+                totalRows.add(new String[]{"Discount",
+                        "-" + billDto.totalDiscount().setScale(2, RoundingMode.HALF_UP).toString()});
+            }
+            totalRows.add(new String[]{"Grand Total",
+                    billDto.grandTotal() != null ? billDto.grandTotal().setScale(2, RoundingMode.HALF_UP).toString() : "0.00"});
+            totalRows.add(new String[]{"Amount Paid",
+                    billDto.amountPaid() != null ? billDto.amountPaid().setScale(2, RoundingMode.HALF_UP).toString() : "0.00"});
+            totalRows.add(new String[]{isAgentBilled ? "Billed to Agent" : "Balance Due",
+                    billDto.balanceDue() != null ? billDto.balanceDue().setScale(2, RoundingMode.HALF_UP).toString() : "0.00"});
 
             // Top border of totals block
             contentStream.setLineWidth(0.5f);
@@ -261,7 +317,12 @@ public class PdfGenerationService {
             contentStream.lineTo(cols[7], yPosition);
             contentStream.stroke();
 
-            for (int i = 0; i < 5; i++) {
+            for (int i = 0; i < totalRows.size(); i++) {
+                String rowLabel = totalRows.get(i)[0];
+                String rowValue = totalRows.get(i)[1];
+                boolean isBoldRow = "Grand Total".equals(rowLabel) || "Balance Due".equals(rowLabel)
+                        || "Billed to Agent".equals(rowLabel);
+
                 if (yPosition < 150) {
                     contentStream.close();
                     PDPage newPage = new PDPage(PDRectangle.A4);
@@ -271,8 +332,7 @@ public class PdfGenerationService {
                     yPosition = 780;
                 }
 
-                // Light tint for Grand Total and Balance Due rows
-                if (i == 2 || i == 4) {
+                if (isBoldRow) {
                     contentStream.setNonStrokingColor(new Color(240, 244, 248));
                     contentStream.addRect(cols[0], yPosition - rowHeight, cols[7] - cols[0], rowHeight);
                     contentStream.fill();
@@ -283,15 +343,14 @@ public class PdfGenerationService {
                 contentStream.lineTo(cols[7], yPosition - rowHeight);
                 contentStream.stroke();
 
-                // Full-width box: left wall | label separator | right wall
                 float[] borderCols = {cols[0], cols[6], cols[7]};
                 drawVerticalLines(contentStream, borderCols, yPosition, yPosition - rowHeight);
 
-                PDFont f = (i == 2 || i == 4) ? fontBold : fontRegular;
-                int    s = (i == 2 || i == 4) ? 11 : 10;
+                PDFont f = isBoldRow ? fontBold : fontRegular;
+                int    s = isBoldRow ? 11 : 10;
 
-                drawTextRight(contentStream, labels[i], cols[6] - 5, yPosition - 14, fontBold, s);
-                drawTextRight(contentStream, values[i], cols[7] - 5, yPosition - 14, f, s);
+                drawTextRight(contentStream, rowLabel, cols[6] - 5, yPosition - 14, fontBold, s);
+                drawTextRight(contentStream, rowValue, cols[7] - 5, yPosition - 14, f, s);
 
                 yPosition -= rowHeight;
             }
@@ -300,18 +359,27 @@ public class PdfGenerationService {
             String footerLabel = isAgentBilled
                     ? "Billed to Agent: " + billDto.travelAgentName()
                     : "Balance Due (in words): " + convertToIndianCurrency(billDto.balanceDue());
-            drawText(contentStream, footerLabel, margin, yPosition - 35, fontBold, 10);
+            drawText(contentStream, footerLabel, margin, yPosition - 20, fontBold, 10);
 
+            if (billDto.notes() != null && !billDto.notes().isBlank()) {
+                drawText(contentStream, "Notes: " + billDto.notes(), margin, yPosition - 35, fontOblique, 10);
+            }
+
+            // Guest signature box
+            contentStream.setLineWidth(0.5f);
             contentStream.moveTo(margin, 130);
             contentStream.lineTo(545, 130);
             contentStream.stroke();
 
-            drawText(contentStream, "Thank you for choosing us!", 400, 110, fontBold, 10);
-            drawText(contentStream, "This is a computer generated Invoice.", margin, 110, fontOblique, 10);
+            // Left: computer generated notice
+            drawText(contentStream, "This is a computer generated Invoice.", margin, 115, fontOblique, 9);
 
-            if (billDto.notes() != null && !billDto.notes().isBlank()) {
-                drawText(contentStream, "Notes: " + billDto.notes(), margin, 95, fontOblique, 10);
-            }
+            // Right: guest signature line
+            float sigLineX = 380f;
+            contentStream.moveTo(sigLineX, 100);
+            contentStream.lineTo(545, 100);
+            contentStream.stroke();
+            drawTextCenter(contentStream, "Guest Signature", (sigLineX + 545) / 2, 90, fontRegular, 8);
 
             contentStream.close();
 

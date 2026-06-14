@@ -57,7 +57,7 @@ public class PosTicketController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('MANAGER', 'POS', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('MANAGER', 'POS')")
     public ResponseEntity<List<PosTicketDto>> getOpenTickets(@RequestParam UUID locationId) {
         return ResponseEntity.ok(ticketService.getOpenTickets(locationId));
     }
@@ -72,6 +72,18 @@ public class PosTicketController {
         OffsetDateTime fromDt = from.atStartOfDay(ist).toOffsetDateTime();
         OffsetDateTime toDt   = to.plusDays(1).atStartOfDay(ist).toOffsetDateTime();
         return ResponseEntity.ok(ticketService.getTicketHistory(locationId, fromDt, toDt));
+    }
+
+    @GetMapping("/booking/{bookingId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    public ResponseEntity<List<PosTicketHistoryDto>> getTicketsByBooking(@PathVariable UUID bookingId) {
+        return ResponseEntity.ok(ticketService.getTicketsByBookingId(bookingId));
+    }
+
+    @GetMapping("/{ticketId}/receipt-url")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    public ResponseEntity<String> getReceiptUrl(@PathVariable UUID ticketId) {
+        return ResponseEntity.ok(ticketService.getReceiptUrl(ticketId));
     }
 
     @GetMapping("/summary")

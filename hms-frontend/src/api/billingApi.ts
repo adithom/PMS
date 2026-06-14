@@ -28,7 +28,7 @@ export interface BillLedgerPageDto {
   grandTotalSum: number;
 }
 
-export type BillCategory = 'ROOM_RENT' | 'RESTAURANT' | 'SPA' | 'LAUNDRY' | 'TRAVEL_DESK' | 'SHOP' | 'MISC';
+export type BillCategory = 'ROOM_RENT' | 'ANCILLARY' | 'RESTAURANT' | 'SPA' | 'LAUNDRY' | 'TRAVEL_DESK' | 'SHOP' | 'MISC';
 
 export interface BillDto {
   id: string;
@@ -38,7 +38,14 @@ export interface BillDto {
   category?: BillCategory;
   PropertyName?: string;
   PropertyAddress?: string;
+  PropertyAddressLine2?: string;
   gstNumber?: string;
+  stateName?: string;
+  stateCode?: string;
+  cin?: string;
+  udyamRegistrationNo?: string;
+  pan?: string;
+  fssaiNumber?: string;
   invoiceNumber?: string;
   invoiceDate?: string;
   folioNumber?: string;
@@ -102,9 +109,10 @@ export interface GroupMultiBillDto {
 
 const billingApi = {
   // Standard Guest/Folio Bills
-  generateBills: async (folioId: string, guestGstNumber?: string): Promise<MultiBillDto> => {
+  generateBills: async (folioId: string, guestGstNumber?: string, splitAncillary = false): Promise<MultiBillDto> => {
     const params = new URLSearchParams();
     if (guestGstNumber) params.append('guestGstNumber', guestGstNumber);
+    if (splitAncillary) params.append('splitAncillary', 'true');
     return apiClient.post(`/bills/generate/${folioId}?${params.toString()}`);
   },
 

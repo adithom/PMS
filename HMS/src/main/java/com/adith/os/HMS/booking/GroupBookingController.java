@@ -2,6 +2,8 @@ package com.adith.os.HMS.booking;
 
 import com.adith.os.HMS.booking.dto.GroupBookingCreationDto;
 import com.adith.os.HMS.booking.dto.GroupBookingSummaryDto;
+import com.adith.os.HMS.booking.dto.RescheduleReservationDto;
+import com.adith.os.HMS.booking.dto.ReservationUpdateDto;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -32,7 +34,7 @@ public class GroupBookingController {
     // -------------------------------------------------------------------------
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<GroupBookingSummaryDto> createGroupBooking(
             @PathVariable UUID propertyId,
             @Valid @RequestBody GroupBookingCreationDto dto) {
@@ -45,14 +47,14 @@ public class GroupBookingController {
     // -------------------------------------------------------------------------
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK', 'AGENCY')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<List<GroupBookingSummaryDto>> getGroupReservations(
             @PathVariable UUID propertyId) {
         return ResponseEntity.ok(groupBookingService.getGroupReservationsByProperty(propertyId));
     }
 
     @GetMapping("/{reservationId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK', 'AGENCY')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<GroupBookingSummaryDto> getGroupReservation(
             @PathVariable UUID propertyId,
             @PathVariable UUID reservationId) {
@@ -60,11 +62,24 @@ public class GroupBookingController {
     }
 
     // -------------------------------------------------------------------------
+    // METADATA UPDATE
+    // -------------------------------------------------------------------------
+
+    @PatchMapping("/{reservationId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    public ResponseEntity<GroupBookingSummaryDto> updateReservation(
+            @PathVariable UUID propertyId,
+            @PathVariable UUID reservationId,
+            @Valid @RequestBody ReservationUpdateDto dto) {
+        return ResponseEntity.ok(groupBookingService.updateReservation(propertyId, reservationId, dto));
+    }
+
+    // -------------------------------------------------------------------------
     // BILLING OPERATIONS
     // -------------------------------------------------------------------------
 
     @PatchMapping("/{reservationId}/consolidate")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<GroupBookingSummaryDto> consolidateBilling(
             @PathVariable UUID propertyId,
             @PathVariable UUID reservationId) {
@@ -72,7 +87,7 @@ public class GroupBookingController {
     }
 
     @PatchMapping("/{reservationId}/separate")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<GroupBookingSummaryDto> separateBilling(
             @PathVariable UUID propertyId,
             @PathVariable UUID reservationId) {
@@ -84,7 +99,7 @@ public class GroupBookingController {
     // -------------------------------------------------------------------------
 
     @PostMapping("/{reservationId}/check-in-all")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<GroupBookingSummaryDto> checkInAll(
             @PathVariable UUID propertyId,
             @PathVariable UUID reservationId) {
@@ -92,7 +107,7 @@ public class GroupBookingController {
     }
 
     @PostMapping("/{reservationId}/bookings/{bookingId}/check-in")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<GroupBookingSummaryDto> checkInBooking(
             @PathVariable UUID propertyId,
             @PathVariable UUID reservationId,
@@ -101,7 +116,7 @@ public class GroupBookingController {
     }
 
     @PostMapping("/{reservationId}/bookings/{bookingId}/check-out")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<GroupBookingSummaryDto> checkOutBooking(
             @PathVariable UUID propertyId,
             @PathVariable UUID reservationId,
@@ -110,11 +125,24 @@ public class GroupBookingController {
     }
 
     // -------------------------------------------------------------------------
+    // RESCHEDULE
+    // -------------------------------------------------------------------------
+
+    @PatchMapping("/{reservationId}/reschedule")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    public ResponseEntity<GroupBookingSummaryDto> rescheduleReservation(
+            @PathVariable UUID propertyId,
+            @PathVariable UUID reservationId,
+            @Valid @RequestBody RescheduleReservationDto dto) {
+        return ResponseEntity.ok(groupBookingService.rescheduleReservation(propertyId, reservationId, dto));
+    }
+
+    // -------------------------------------------------------------------------
     // CANCEL
     // -------------------------------------------------------------------------
 
     @PostMapping("/{reservationId}/cancel")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<GroupBookingSummaryDto> cancelReservation(
             @PathVariable UUID propertyId,
             @PathVariable UUID reservationId) {

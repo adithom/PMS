@@ -17,11 +17,13 @@ public record GroupBookingSummaryDto(
 
         // --- Reservation info ---
         UUID reservationId,
+        String reservationNumber,
         String groupReference,
         UUID organizerGuestId,
         String organizerGuestName,
         LocalDate checkIn,
         LocalDate checkOut,
+        String specialRequests,
         BookingStatus overallStatus,    // Derived: worst-case status across bookings
         int totalRooms,
         BigDecimal totalGroupPrice,     // Sum of all member booking totalPrices
@@ -46,11 +48,15 @@ public record GroupBookingSummaryDto(
             String unitName,
             String roomNumber,          // null if not yet assigned
             BookingStatus status,
+            Integer adults,
+            Integer children,
             BigDecimal totalPrice,
             BigDecimal balanceDue,
             UUID folioId,
             String folioNumber,
             String specialRequests,
-            Boolean isTwinBed
+            Boolean isTwinBed,
+            BigDecimal unitBaseRate,            // baseRate of first active room in unit — for estimate
+            BigDecimal mealPlanPricePerNight    // from booking.mealPlanPricePerNight
     ) {}
 }

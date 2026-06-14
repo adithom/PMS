@@ -1,14 +1,19 @@
 import api from './fetchClient';
-import type { TravelAgent } from '../types';
+import type { TravelAgent, ContactPerson } from '../types';
 
 export interface TravelAgentCreationDto {
   name: string;
-  contactPerson?: string;
   email?: string;
   phone?: string;
-  iataCode?: string;
-  commissionRate?: number;
+  gstin?: string;
   address?: string;
+}
+
+export interface ContactPersonCreationDto {
+  name: string;
+  phone?: string;
+  email?: string;
+  designation?: string;
 }
 
 const travelAgentApi = {
@@ -21,9 +26,6 @@ const travelAgentApi = {
   getById: (id: string) =>
     api.get<TravelAgent>(`/travel-agents/${id}`),
 
-  getByIataCode: (iataCode: string) =>
-    api.get<TravelAgent>(`/travel-agents/iata/${iataCode}`),
-
   create: (data: TravelAgentCreationDto) =>
     api.post<TravelAgent>('/travel-agents', data),
 
@@ -32,6 +34,15 @@ const travelAgentApi = {
 
   delete: (id: string) =>
     api.delete<void>(`/travel-agents/${id}`),
+
+  createContact: (agentId: string, data: ContactPersonCreationDto) =>
+    api.post<ContactPerson>(`/travel-agents/${agentId}/contacts`, data),
+
+  updateContact: (agentId: string, contactId: string, data: ContactPersonCreationDto) =>
+    api.put<ContactPerson>(`/travel-agents/${agentId}/contacts/${contactId}`, data),
+
+  deleteContact: (agentId: string, contactId: string) =>
+    api.delete<void>(`/travel-agents/${agentId}/contacts/${contactId}`),
 };
 
 export default travelAgentApi;

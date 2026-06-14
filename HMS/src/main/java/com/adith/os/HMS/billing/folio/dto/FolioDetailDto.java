@@ -1,5 +1,6 @@
 package com.adith.os.HMS.billing.folio.dto;
 
+import com.adith.os.HMS.billing.folio.DiscountType;
 import com.adith.os.HMS.billing.folio.FolioStatus;
 import com.adith.os.HMS.billing.payment.dto.PaymentDto;
 
@@ -31,5 +32,11 @@ public record FolioDetailDto(
         List<ChargeDto> charges,
         List<PaymentDto> payments,
         UUID travelAgentId,
-        String travelAgentName
+        String travelAgentName,
+        DiscountType roomDiscountType,
+        BigDecimal roomDiscountValue,
+        BigDecimal roomDiscountAmount,
+        DiscountType ancillaryDiscountType,
+        BigDecimal ancillaryDiscountValue,
+        BigDecimal ancillaryDiscountAmount
 ) {}

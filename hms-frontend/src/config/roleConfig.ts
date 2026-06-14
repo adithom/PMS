@@ -13,13 +13,13 @@ export const routes: RouteConfig[] = [
     path: '/bookings',
     label: 'Bookings',
     component: 'Bookings',
-    allowedRoles: ['ADMIN', 'MANAGER', 'FRONTDESK', 'AGENCY']
+    allowedRoles: ['ADMIN', 'MANAGER']
   },
   {
     path: '/reservations',
     label: 'Reservations',
     component: 'Reservations',
-    allowedRoles: ['ADMIN', 'MANAGER', 'FRONTDESK', 'AGENCY']
+    allowedRoles: ['ADMIN', 'MANAGER']
   },
   {
     path: '/rooms',
@@ -31,7 +31,7 @@ export const routes: RouteConfig[] = [
     path: '/guests',
     label: 'Guests',
     component: 'Guests',
-    allowedRoles: ['ADMIN', 'MANAGER', 'FRONTDESK']
+    allowedRoles: ['ADMIN', 'MANAGER']
   },
   {
     path: '/pos',
@@ -49,13 +49,13 @@ export const routes: RouteConfig[] = [
     path: '/billing',
     label: 'Billing',
     component: 'Billing',
-    allowedRoles: ['ADMIN', 'MANAGER', 'FRONTDESK']
+    allowedRoles: ['ADMIN', 'MANAGER']
   },
   {
     path: '/reports',
     label: 'Reports',
     component: 'Reports',
-    allowedRoles: ['ADMIN', 'MANAGER', 'FRONTDESK']
+    allowedRoles: ['ADMIN', 'MANAGER']
   },
   {
     path: '/console',

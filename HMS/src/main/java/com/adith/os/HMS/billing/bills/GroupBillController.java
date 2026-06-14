@@ -28,7 +28,7 @@ public class GroupBillController {
     }
 
     @PostMapping("/generate")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<GroupMultiBillDto> generateGroupBills(
             @PathVariable UUID propertyId,
             @PathVariable UUID reservationId,
@@ -40,7 +40,7 @@ public class GroupBillController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<List<GroupBill>> getGroupBills(
             @PathVariable UUID propertyId,
             @PathVariable UUID reservationId) {
@@ -49,7 +49,7 @@ public class GroupBillController {
     }
 
     @GetMapping("/{groupBillId}/download-url")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<String> getGroupBillDownloadUrl(
             @PathVariable UUID propertyId,
             @PathVariable UUID reservationId,

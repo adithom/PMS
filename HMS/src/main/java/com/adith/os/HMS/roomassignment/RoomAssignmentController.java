@@ -25,7 +25,7 @@ public class RoomAssignmentController {
      * POST /api/properties/{propertyId}/bookings/{bookingId}/shift-room
      */
     @PostMapping("/shift-room")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<List<RoomAssignmentDto>> shiftRoom(
             @PathVariable UUID propertyId,
             @PathVariable UUID bookingId,
@@ -40,7 +40,7 @@ public class RoomAssignmentController {
      * GET /api/properties/{propertyId}/bookings/{bookingId}/room-assignments
      */
     @GetMapping("/room-assignments")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK', 'AGENCY')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<List<RoomAssignmentDto>> getRoomAssignments(
             @PathVariable UUID propertyId,
             @PathVariable UUID bookingId) {

@@ -13,6 +13,7 @@ import com.adith.os.HMS.billing.pos.dto.PosTicketDto;
 import com.adith.os.HMS.billing.pos.dto.PosTicketHistoryDto;
 import com.adith.os.HMS.booking.Booking;
 import com.adith.os.HMS.booking.BookingRepository;
+import com.adith.os.HMS.storage.R2StorageService;
 import com.adith.os.HMS.property.mealplan.MealPlanType;
 import com.adith.os.HMS.roomassignment.RoomAssignment;
 import com.adith.os.HMS.roomassignment.RoomAssignmentStatus;
@@ -40,6 +41,7 @@ public class PosTicketService {
     private final FolioService folioService;
     private final PosService posService;
     private final PosReceiptService receiptService;
+    private final R2StorageService r2StorageService;
 
     public PosTicketService(PosTicketRepository ticketRepository,
                             PosOrderRepository orderRepository,
@@ -48,7 +50,8 @@ public class PosTicketService {
                             BookingRepository bookingRepository,
                             FolioService folioService,
                             PosService posService,
-                            PosReceiptService receiptService) {
+                            PosReceiptService receiptService,
+                            R2StorageService r2StorageService) {
         this.ticketRepository = ticketRepository;
         this.orderRepository  = orderRepository;
         this.locationRepository = locationRepository;
@@ -57,6 +60,7 @@ public class PosTicketService {
         this.folioService       = folioService;
         this.posService         = posService;
         this.receiptService     = receiptService;
+        this.r2StorageService   = r2StorageService;
     }
 
     // ──────────────── Open ticket ────────────────
@@ -234,9 +238,11 @@ public class PosTicketService {
             String invoiceNumber = receiptService.getNextInvoiceNumber(ticket.getPosLocation());
             ticket.setInvoiceNumber(invoiceNumber);
 
-            BigDecimal ticketTotal = orders.stream()
-                    .map(PosOrder::getTotalAmount)
+            BigDecimal ticketSubtotal = orders.stream()
+                    .map(PosOrder::getSubtotal)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            BigDecimal locationTaxRate = ticket.getPosLocation().getDefaultTaxRate();
 
             UUID folioId = resolveFolioId(ticket);
             UUID propertyId = ticket.getProperty().getId();
@@ -248,9 +254,9 @@ public class PosTicketService {
                     LocalDate.now(),
                     chargeCode,
                     locationName + " - Receipt #" + invoiceNumber,
-                    ticketTotal,
+                    ticketSubtotal,
                     BigDecimal.ONE,
-                    BigDecimal.ZERO,
+                    locationTaxRate,
                     BigDecimal.ZERO,
                     "POS_TICKET",
                     ticket.getId(),
@@ -340,9 +346,11 @@ public class PosTicketService {
                             null, null))
                     .collect(Collectors.toList());
 
+            String locName = ticket.getPosLocation() != null ? ticket.getPosLocation().getName() : null;
             return new PosTicketHistoryDto(
                     ticket.getId(),
                     ticket.getInvoiceNumber(),
+                    locName,
                     ticket.getGuestName(),
                     ticket.getRoomNumber(),
                     ticket.getMealType(),
@@ -369,6 +377,56 @@ public class PosTicketService {
                            ? revenue.divide(BigDecimal.valueOf(count), 2, RoundingMode.HALF_UP)
                            : BigDecimal.ZERO;
         return new OrderSummaryDto(count, revenue, avg);
+    }
+
+    // ──────────────── Booking-linked ticket queries ────────────────
+
+    public List<PosTicketHistoryDto> getTicketsByBookingId(UUID bookingId) {
+        return ticketRepository.findByBookingIdAndStatus(bookingId, PosTicketStatus.CLOSED)
+                .stream()
+                .map(ticket -> {
+                    List<PosOrder> orders = orderRepository.findByTicketIdWithItems(ticket.getId());
+                    BigDecimal subtotal    = orders.stream().map(PosOrder::getSubtotal).reduce(BigDecimal.ZERO, BigDecimal::add);
+                    BigDecimal taxAmount   = orders.stream().map(PosOrder::getTaxAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+                    BigDecimal totalAmount = orders.stream().map(PosOrder::getTotalAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+                    List<PosOrderItemDto> items = orders.stream()
+                            .flatMap(o -> o.getItems().stream())
+                            .map(i -> new PosOrderItemDto(
+                                    i.getId(), i.getPosProduct().getId(), i.getItemName(),
+                                    i.getQuantity(), i.getUnitPrice(), i.getSubtotal(),
+                                    i.getTaxRate(), i.getTaxAmount(), i.getTotalAmount(),
+                                    null, null))
+                            .collect(Collectors.toList());
+                    String locName = ticket.getPosLocation() != null ? ticket.getPosLocation().getName() : null;
+                    return new PosTicketHistoryDto(
+                            ticket.getId(),
+                            ticket.getInvoiceNumber(),
+                            locName,
+                            ticket.getGuestName(),
+                            ticket.getRoomNumber(),
+                            ticket.getMealType(),
+                            ticket.isMealPlanCovered(),
+                            ticket.getClosedAt(),
+                            subtotal,
+                            taxAmount,
+                            totalAmount,
+                            ticket.getCreatedBy(),
+                            items,
+                            ticket.getPaymentMethod(),
+                            ticket.getTransactionReference()
+                    );
+                })
+                .collect(Collectors.toList());
+    }
+
+    public String getReceiptUrl(UUID ticketId) {
+        PosTicket ticket = ticketRepository.findById(ticketId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ticket not found"));
+        if (ticket.getReceiptUrl() == null || ticket.getReceiptUrl().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No receipt available for this ticket");
+        }
+        String fileName = "REC_" + (ticket.getInvoiceNumber() != null ? ticket.getInvoiceNumber() : ticket.getTicketNumber()) + ".pdf";
+        return r2StorageService.generatePresignedDownloadUrl(ticket.getReceiptUrl(), fileName);
     }
 
     // ──────────────── DTO mapper ────────────────

@@ -19,7 +19,12 @@ public record GroupMultiBillDto(List<GroupBillSectionDto> bills) {
 
             String propertyName,
             String propertyAddress,
+            String propertyAddressLine2,
+            String propertyPostalCode,
+            String propertyPhone,
             String propertyGstNumber,
+            String propertyStateName,
+            String propertyStateCode,
 
             UUID parentBookingId,
             String groupReference,
@@ -53,7 +58,7 @@ public record GroupMultiBillDto(List<GroupBillSectionDto> bills) {
         public GroupBillSectionDto withPdfDownloadUrl(String url) {
             return new GroupBillSectionDto(
                     invoiceNumber, invoiceDate, category,
-                    propertyName, propertyAddress, propertyGstNumber,
+                    propertyName, propertyAddress, propertyAddressLine2, propertyPostalCode, propertyPhone, propertyGstNumber, propertyStateName, propertyStateCode,
                     parentBookingId, groupReference,
                     organizerGuestName, organizerGuestPhone, organizerGuestEmail, organizerGuestGstNumber,
                     checkIn, checkOut, currency, generatedAt,

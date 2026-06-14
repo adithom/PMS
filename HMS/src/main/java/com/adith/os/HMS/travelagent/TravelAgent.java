@@ -4,8 +4,9 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 
-import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -20,19 +21,12 @@ public class TravelAgent {
     @Column(nullable = false)
     private String name;
 
-    @Column(name = "contact_person")
-    private String contactPerson;
-
     @Email
     private String email;
 
     private String phone;
 
-    @Column(name = "iata_code", length = 20, unique = true)
-    private String iataCode;
-
-    @Column(name = "commission_rate", precision = 5, scale = 2)
-    private BigDecimal commissionRate;
+    private String gstin;
 
     @Column(nullable = false, columnDefinition = "boolean default true")
     private boolean active = true;
@@ -44,6 +38,9 @@ public class TravelAgent {
 
     @Column(name = "updated_at")
     private OffsetDateTime updatedAt;
+
+    @OneToMany(mappedBy = "travelAgent", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<ContactPerson> contactPersons = new ArrayList<>();
 
     @PrePersist
     protected void onCreate() {
@@ -61,20 +58,14 @@ public class TravelAgent {
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
 
-    public String getContactPerson() { return contactPerson; }
-    public void setContactPerson(String contactPerson) { this.contactPerson = contactPerson; }
-
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }
 
     public String getPhone() { return phone; }
     public void setPhone(String phone) { this.phone = phone; }
 
-    public String getIataCode() { return iataCode; }
-    public void setIataCode(String iataCode) { this.iataCode = iataCode; }
-
-    public BigDecimal getCommissionRate() { return commissionRate; }
-    public void setCommissionRate(BigDecimal commissionRate) { this.commissionRate = commissionRate; }
+    public String getGstin() { return gstin; }
+    public void setGstin(String gstin) { this.gstin = gstin; }
 
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }
@@ -87,4 +78,7 @@ public class TravelAgent {
 
     public OffsetDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(OffsetDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    public List<ContactPerson> getContactPersons() { return contactPersons; }
+    public void setContactPersons(List<ContactPerson> contactPersons) { this.contactPersons = contactPersons; }
 }

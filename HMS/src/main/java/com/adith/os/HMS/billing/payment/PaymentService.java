@@ -67,10 +67,6 @@ public class PaymentService {
         payment.setPaymentStatus(PaymentStatus.COMPLETED);
         payment.setProcessedBy(username != null ? username : "SYSTEM");
 
-        if (dto.targetCategory() != null) {
-            payment.setTargetCategory(dto.targetCategory());
-        }
-
         // Folio payments tag the booking they settle. Reservation-level (master) payments
         // come through recordReservationPayment().
         com.adith.os.HMS.booking.Booking b = folio.getBooking();

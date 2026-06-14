@@ -300,4 +300,12 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
     List<Booking> findByPropertyIdAndTravelAgentIdOrderByCheckInDesc(
             @Param("propertyId") UUID propertyId,
             @Param("travelAgentId") UUID travelAgentId);
+
+    @Query("""
+        SELECT b FROM Booking b
+        WHERE b.guest.id = :guestId
+           OR :guestId IN (SELECT ag.id FROM b.additionalGuests ag)
+        ORDER BY b.checkIn DESC
+    """)
+    List<Booking> findAllBookingsForGuest(@Param("guestId") UUID guestId);
 }

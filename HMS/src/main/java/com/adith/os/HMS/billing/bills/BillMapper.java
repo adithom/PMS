@@ -2,6 +2,7 @@ package com.adith.os.HMS.billing.bills;
 
 import com.adith.os.HMS.billing.folio.ChargeCategory;
 import com.adith.os.HMS.billing.folio.Folio;
+import com.adith.os.HMS.billing.folio.FolioDiscountCalculator;
 import com.adith.os.HMS.billing.folio.dto.ChargeDto;
 import com.adith.os.HMS.billing.bills.dto.BillBatchRowDto;
 import com.adith.os.HMS.billing.bills.dto.BillDto;
@@ -67,7 +68,7 @@ public class BillMapper {
         List<ChargeDto> validCharges = charges.stream()
                 .map(c -> c.isVoided()
                         ? new ChargeDto(c.id(), c.chargeDate(), c.postingDate(), c.chargeCode(),
-                                c.description() + " [VOID]", c.quantity(), c.unitPrice(),
+                                c.description() + " [VOID]", c.referenceType(), c.quantity(), c.unitPrice(),
                                 BigDecimal.ZERO, c.taxRate(), BigDecimal.ZERO,
                                 BigDecimal.ZERO, BigDecimal.ZERO,
                                 true, c.voidReason(), c.notes())
@@ -75,6 +76,10 @@ public class BillMapper {
                 .toList();
 
         var totals = BillTotalCalculator.calculate(validCharges);
+
+        // Folio-level discount for this bill type
+        BigDecimal folioDiscount = FolioDiscountCalculator.computeDiscountForBill(
+                folio, bill.getBillType(), totals.total());
 
         Guest guest = folio.getGuest();
         Property property = folio.getProperty();
@@ -95,44 +100,45 @@ public class BillMapper {
 
         // --- DYNAMIC PAYMENT & BALANCE CALCULATIONS ---
         // Payments are queried by bookingId (the folio's booking) — not via folio.payments.
-        // Map legacy ChargeCategory targeting onto BillType for payment-to-bill matching.
+        // Main bill absorbs payments up to its total; remainder flows to the ancillary bill.
         List<Payment> bookingPayments = booking != null
                 ? paymentRepository.findByBookingId(booking.getId())
                 : List.of();
 
-        BigDecimal categoryAmountPaid = bookingPayments.stream()
+        BigDecimal totalPaid = bookingPayments.stream()
                 .filter(p -> p.getPaymentStatus() == PaymentStatus.COMPLETED || p.getPaymentStatus() == PaymentStatus.REFUNDED)
-                .filter(p -> {
-                    ChargeCategory t = p.getTargetCategory();
-                    if (t == null) return true;
-                    if (bill.getBillType() == BillType.ROOM_RENT)
-                        return t == ChargeCategory.ROOM_RENT || t == ChargeCategory.MEAL_PLAN;
-                    return t == ChargeCategory.ANCILLARY;
-                })
                 .map(Payment::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        BigDecimal categoryRefunds = bookingPayments.stream()
+        BigDecimal totalRefunds = bookingPayments.stream()
                 .filter(p -> p.getPaymentStatus() == PaymentStatus.COMPLETED || p.getPaymentStatus() == PaymentStatus.REFUNDED)
-                .filter(p -> {
-                    ChargeCategory t = p.getTargetCategory();
-                    if (t == null) return true;
-                    if (bill.getBillType() == BillType.ROOM_RENT)
-                        return t == ChargeCategory.ROOM_RENT || t == ChargeCategory.MEAL_PLAN;
-                    return t == ChargeCategory.ANCILLARY;
-                })
                 .map(p -> p.getRefundedAmount() != null ? p.getRefundedAmount() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        BigDecimal finalAmountPaid = categoryAmountPaid.subtract(categoryRefunds);
+        BigDecimal totalNetPaid = totalPaid.subtract(totalRefunds);
+
+        BigDecimal grandTotal = totals.total().subtract(folioDiscount).max(BigDecimal.ZERO);
+
+        BigDecimal finalAmountPaid;
+        if (bill.getBillType() == BillType.ROOM_RENT) {
+            finalAmountPaid = totalNetPaid.min(grandTotal);
+        } else {
+            BigDecimal roomRentChargesTotal = folio.getCharges().stream()
+                    .filter(c -> !c.isVoided())
+                    .filter(c -> c.getChargeCode().getCategory() == ChargeCategory.ROOM_RENT
+                              || c.getChargeCode().getCategory() == ChargeCategory.MEAL_PLAN)
+                    .map(c -> c.getTotalAmount())
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal roomFolioDiscount = FolioDiscountCalculator.computeRoomDiscountAmount(folio);
+            BigDecimal effectiveRoomTotal = roomRentChargesTotal.subtract(roomFolioDiscount).max(BigDecimal.ZERO);
+            finalAmountPaid = totalNetPaid.subtract(effectiveRoomTotal).max(BigDecimal.ZERO);
+        }
 
         // Apply the booking's share of reservation-level payments (master credit) on the
         // designated bill (typically ROOM_RENT, the first bill in a multi-bill batch).
         if (appliedMasterCredit != null && appliedMasterCredit.compareTo(BigDecimal.ZERO) > 0) {
             finalAmountPaid = finalAmountPaid.add(appliedMasterCredit);
         }
-
-        BigDecimal grandTotal = totals.total();
 
         // .max(BigDecimal.ZERO) so overpayments show 0.00 instead of negative.
         BigDecimal balanceDue = grandTotal.subtract(finalAmountPaid).max(BigDecimal.ZERO);
@@ -146,7 +152,16 @@ public class BillMapper {
 
                 property.getName(),
                 property.getAddress(),
+                property.getAddressLine2(),
+                property.getPostalCode(),
+                property.getPhone(),
                 property.getGstNumber(),
+                property.getStateName(),
+                property.getStateCode(),
+                property.getCin(),
+                property.getUdyamRegistrationNo(),
+                property.getPan(),
+                property.getFssaiNumber(),
 
                 bill.getInvoiceNumber(),
                 invoiceDate,
@@ -165,7 +180,7 @@ public class BillMapper {
 
                 totals.subtotal(),
                 totals.tax(),
-                totals.discount(),
+                totals.discount().add(folioDiscount),
                 grandTotal,
 
                 finalAmountPaid,
@@ -252,7 +267,16 @@ public class BillMapper {
 
                 property.getName(),
                 property.getAddress(),
+                property.getAddressLine2(),
+                property.getPostalCode(),
+                property.getPhone(),
                 property.getGstNumber(),
+                property.getStateName(),
+                property.getStateCode(),
+                property.getCin(),
+                property.getUdyamRegistrationNo(),
+                property.getPan(),
+                property.getFssaiNumber(),
 
                 bill.getInvoiceNumber(),
                 invoiceDate,

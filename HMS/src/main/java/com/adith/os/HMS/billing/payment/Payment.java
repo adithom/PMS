@@ -1,6 +1,5 @@
 package com.adith.os.HMS.billing.payment;
 
-import com.adith.os.HMS.billing.folio.ChargeCategory;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -47,10 +46,6 @@ public class Payment {
     @Enumerated(EnumType.STRING)
     @Column(name = "payment_status", nullable = false)
     private PaymentStatus paymentStatus = PaymentStatus.COMPLETED;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "target_category")
-    private com.adith.os.HMS.billing.folio.ChargeCategory targetCategory;
 
     // Card/Digital payment details
     @Column(name = "transaction_id", length = 100)
@@ -420,14 +415,6 @@ public class Payment {
 
     public void setRefundReason(String refundReason) {
         this.refundReason = refundReason;
-    }
-
-    public ChargeCategory getTargetCategory() {
-        return targetCategory;
-    }
-
-    public void setTargetCategory(ChargeCategory targetCategory) {
-        this.targetCategory = targetCategory;
     }
 
     @Override

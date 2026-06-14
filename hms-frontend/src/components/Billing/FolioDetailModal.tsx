@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { fmtDateTime } from '../../utils/dateHelpers';
-import { X, ArrowRightLeft, FileText, Printer } from 'lucide-react';
+import { X, ArrowRightLeft, FileText, Printer, Pencil, Trash2 } from 'lucide-react';
 import folioApi from '../../api/folioApi';
-import type { FolioDetailDto, ChargeDto } from '../../api/folioApi';
+import type { FolioDetailDto, ChargeDto, ChargeUpdateDto, DiscountBillType, DiscountType } from '../../api/folioApi';
 import billingApi from '../../api/billingApi';
 import type { BillDto } from '../../api/billingApi';
 import { triggerPresignedDownload } from '../../utils/downloadUtils';
@@ -40,9 +40,26 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
   const [bills, setBills] = useState<BillDto[]>([]);
   const [downloadingBillId, setDownloadingBillId] = useState<string | null>(null);
   const [isGeneratingBill, setIsGeneratingBill] = useState(false);
+  const [showBillOptions, setShowBillOptions] = useState(false);
+  const [billOptGstNumber, setBillOptGstNumber] = useState('');
+  const [billOptSplitAncillary, setBillOptSplitAncillary] = useState(false);
 
   // Action states
   const [isProcessingId, setIsProcessingId] = useState<string | null>(null);
+
+  // Inline charge editing
+  const [editingChargeId, setEditingChargeId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<{ description: string; finalPrice: number; quantity: number; taxRate: number }>(
+    { description: '', finalPrice: 0, quantity: 1, taxRate: 0 }
+  );
+
+  // Discount form state
+  const [showDiscountForm, setShowDiscountForm] = useState(false);
+  const [discountTarget, setDiscountTarget] = useState<DiscountBillType>('room');
+  const [discountType, setDiscountType] = useState<DiscountType>('PERCENTAGE');
+  const [discountValue, setDiscountValue] = useState('');
+  const [discountSubmitting, setDiscountSubmitting] = useState(false);
+  const [discountError, setDiscountError] = useState<string | null>(null);
 
   // Sub-modal states
   const [showAddCharge, setShowAddCharge] = useState(false);
@@ -78,10 +95,10 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
   };
 
   const handleGenerateInvoice = async () => {
-    const gstNumber = window.prompt('Enter guest GST number (optional, leave blank to skip):') ?? '';
     setIsGeneratingBill(true);
+    setShowBillOptions(false);
     try {
-      const result = await billingApi.generateBills(folioId, gstNumber || undefined);
+      const result = await billingApi.generateBills(folioId, billOptGstNumber || undefined, billOptSplitAncillary);
       const withUrl = result.bills.filter(b => b.pdfDownloadUrl);
       if (withUrl.length === 0) {
         alert('Bill generated but PDF upload unavailable. Contact admin.');
@@ -123,6 +140,118 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
       setIsProcessingId(null);
     }
   };
+
+  const hasActiveCumulativeBill = useMemo(
+    () => bills.some(b => !b.isVoided && (b.category === 'ROOM_RENT' || b.category === 'ANCILLARY')),
+    [bills]
+  );
+
+  const isChargeEditable = (charge: ChargeDto) =>
+    !charge.isVoided &&
+    charge.referenceType !== 'POS_TICKET' &&
+    folio?.status === 'OPEN' &&
+    !hasActiveCumulativeBill;
+
+  const startEditCharge = (charge: ChargeDto) => {
+    setEditingChargeId(charge.id);
+    setEditForm({
+      description: charge.description ?? '',
+      finalPrice: charge.totalAmount ?? 0,
+      quantity: charge.quantity ?? 1,
+      taxRate: charge.taxRate ?? 0,
+    });
+  };
+
+  const handleSaveEdit = async (charge: ChargeDto) => {
+    setIsProcessingId(charge.id);
+    try {
+      const qty = editForm.quantity || 1;
+      const exTaxTotal = editForm.finalPrice / (1 + editForm.taxRate / 100);
+      const unitPrice = exTaxTotal / qty;
+      await folioApi.updateCharge(propertyId, folioId, charge.id, {
+        description: editForm.description,
+        unitPrice,
+        quantity: qty,
+        taxRate: editForm.taxRate,
+      });
+      setEditingChargeId(null);
+      await loadFolio();
+    } catch (err: any) {
+      alert(err.message || 'Failed to update charge.');
+    } finally {
+      setIsProcessingId(null);
+    }
+  };
+
+  const openDiscountForm = (target: DiscountBillType) => {
+    const existing = target === 'room'
+      ? { type: folio?.roomDiscountType, value: folio?.roomDiscountValue }
+      : { type: folio?.ancillaryDiscountType, value: folio?.ancillaryDiscountValue };
+    setDiscountTarget(target);
+    setDiscountType(existing.type ?? 'PERCENTAGE');
+    setDiscountValue(existing.value != null ? String(existing.value) : '');
+    setDiscountError(null);
+    setShowDiscountForm(true);
+  };
+
+  const handleSaveDiscount = async () => {
+    const num = parseFloat(discountValue);
+    if (!discountValue || isNaN(num) || num <= 0) {
+      setDiscountError('Enter a positive number.');
+      return;
+    }
+    if (discountType === 'PERCENTAGE' && num > 100) {
+      setDiscountError('Percentage cannot exceed 100.');
+      return;
+    }
+    setDiscountSubmitting(true);
+    setDiscountError(null);
+    try {
+      const updated = await folioApi.setDiscount(propertyId, folioId, discountTarget, {
+        discountType,
+        value: num,
+      });
+      setFolio(prev => prev ? { ...prev, ...updated } : prev);
+      setShowDiscountForm(false);
+    } catch (err: any) {
+      setDiscountError(err.message || 'Failed to save discount.');
+    } finally {
+      setDiscountSubmitting(false);
+    }
+  };
+
+  const handleDeleteDiscount = async (target: DiscountBillType) => {
+    if (!window.confirm('Remove this discount?')) return;
+    try {
+      const updated = await folioApi.deleteDiscount(propertyId, folioId, target);
+      setFolio(prev => prev ? { ...prev, ...updated } : prev);
+    } catch (err: any) {
+      alert(err.message || 'Failed to remove discount.');
+    }
+  };
+
+  // Charge totals for discount live preview
+  const roomChargesTotal = useMemo(() => {
+    if (!folio?.charges) return 0;
+    return folio.charges
+      .filter(c => !c.isVoided && (c.chargeCode === 'ROOM_RENT' || c.chargeCode === 'MEAL_PLAN'))
+      .reduce((s, c) => s + (c.totalAmount ?? 0), 0);
+  }, [folio?.charges]);
+
+  const ancillaryChargesTotal = useMemo(() => {
+    if (!folio?.charges) return 0;
+    return folio.charges
+      .filter(c => !c.isVoided && c.chargeCode !== 'ROOM_RENT' && c.chargeCode !== 'MEAL_PLAN')
+      .reduce((s, c) => s + (c.totalAmount ?? 0), 0);
+  }, [folio?.charges]);
+
+  const discountPreviewAmount = useMemo(() => {
+    const num = parseFloat(discountValue);
+    if (!discountValue || isNaN(num) || num <= 0) return null;
+    const base = discountTarget === 'room' ? roomChargesTotal : ancillaryChargesTotal;
+    if (discountType === 'FLAT') return Math.min(num, base);
+    return (base * num) / 100;
+  }, [discountValue, discountType, discountTarget, roomChargesTotal, ancillaryChargesTotal]);
 
   // Group charges by category in display order; skip empty categories
   const categorizedCharges = useMemo(() => {
@@ -230,6 +359,81 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
                         <tbody className="divide-y divide-slate-100">
                           {category.charges.map(charge => {
                             const dateStr = fmtDateTime(charge.postingDate ?? charge.chargeDate);
+                            const isEditing = editingChargeId === charge.id;
+
+                            if (isEditing) {
+                              return (
+                                <tr key={charge.id} className="bg-indigo-50/60">
+                                  <td className="px-4 py-3 text-xs text-slate-500">{dateStr}</td>
+                                  <td className="px-4 py-3 space-y-1.5">
+                                    <input
+                                      type="text"
+                                      value={editForm.description}
+                                      onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
+                                      className="w-full rounded border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                                      placeholder="Description"
+                                    />
+                                    <div className="flex gap-2">
+                                      <div className="flex-1">
+                                        <p className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">Final Price (incl. tax)</p>
+                                        <input
+                                          type="number"
+                                          min="0.01"
+                                          step="0.01"
+                                          value={editForm.finalPrice}
+                                          onChange={e => setEditForm(f => ({ ...f, finalPrice: parseFloat(e.target.value) || 0 }))}
+                                          className="w-full rounded border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                                        />
+                                      </div>
+                                      <div className="w-20">
+                                        <p className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">Qty</p>
+                                        <input
+                                          type="number"
+                                          min="0.01"
+                                          step="0.01"
+                                          value={editForm.quantity}
+                                          onChange={e => setEditForm(f => ({ ...f, quantity: parseFloat(e.target.value) || 1 }))}
+                                          className="w-full rounded border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                                        />
+                                      </div>
+                                      <div className="w-20">
+                                        <p className="text-[10px] font-bold uppercase text-slate-400 mb-0.5">Tax %</p>
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          step="0.01"
+                                          value={editForm.taxRate}
+                                          onChange={e => setEditForm(f => ({ ...f, taxRate: parseFloat(e.target.value) || 0 }))}
+                                          className="w-full rounded border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                                        />
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3 text-right font-medium text-slate-900">
+                                    {folio.currency} {editForm.finalPrice.toFixed(2)}
+                                  </td>
+                                  <td className="px-4 py-3 text-center">
+                                    <div className="flex items-center justify-center gap-2">
+                                      <button
+                                        onClick={() => handleSaveEdit(charge)}
+                                        disabled={isProcessingId === charge.id || !editForm.description.trim()}
+                                        className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 hover:text-indigo-800 disabled:opacity-50"
+                                      >
+                                        {isProcessingId === charge.id ? 'Saving…' : 'Save'}
+                                      </button>
+                                      <span className="text-slate-300">|</span>
+                                      <button
+                                        onClick={() => setEditingChargeId(null)}
+                                        className="text-[10px] font-bold uppercase tracking-wider text-slate-400 hover:text-slate-600"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            }
+
                             return (
                               <tr key={charge.id} className={`transition-colors hover:bg-slate-50 ${charge.isVoided ? 'opacity-50' : ''}`}>
                                 <td className="px-4 py-3 text-xs text-slate-500">{dateStr}</td>
@@ -246,15 +450,28 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
                                 </td>
                                 {!readOnly && (
                                   <td className="px-4 py-3 text-center">
-                                    {!charge.isVoided && folio.status === 'OPEN' && (
-                                      <button
-                                        onClick={() => handleVoidCharge(charge)}
-                                        disabled={isProcessingId === charge.id}
-                                        className="text-[10px] font-bold uppercase tracking-wider text-rose-500 hover:text-rose-700 disabled:opacity-50"
-                                      >
-                                        {isProcessingId === charge.id ? 'Processing…' : 'Void'}
-                                      </button>
-                                    )}
+                                    <div className="flex items-center justify-center gap-2">
+                                      {isChargeEditable(charge) && (
+                                        <button
+                                          onClick={() => startEditCharge(charge)}
+                                          className="text-[10px] font-bold uppercase tracking-wider text-indigo-500 hover:text-indigo-700"
+                                        >
+                                          Edit
+                                        </button>
+                                      )}
+                                      {isChargeEditable(charge) && !charge.isVoided && folio.status === 'OPEN' && (
+                                        <span className="text-slate-300">|</span>
+                                      )}
+                                      {!charge.isVoided && folio.status === 'OPEN' && (
+                                        <button
+                                          onClick={() => handleVoidCharge(charge)}
+                                          disabled={isProcessingId === charge.id}
+                                          className="text-[10px] font-bold uppercase tracking-wider text-rose-500 hover:text-rose-700 disabled:opacity-50"
+                                        >
+                                          {isProcessingId === charge.id ? 'Processing…' : 'Void'}
+                                        </button>
+                                      )}
+                                    </div>
                                   </td>
                                 )}
                               </tr>
@@ -298,12 +515,54 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
                 <span>Taxes</span>
                 <span>{folio.currency} {folio.taxAmount?.toFixed(2) || '0.00'}</span>
               </div>
-              {folio.discountAmount ? (
-                <div className="flex justify-between text-sm font-medium text-emerald-600">
-                  <span>Discounts</span>
-                  <span>-{folio.currency} {folio.discountAmount.toFixed(2)}</span>
+              {folio.roomDiscountAmount != null && (
+                <div className="flex items-center justify-between text-sm font-medium text-emerald-600">
+                  <span className="flex items-center gap-1">
+                    Room Discount
+                    {!readOnly && folio.status === 'OPEN' && (
+                      <>
+                        <button onClick={() => openDiscountForm('room')} className="ml-1 rounded p-0.5 hover:bg-emerald-100" title="Edit"><Pencil className="h-3 w-3" /></button>
+                        <button onClick={() => handleDeleteDiscount('room')} className="rounded p-0.5 hover:bg-rose-100 text-rose-400" title="Remove"><Trash2 className="h-3 w-3" /></button>
+                      </>
+                    )}
+                  </span>
+                  <span>-{folio.currency} {folio.roomDiscountAmount.toFixed(2)}</span>
                 </div>
-              ) : null}
+              )}
+              {folio.ancillaryDiscountAmount != null && (
+                <div className="flex items-center justify-between text-sm font-medium text-emerald-600">
+                  <span className="flex items-center gap-1">
+                    Ancillary Discount
+                    {!readOnly && folio.status === 'OPEN' && (
+                      <>
+                        <button onClick={() => openDiscountForm('ancillary')} className="ml-1 rounded p-0.5 hover:bg-emerald-100" title="Edit"><Pencil className="h-3 w-3" /></button>
+                        <button onClick={() => handleDeleteDiscount('ancillary')} className="rounded p-0.5 hover:bg-rose-100 text-rose-400" title="Remove"><Trash2 className="h-3 w-3" /></button>
+                      </>
+                    )}
+                  </span>
+                  <span>-{folio.currency} {folio.ancillaryDiscountAmount.toFixed(2)}</span>
+                </div>
+              )}
+              {!readOnly && folio.status === 'OPEN' && (
+                <div className="flex gap-2">
+                  {folio.roomDiscountType == null && (
+                    <button
+                      onClick={() => openDiscountForm('room')}
+                      className="flex-1 rounded-lg border border-dashed border-emerald-300 py-1.5 text-[11px] font-bold text-emerald-600 hover:bg-emerald-50 transition-colors"
+                    >
+                      + Room Discount
+                    </button>
+                  )}
+                  {folio.ancillaryDiscountType == null && (
+                    <button
+                      onClick={() => openDiscountForm('ancillary')}
+                      className="flex-1 rounded-lg border border-dashed border-emerald-300 py-1.5 text-[11px] font-bold text-emerald-600 hover:bg-emerald-50 transition-colors"
+                    >
+                      + Ancillary Discount
+                    </button>
+                  )}
+                </div>
+              )}
               <div className="my-2 border-t border-slate-200 pt-2"></div>
               <div className="flex justify-between text-base font-bold text-slate-900">
                 <span>Total Charges</span>
@@ -372,9 +631,63 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
                     <FileText className="h-4 w-4" />
                     View Bill
                   </button>
+                ) : showBillOptions ? (
+                  <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+                    <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Generate Bill</p>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Guest GST Number <span className="font-normal text-slate-400">(optional)</span></label>
+                      <input
+                        type="text"
+                        value={billOptGstNumber}
+                        onChange={e => setBillOptGstNumber(e.target.value)}
+                        placeholder="e.g. 32AADCJ3244K1ZQ"
+                        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                      />
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-slate-600 mb-1.5">Ancillary Billing</p>
+                      <div className="flex gap-3">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="ancillaryMode"
+                            checked={!billOptSplitAncillary}
+                            onChange={() => setBillOptSplitAncillary(false)}
+                            className="accent-indigo-600"
+                          />
+                          <span className="text-xs text-slate-700">Consolidated <span className="text-slate-400">(one Ancillary bill)</span></span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="ancillaryMode"
+                            checked={billOptSplitAncillary}
+                            onChange={() => setBillOptSplitAncillary(true)}
+                            className="accent-indigo-600"
+                          />
+                          <span className="text-xs text-slate-700">Split <span className="text-slate-400">(per category)</span></span>
+                        </label>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        onClick={handleGenerateInvoice}
+                        disabled={isGeneratingBill}
+                        className="flex-1 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-bold text-white hover:bg-indigo-700 disabled:opacity-50"
+                      >
+                        {isGeneratingBill ? 'Generating...' : 'Confirm & Generate'}
+                      </button>
+                      <button
+                        onClick={() => setShowBillOptions(false)}
+                        className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
                 ) : (
                   <button
-                    onClick={handleGenerateInvoice}
+                    onClick={() => setShowBillOptions(true)}
                     disabled={isGeneratingBill}
                     className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-all hover:bg-slate-50 disabled:opacity-50"
                   >
@@ -398,7 +711,7 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
                           {bill.isVoided && <span className="ml-2 text-[10px] font-bold uppercase text-rose-500">Voided</span>}
                         </p>
                         <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
-                          {bill.charges?.[0]?.chargeCode === 'ROOM_RENT' ? 'Room Rent' : 'Ancillary'}
+                          {bill.category === 'ROOM_RENT' ? 'Main' : bill.category === 'ANCILLARY' ? 'Ancillary' : (bill.category ?? 'Bill')}
                         </p>
                       </div>
                       {!bill.isVoided && (
@@ -473,6 +786,84 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
           onClose={() => setShowBillView(false)}
           onBillsChanged={loadBills}
         />
+      )}
+
+      {showDiscountForm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-base font-bold text-slate-900">
+                {discountTarget === 'room' ? 'Room Bill' : 'Ancillary Bill'} Discount
+              </h3>
+              <button onClick={() => setShowDiscountForm(false)} className="rounded-lg p-1.5 hover:bg-slate-100">
+                <X className="h-4 w-4 text-slate-500" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <p className="mb-2 text-xs font-semibold text-slate-500 uppercase tracking-wide">Type</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setDiscountType('PERCENTAGE')}
+                    className={`flex-1 rounded-lg border py-2 text-sm font-bold transition-colors ${discountType === 'PERCENTAGE' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                  >
+                    % Percentage
+                  </button>
+                  <button
+                    onClick={() => setDiscountType('FLAT')}
+                    className={`flex-1 rounded-lg border py-2 text-sm font-bold transition-colors ${discountType === 'FLAT' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                  >
+                    ₹ Flat Amount
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  {discountType === 'PERCENTAGE' ? 'Percentage (%)' : 'Amount (₹)'}
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max={discountType === 'PERCENTAGE' ? 100 : undefined}
+                  step="0.01"
+                  value={discountValue}
+                  onChange={e => setDiscountValue(e.target.value)}
+                  placeholder={discountType === 'PERCENTAGE' ? 'e.g. 10' : 'e.g. 500'}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                  autoFocus
+                />
+                {discountPreviewAmount != null && (
+                  <p className="mt-1.5 text-xs font-medium text-emerald-600">
+                    = {folio.currency} {discountPreviewAmount.toFixed(2)} off
+                    {' '}({discountTarget === 'room' ? 'Room' : 'Ancillary'} bill total: {folio.currency} {(discountTarget === 'room' ? roomChargesTotal : ancillaryChargesTotal).toFixed(2)})
+                  </p>
+                )}
+              </div>
+
+              {discountError && (
+                <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{discountError}</p>
+              )}
+
+              <div className="flex gap-3 pt-1">
+                <button
+                  onClick={() => setShowDiscountForm(false)}
+                  className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveDiscount}
+                  disabled={discountSubmitting}
+                  className="flex-1 rounded-xl bg-indigo-600 py-2.5 text-sm font-bold text-white hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {discountSubmitting ? 'Saving...' : 'Apply Discount'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

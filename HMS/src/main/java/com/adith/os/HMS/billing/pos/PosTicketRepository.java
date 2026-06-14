@@ -12,6 +12,8 @@ public interface PosTicketRepository extends JpaRepository<PosTicket, UUID> {
 
     List<PosTicket> findByPosLocationIdAndStatus(UUID locationId, PosTicketStatus status);
 
+    List<PosTicket> findByBookingIdAndStatus(UUID bookingId, PosTicketStatus status);
+
     @Query("SELECT t FROM PosTicket t WHERE t.posLocation.id = :locationId " +
            "AND t.closedAt >= :from AND t.closedAt < :to AND t.status = 'CLOSED' " +
            "ORDER BY t.closedAt DESC")

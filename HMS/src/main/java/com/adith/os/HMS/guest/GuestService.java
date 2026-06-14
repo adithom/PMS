@@ -1,14 +1,16 @@
 package com.adith.os.HMS.guest;
 
-import com.adith.os.HMS.guest.dto.GuestCreationDto;
-import com.adith.os.HMS.guest.dto.GuestDto;
-import com.adith.os.HMS.guest.dto.GuestUpdateDto;
+import com.adith.os.HMS.billing.pos.PosOrderRepository;
+import com.adith.os.HMS.booking.Booking;
+import com.adith.os.HMS.booking.BookingRepository;
+import com.adith.os.HMS.guest.dto.*;
 import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -17,10 +19,15 @@ public class GuestService {
 
     private final GuestRepository guestRepository;
     private final GuestMapper guestMapper;
+    private final BookingRepository bookingRepository;
+    private final PosOrderRepository posOrderRepository;
 
-    public GuestService(GuestRepository guestRepository, GuestMapper guestMapper) {
+    public GuestService(GuestRepository guestRepository, GuestMapper guestMapper,
+                        BookingRepository bookingRepository, PosOrderRepository posOrderRepository) {
         this.guestRepository = guestRepository;
         this.guestMapper = guestMapper;
+        this.bookingRepository = bookingRepository;
+        this.posOrderRepository = posOrderRepository;
     }
 
     @Transactional
@@ -279,6 +286,45 @@ public class GuestService {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
                     "Failed to partially update guest: " + e.getMessage());
         }
+    }
+
+    @Transactional
+    public GuestProfileDto getGuestProfile(UUID guestId) {
+        Guest guest = guestRepository.findById(guestId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Guest not found: " + guestId));
+
+        GuestDto guestDto = guestMapper.toDto(guest);
+
+        List<Booking> bookings = bookingRepository.findAllBookingsForGuest(guestId);
+        List<GuestBookingSummaryDto> bookingHistory = new ArrayList<>();
+        for (Booking b : bookings) {
+            String role = b.getGuest().getId().equals(guestId) ? "PRIMARY" : "ADDITIONAL";
+            String propertyName = b.getProperty() != null ? b.getProperty().getName() : null;
+            String roomNumber = b.getRoom() != null ? b.getRoom().getNumber() : null;
+            String unitName = b.getUnit() != null ? b.getUnit().getName() : null;
+            String groupRef = b.getReservation() != null ? b.getReservation().getGroupReference() : null;
+            UUID reservationId = b.getReservation() != null ? b.getReservation().getId() : null;
+            bookingHistory.add(new GuestBookingSummaryDto(
+                    b.getId(), reservationId, groupRef, propertyName, roomNumber, unitName,
+                    b.getCheckIn(), b.getCheckOut(), b.getStatus(), b.getMealPlanType(), role
+            ));
+        }
+
+        List<Object[]> rows = posOrderRepository.findTopItemsByGuest(guestId);
+        List<GuestPosPreferenceDto> posPreferences = new ArrayList<>();
+        int limit = 0;
+        for (Object[] row : rows) {
+            if (limit++ >= 5) break;
+            posPreferences.add(new GuestPosPreferenceDto(
+                    (UUID) row[0],
+                    (String) row[1],
+                    (String) row[2],
+                    ((Number) row[3]).longValue(),
+                    ((Number) row[4]).longValue()
+            ));
+        }
+
+        return new GuestProfileDto(guestDto, bookingHistory, posPreferences);
     }
 
     @Transactional

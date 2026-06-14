@@ -8,6 +8,7 @@ import com.adith.os.HMS.property.mealplan.MealPlanType;
 import com.adith.os.HMS.reservation.Reservation;
 import com.adith.os.HMS.room.Room;
 import com.adith.os.HMS.roomassignment.RoomAssignment;
+import com.adith.os.HMS.travelagent.ContactPerson;
 import com.adith.os.HMS.travelagent.TravelAgent;
 import com.adith.os.HMS.unit.Unit;
 import jakarta.persistence.*;
@@ -82,6 +83,14 @@ public class Booking {
     @Column(name = "total_price", precision = 10, scale = 2, nullable = false)
     private BigDecimal totalPrice = BigDecimal.ZERO;
 
+    /**
+     * Nightly rate set before a room is assigned to this booking. Applied to the
+     * RoomAssignment.nightlyRate once a room is assigned (see BookingService.assignRoomToBooking),
+     * then cleared. Has no effect on billing until then.
+     */
+    @Column(name = "expected_nightly_rate", precision = 10, scale = 2)
+    private BigDecimal expectedNightlyRate;
+
     @Column(name = "paid_amount", precision = 10, scale = 2, nullable = false)
     private BigDecimal paidAmount = BigDecimal.ZERO;
 
@@ -115,8 +124,9 @@ public class Booking {
     @JoinColumn(name = "travel_agent_id")
     private TravelAgent travelAgent;
 
-    @Column(name = "commission_rate", precision = 5, scale = 2)
-    private BigDecimal commissionRate;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "contact_person_id")
+    private ContactPerson contactPerson;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "meal_plan_type")
@@ -300,6 +310,14 @@ public class Booking {
         this.totalPrice = totalPrice;
     }
 
+    public BigDecimal getExpectedNightlyRate() {
+        return expectedNightlyRate;
+    }
+
+    public void setExpectedNightlyRate(BigDecimal expectedNightlyRate) {
+        this.expectedNightlyRate = expectedNightlyRate;
+    }
+
     public BigDecimal getPaidAmount() {
         return paidAmount;
     }
@@ -336,8 +354,8 @@ public class Booking {
     public TravelAgent getTravelAgent() { return travelAgent; }
     public void setTravelAgent(TravelAgent travelAgent) { this.travelAgent = travelAgent; }
 
-    public BigDecimal getCommissionRate() { return commissionRate; }
-    public void setCommissionRate(BigDecimal commissionRate) { this.commissionRate = commissionRate; }
+    public ContactPerson getContactPerson() { return contactPerson; }
+    public void setContactPerson(ContactPerson contactPerson) { this.contactPerson = contactPerson; }
 
     public MealPlanType getMealPlanType() { return mealPlanType; }
     public void setMealPlanType(MealPlanType mealPlanType) { this.mealPlanType = mealPlanType; }

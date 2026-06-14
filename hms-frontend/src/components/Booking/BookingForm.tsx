@@ -7,7 +7,7 @@ import mealPlanApi from '../../api/mealPlanApi';
 import roomApi from '../../api/roomApi';
 import availabilityApi from '../../api/availabilityApi';
 import { GuestIdType, GUEST_ID_TYPE_LABELS, BOOKING_SOURCE_OPTIONS } from '../../types';
-import type { Property, Room, UnitDto, Booking, TravelAgent, MealPlan, MealPlanType, GuestSummary } from '../../types';
+import type { Property, Room, UnitDto, Booking, TravelAgent, ContactPerson, MealPlan, MealPlanType, GuestSummary } from '../../types';
 
 /* ────────────────────────────────────────────────────────────── */
 /* Helpers                                                      */
@@ -75,6 +75,7 @@ type Props = {
   initialCheckIn?: string;
   initialCheckOut?: string;
   initialGuest?: GuestSearchResult | null;
+  reservationId?: string;
   onSuccess?: (created: Booking) => void;
   onCancel?: () => void;
 };
@@ -105,6 +106,7 @@ export default function BookingForm({
   initialCheckIn,
   initialCheckOut,
   initialGuest,
+  reservationId,
   onSuccess,
   onCancel
 }: Props) {
@@ -188,11 +190,18 @@ export default function BookingForm({
   const [selectedAgentName, setSelectedAgentName] = useState<string>(booking?.travelAgentName ?? '');
   const [creatingAgent, setCreatingAgent] = useState<boolean>(false);
   const [newAgentName, setNewAgentName] = useState<string>('');
-  const [newAgentContactPerson, setNewAgentContactPerson] = useState<string>('');
   const [newAgentEmail, setNewAgentEmail] = useState<string>('');
   const [newAgentPhone, setNewAgentPhone] = useState<string>('');
-  const [newAgentIataCode, setNewAgentIataCode] = useState<string>('');
-  const [newAgentCommissionRate, setNewAgentCommissionRate] = useState<string>('');
+  const [newAgentGstin, setNewAgentGstin] = useState<string>('');
+  // Contact person state
+  const [agentContactPersons, setAgentContactPersons] = useState<ContactPerson[]>([]);
+  const [selectedContactPersonId, setSelectedContactPersonId] = useState<string | null>(booking?.contactPersonId ?? null);
+  const [creatingContact, setCreatingContact] = useState<boolean>(false);
+  const [newContactName, setNewContactName] = useState<string>('');
+  const [newContactPhone, setNewContactPhone] = useState<string>('');
+  const [newContactEmail, setNewContactEmail] = useState<string>('');
+  const [newContactDesignation, setNewContactDesignation] = useState<string>('');
+  const [savingContact, setSavingContact] = useState<boolean>(false);
 
   // ── Meal Plan State ──
   const [mealPlanOpen, setMealPlanOpen] = useState<boolean>(!!booking?.mealPlanType);
@@ -404,6 +413,17 @@ export default function BookingForm({
     return () => { mounted = false; };
   }, [agentQuery, selectedAgentId]);
 
+  // Load contact persons when agent is selected
+  useEffect(() => {
+    if (!selectedAgentId) { setAgentContactPersons([]); setSelectedContactPersonId(null); return; }
+    let mounted = true;
+    travelAgentApi.getById(selectedAgentId).then(agent => {
+      if (!mounted) return;
+      setAgentContactPersons(agent.contactPersons ?? []);
+    }).catch(() => setAgentContactPersons([]));
+    return () => { mounted = false; };
+  }, [selectedAgentId]);
+
   /* ═══════════════════════════════════════════════════════════ */
   /* Submission                                                  */
   /* ═══════════════════════════════════════════════════════════ */
@@ -488,19 +508,20 @@ export default function BookingForm({
       if (new Date(checkOut) <= new Date(checkIn)) throw new Error('Valid dates required.');
 
       // Resolve travel agent for payload
-      let travelAgentPayload: Pick<BookingCreationDto, 'travelAgentId' | 'newTravelAgent'> = {};
+      let travelAgentPayload: Pick<BookingCreationDto, 'travelAgentId' | 'newTravelAgent' | 'contactPersonId'> = {};
       if (agentSectionOpen) {
         if (selectedAgentId) {
-          travelAgentPayload = { travelAgentId: selectedAgentId };
+          travelAgentPayload = {
+            travelAgentId: selectedAgentId,
+            ...(selectedContactPersonId ? { contactPersonId: selectedContactPersonId } : {}),
+          };
         } else if (creatingAgent && newAgentName.trim()) {
           travelAgentPayload = {
             newTravelAgent: {
               name: newAgentName.trim(),
-              contactPerson: newAgentContactPerson.trim() || undefined,
               email: newAgentEmail.trim() || undefined,
               phone: newAgentPhone.trim() || undefined,
-              iataCode: newAgentIataCode.trim() || undefined,
-              commissionRate: newAgentCommissionRate ? Number(newAgentCommissionRate) : undefined,
+              gstin: newAgentGstin.trim() || undefined,
             }
           };
         }
@@ -542,6 +563,7 @@ export default function BookingForm({
         referenceNumber: referenceNumber || undefined,
         bookingSource: bookingSource || undefined,
         additionalGuestIds: additionalGuests.length > 0 ? additionalGuests.map(g => g.id) : undefined,
+        ...(!isEditMode && reservationId ? { reservationId } : {}),
         ...(!isEditMode && paidAmount > 0 ? { advancePaymentMethod } : {}),
         ...(isEditMode
           ? { totalPrice: computedTotalPrice, nightlyRate, nightlyRateExTax }
@@ -823,8 +845,10 @@ export default function BookingForm({
               setAgentSectionOpen(false);
               setSelectedAgentId(null); setSelectedAgentName(''); setAgentQuery('');
               setAgentResults([]); setCreatingAgent(false);
-              setNewAgentName(''); setNewAgentContactPerson(''); setNewAgentEmail('');
-              setNewAgentPhone(''); setNewAgentIataCode(''); setNewAgentCommissionRate('');
+              setNewAgentName(''); setNewAgentEmail('');
+              setNewAgentPhone(''); setNewAgentGstin('');
+              setAgentContactPersons([]); setSelectedContactPersonId(null);
+              setCreatingContact(false); setNewContactName(''); setNewContactPhone(''); setNewContactEmail(''); setNewContactDesignation('');
             }} className="text-xs font-medium text-slate-400 hover:text-rose-500">
               Remove
             </button>
@@ -838,21 +862,14 @@ export default function BookingForm({
                 <div className="grid gap-4 sm:grid-cols-2">
                   <label><span className={labelCls}>Agency Name *</span>
                     <input className={inputCls} value={newAgentName} onChange={e => setNewAgentName(e.target.value)} placeholder="e.g. Cox & Kings" /></label>
-                  <label><span className={labelCls}>Contact Person</span>
-                    <input className={inputCls} value={newAgentContactPerson} onChange={e => setNewAgentContactPerson(e.target.value)} /></label>
+                  <label><span className={labelCls}>GSTIN</span>
+                    <input className={inputCls} value={newAgentGstin} onChange={e => setNewAgentGstin(e.target.value)} placeholder="e.g. 29ABCDE1234F1Z5" /></label>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <label><span className={labelCls}>Email</span>
                     <input type="email" className={inputCls} value={newAgentEmail} onChange={e => setNewAgentEmail(e.target.value)} /></label>
                   <label><span className={labelCls}>Phone</span>
                     <input className={inputCls} value={newAgentPhone} onChange={e => setNewAgentPhone(e.target.value)} /></label>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <label><span className={labelCls}>IATA Code</span>
-                    <input className={inputCls} value={newAgentIataCode} onChange={e => setNewAgentIataCode(e.target.value)} placeholder="e.g. 12345678" /></label>
-                  <label><span className={labelCls}>Commission Rate (%)</span>
-                    <input type="number" min={0} max={100} step={0.01} className={inputCls}
-                      value={newAgentCommissionRate} onChange={e => setNewAgentCommissionRate(e.target.value)} placeholder="e.g. 10" /></label>
                 </div>
                 <div className="flex justify-end gap-2 pt-2">
                   <button type="button" onClick={() => setCreatingAgent(false)} className={btnSecondary}>Cancel</button>
@@ -862,11 +879,9 @@ export default function BookingForm({
                       try {
                         const created = await travelAgentApi.create({
                           name: newAgentName.trim(),
-                          contactPerson: newAgentContactPerson.trim() || undefined,
                           email: newAgentEmail.trim() || undefined,
                           phone: newAgentPhone.trim() || undefined,
-                          iataCode: newAgentIataCode.trim() || undefined,
-                          commissionRate: newAgentCommissionRate ? Number(newAgentCommissionRate) : undefined,
+                          gstin: newAgentGstin.trim() || undefined,
                         });
                         setSelectedAgentId(created.id);
                         setSelectedAgentName(created.name);
@@ -882,44 +897,113 @@ export default function BookingForm({
                 </div>
               </div>
             ) : (
-              <div className="relative">
-                {!selectedAgentId && (
-                  <div className="flex items-center justify-between mb-2">
-                    <span className={labelCls} style={{ marginBottom: 0 }}>Search Existing Agent</span>
-                    <button type="button" onClick={() => { setCreatingAgent(true); setAgentQuery(''); setAgentResults([]); }}
-                      className="text-xs font-bold text-emerald-600 hover:text-emerald-700">
-                      + New Agent
-                    </button>
-                  </div>
-                )}
-                {selectedAgentId ? (
-                  <div className="flex items-center justify-between rounded-lg border border-emerald-100 bg-emerald-50/50 px-3 py-2">
-                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
-                      ✓ {selectedAgentName}
-                    </span>
-                    <button type="button" onClick={() => {
-                      setSelectedAgentId(null); setSelectedAgentName(''); setAgentQuery(''); setAgentResults([]);
-                    }} className="text-xs text-slate-400 hover:text-rose-500 font-medium">Change</button>
-                  </div>
-                ) : (
-                  <>
-                    <input className={inputCls} placeholder="Type agency name or IATA code..." value={agentQuery}
-                      onChange={e => { setAgentQuery(e.target.value); setSelectedAgentId(null); }} />
-                    {agentResults.length > 0 && (
-                      <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
-                        {agentResults.map(a => (
-                          <button key={a.id} type="button"
-                            onClick={() => { setSelectedAgentId(a.id); setSelectedAgentName(a.name); setAgentQuery(a.name); setAgentResults([]); }}
-                            className="flex w-full flex-col items-start px-4 py-3 text-left hover:bg-slate-50 border-b border-slate-100 last:border-0">
-                            <span className="font-semibold text-slate-900">{a.name}</span>
-                            <span className="text-xs text-slate-500">
-                              {[a.iataCode, a.email, a.phone].filter(Boolean).join(' · ') || 'No contact info'}
-                            </span>
+              <div className="space-y-3">
+                <div className="relative">
+                  {!selectedAgentId && (
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={labelCls} style={{ marginBottom: 0 }}>Search Existing Agent</span>
+                      <button type="button" onClick={() => { setCreatingAgent(true); setAgentQuery(''); setAgentResults([]); }}
+                        className="text-xs font-bold text-emerald-600 hover:text-emerald-700">
+                        + New Agent
+                      </button>
+                    </div>
+                  )}
+                  {selectedAgentId ? (
+                    <div className="flex items-center justify-between rounded-lg border border-emerald-100 bg-emerald-50/50 px-3 py-2">
+                      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
+                        ✓ {selectedAgentName}
+                      </span>
+                      <button type="button" onClick={() => {
+                        setSelectedAgentId(null); setSelectedAgentName(''); setAgentQuery(''); setAgentResults([]);
+                        setAgentContactPersons([]); setSelectedContactPersonId(null);
+                        setCreatingContact(false);
+                      }} className="text-xs text-slate-400 hover:text-rose-500 font-medium">Change</button>
+                    </div>
+                  ) : (
+                    <>
+                      <input className={inputCls} placeholder="Type agency name..." value={agentQuery}
+                        onChange={e => { setAgentQuery(e.target.value); setSelectedAgentId(null); }} />
+                      {agentResults.length > 0 && (
+                        <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
+                          {agentResults.map(a => (
+                            <button key={a.id} type="button"
+                              onClick={() => { setSelectedAgentId(a.id); setSelectedAgentName(a.name); setAgentQuery(a.name); setAgentResults([]); }}
+                              className="flex w-full flex-col items-start px-4 py-3 text-left hover:bg-slate-50 border-b border-slate-100 last:border-0">
+                              <span className="font-semibold text-slate-900">{a.name}</span>
+                              <span className="text-xs text-slate-500">
+                                {[a.gstin, a.email, a.phone].filter(Boolean).join(' · ') || 'No contact info'}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {/* Contact Person — shown once an agent is selected */}
+                {selectedAgentId && (
+                  <div className="space-y-2 pt-1">
+                    <div className="flex items-center justify-between">
+                      <span className={labelCls} style={{ marginBottom: 0 }}>Contact Person</span>
+                      {!creatingContact && (
+                        <button type="button" onClick={() => setCreatingContact(true)}
+                          className="text-xs font-bold text-emerald-600 hover:text-emerald-700">
+                          + New Contact
+                        </button>
+                      )}
+                    </div>
+                    {creatingContact ? (
+                      <div className="rounded-lg border border-emerald-100 bg-emerald-50/30 p-3 space-y-3">
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <label><span className={labelCls}>Name *</span>
+                            <input className={inputCls} value={newContactName} onChange={e => setNewContactName(e.target.value)} placeholder="Full name" /></label>
+                          <label><span className={labelCls}>Designation</span>
+                            <input className={inputCls} value={newContactDesignation} onChange={e => setNewContactDesignation(e.target.value)} placeholder="e.g. Sales Manager" /></label>
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <label><span className={labelCls}>Phone</span>
+                            <input className={inputCls} value={newContactPhone} onChange={e => setNewContactPhone(e.target.value)} /></label>
+                          <label><span className={labelCls}>Email</span>
+                            <input type="email" className={inputCls} value={newContactEmail} onChange={e => setNewContactEmail(e.target.value)} /></label>
+                        </div>
+                        <div className="flex justify-end gap-2">
+                          <button type="button" onClick={() => { setCreatingContact(false); setNewContactName(''); setNewContactPhone(''); setNewContactEmail(''); setNewContactDesignation(''); }} className={btnSecondary}>Cancel</button>
+                          <button type="button" disabled={savingContact || !newContactName.trim()} className={btnPrimary}
+                            onClick={async () => {
+                              if (!selectedAgentId || !newContactName.trim()) return;
+                              setSavingContact(true);
+                              try {
+                                const created = await travelAgentApi.createContact(selectedAgentId, {
+                                  name: newContactName.trim(),
+                                  phone: newContactPhone.trim() || undefined,
+                                  email: newContactEmail.trim() || undefined,
+                                  designation: newContactDesignation.trim() || undefined,
+                                });
+                                setAgentContactPersons(prev => [...prev, created]);
+                                setSelectedContactPersonId(created.id);
+                                setCreatingContact(false);
+                                setNewContactName(''); setNewContactPhone(''); setNewContactEmail(''); setNewContactDesignation('');
+                              } catch (err: any) {
+                                setError(err.message || 'Failed to create contact person');
+                              } finally { setSavingContact(false); }
+                            }}>
+                            {savingContact ? 'Saving...' : 'Add Contact'}
                           </button>
-                        ))}
+                        </div>
                       </div>
+                    ) : (
+                      <select className={inputCls} value={selectedContactPersonId ?? ''}
+                        onChange={e => setSelectedContactPersonId(e.target.value || null)}>
+                        <option value="">— Optional —</option>
+                        {agentContactPersons.map(cp => (
+                          <option key={cp.id} value={cp.id}>
+                            {cp.name}{cp.designation ? ` (${cp.designation})` : ''}
+                          </option>
+                        ))}
+                      </select>
                     )}
-                  </>
+                  </div>
                 )}
               </div>
             )}

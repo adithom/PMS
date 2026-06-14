@@ -2,6 +2,8 @@ package com.adith.os.HMS.booking;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Set;
@@ -31,6 +33,8 @@ import com.adith.os.HMS.property.Property;
 import com.adith.os.HMS.property.PropertyRepository;
 import com.adith.os.HMS.reservation.Reservation;
 import com.adith.os.HMS.reservation.ReservationRepository;
+import com.adith.os.HMS.reservation.ReservationSequence;
+import com.adith.os.HMS.reservation.ReservationSequenceRepository;
 import com.adith.os.HMS.reservation.ReservationStatus;
 import com.adith.os.HMS.room.Room;
 import com.adith.os.HMS.room.RoomRepository;
@@ -41,6 +45,8 @@ import com.adith.os.HMS.roomassignment.RoomAssignmentService;
 import com.adith.os.HMS.roomassignment.RoomAssignmentStatus;
 import com.adith.os.HMS.property.mealplan.PropertyMealPlan;
 import com.adith.os.HMS.property.mealplan.PropertyMealPlanRepository;
+import com.adith.os.HMS.travelagent.ContactPerson;
+import com.adith.os.HMS.travelagent.ContactPersonRepository;
 import com.adith.os.HMS.travelagent.TravelAgent;
 import com.adith.os.HMS.travelagent.TravelAgentService;
 import com.adith.os.HMS.unit.Unit;
@@ -68,8 +74,10 @@ public class BookingService {
     private final RoomAssignmentService roomAssignmentService;
     private final RoomAssignmentRepository roomAssignmentRepository;
     private final TravelAgentService travelAgentService;
+    private final ContactPersonRepository contactPersonRepository;
     private final PropertyMealPlanRepository mealPlanRepository;
     private final ReservationRepository reservationRepository;
+    private final ReservationSequenceRepository reservationSequenceRepository;
 
     // Active statuses for room assignments
     private static final List<RoomAssignmentStatus> ACTIVE_ASSIGNMENT_STATUSES =
@@ -86,8 +94,10 @@ public class BookingService {
                           RoomAssignmentService roomAssignmentService,
                           RoomAssignmentRepository roomAssignmentRepository,
                           TravelAgentService travelAgentService,
+                          ContactPersonRepository contactPersonRepository,
                           PropertyMealPlanRepository mealPlanRepository,
-                          ReservationRepository reservationRepository) {
+                          ReservationRepository reservationRepository,
+                          ReservationSequenceRepository reservationSequenceRepository) {
         this.propertyRepository = propertyRepository;
         this.roomRepository = roomRepository;
         this.guestRepository = guestRepository;
@@ -99,8 +109,10 @@ public class BookingService {
         this.roomAssignmentService = roomAssignmentService;
         this.roomAssignmentRepository = roomAssignmentRepository;
         this.travelAgentService = travelAgentService;
+        this.contactPersonRepository = contactPersonRepository;
         this.mealPlanRepository = mealPlanRepository;
         this.reservationRepository = reservationRepository;
+        this.reservationSequenceRepository = reservationSequenceRepository;
     }
 
     @Transactional
@@ -232,22 +244,35 @@ public class BookingService {
                     bookingCreationDto.travelAgentId(), bookingCreationDto.newTravelAgent());
             if (travelAgent != null) {
                 booking.setTravelAgent(travelAgent);
-                booking.setCommissionRate(travelAgent.getCommissionRate());
+            }
+            if (bookingCreationDto.contactPersonId() != null) {
+                ContactPerson cp = contactPersonRepository.findById(bookingCreationDto.contactPersonId())
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                                "Contact person not found: " + bookingCreationDto.contactPersonId()));
+                booking.setContactPerson(cp);
             }
 
-            Reservation reservation = new Reservation();
-            reservation.setProperty(property);
-            reservation.setOrganizerGuest(guest);
-            reservation.setCheckIn(bookingCreationDto.checkIn());
-            reservation.setCheckOut(bookingCreationDto.checkOut());
-            reservation.setCurrency(booking.getCurrency());
-            reservation.setSpecialRequests(bookingCreationDto.specialRequests());
-            reservation.setStatus(ReservationStatus.PENDING);
-            if (travelAgent != null) {
-                reservation.setTravelAgent(travelAgent);
-                reservation.setCommissionRate(travelAgent.getCommissionRate());
+            Reservation savedReservation;
+            if (bookingCreationDto.reservationId() != null) {
+                savedReservation = reservationRepository.findById(bookingCreationDto.reservationId())
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                                "Reservation not found: " + bookingCreationDto.reservationId()));
+            } else {
+                Reservation reservation = new Reservation();
+                reservation.setProperty(property);
+                reservation.setOrganizerGuest(guest);
+                reservation.setCheckIn(bookingCreationDto.checkIn());
+                reservation.setCheckOut(bookingCreationDto.checkOut());
+                reservation.setCurrency(booking.getCurrency());
+                reservation.setSpecialRequests(bookingCreationDto.specialRequests());
+                reservation.setStatus(ReservationStatus.PENDING);
+                if (travelAgent != null) {
+                    reservation.setTravelAgent(travelAgent);
+                }
+                reservation.setReservationNumber(
+                        generateReservationNumber(property, LocalDate.now(ZoneId.of("Asia/Kolkata"))));
+                savedReservation = reservationRepository.save(reservation);
             }
-            Reservation savedReservation = reservationRepository.save(reservation);
             booking.setReservation(savedReservation);
 
             if (bookingCreationDto.mealPlanType() != null) {
@@ -280,7 +305,7 @@ public class BookingService {
                         ? bookingCreationDto.advancePaymentMethod()
                         : PaymentMethod.CASH;
                 PaymentCreationDto paymentDto = new PaymentCreationDto(
-                        advance, method, null,
+                        advance, method,
                         null, null, null,
                         null, null, null,
                         null,
@@ -627,10 +652,15 @@ public class BookingService {
             if (dto.travelAgentId() != null) {
                 TravelAgent agent = travelAgentService.resolveOrCreate(dto.travelAgentId(), null);
                 booking.setTravelAgent(agent);
-                booking.setCommissionRate(agent.getCommissionRate());
             } else {
                 booking.setTravelAgent(null);
-                booking.setCommissionRate(null);
+                booking.setContactPerson(null);
+            }
+            if (dto.contactPersonId() != null) {
+                ContactPerson cp = contactPersonRepository.findById(dto.contactPersonId())
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                                "Contact person not found: " + dto.contactPersonId()));
+                booking.setContactPerson(cp);
             }
 
             // Sync dates before saving
@@ -815,11 +845,16 @@ public class BookingService {
             // Travel agent partial update
             if (Boolean.TRUE.equals(dto.clearTravelAgent())) {
                 booking.setTravelAgent(null);
-                booking.setCommissionRate(null);
+                booking.setContactPerson(null);
             } else if (dto.travelAgentId() != null) {
                 TravelAgent agent = travelAgentService.resolveOrCreate(dto.travelAgentId(), null);
                 booking.setTravelAgent(agent);
-                booking.setCommissionRate(agent.getCommissionRate());
+            }
+            if (dto.contactPersonId() != null) {
+                ContactPerson cp = contactPersonRepository.findById(dto.contactPersonId())
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                                "Contact person not found: " + dto.contactPersonId()));
+                booking.setContactPerson(cp);
             }
 
             // Meal plan partial update
@@ -1037,10 +1072,12 @@ public class BookingService {
 
         // Assign room
         booking.setRoom(room);
+        BigDecimal expectedNightlyRate = booking.getExpectedNightlyRate();
+        booking.setExpectedNightlyRate(null);
         Booking savedBooking = bookingRepository.save(booking);
 
-        // Create room assignment if none exists
-        roomAssignmentService.createInitialAssignment(savedBooking, null);
+        // Create room assignment if none exists, applying any rate set before assignment
+        roomAssignmentService.createInitialAssignment(savedBooking, expectedNightlyRate);
 
         return bookingMapper.toDto(savedBooking);
     }
@@ -1429,5 +1466,16 @@ public class BookingService {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
                     "Failed to fetch overlapping bookings: " + e.getMessage());
         }
+    }
+
+    private String generateReservationNumber(Property property, LocalDate date) {
+        LocalDate monthStart = date.withDayOfMonth(1);
+        ReservationSequence seq = reservationSequenceRepository
+                .findByPropertyAndMonthWithLock(property.getId(), monthStart)
+                .orElse(new ReservationSequence(property, monthStart, 1));
+        int current = seq.getNextVal();
+        seq.setNextVal(current + 1);
+        reservationSequenceRepository.save(seq);
+        return date.format(DateTimeFormatter.ofPattern("yyyyMM")) + String.format("%04d", current);
     }
 }

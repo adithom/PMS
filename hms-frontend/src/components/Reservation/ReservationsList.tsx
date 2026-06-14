@@ -161,6 +161,9 @@ export default function ReservationsList({ propertyId, onOpen }: Props) {
                       )}
                     </div>
                     <div className="text-xs text-slate-500">
+                      {r.reservationNumber && (
+                        <span className="mr-2 font-mono font-bold text-slate-400">#{r.reservationNumber}</span>
+                      )}
                       {fmtDate(r.checkIn)} → {fmtDate(r.checkOut)}
                       {' · '}
                       {r.totalRooms} {r.totalRooms === 1 ? 'room' : 'rooms'}

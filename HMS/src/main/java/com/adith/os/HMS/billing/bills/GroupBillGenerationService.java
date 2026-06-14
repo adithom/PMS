@@ -29,7 +29,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
@@ -114,7 +113,7 @@ public class GroupBillGenerationService {
 
             List<FolioCharge> validCharges = folio.getCharges() == null ? List.of()
                     : folio.getCharges().stream()
-                           .filter(c -> !c.isVoided() && c.getBill() == null && c.getGroupBill() == null)
+                           .filter(c -> c.getBill() == null && c.getGroupBill() == null)
                            .filter(FolioCharge::isRouteToMaster)
                            .toList();
 
@@ -154,16 +153,15 @@ public class GroupBillGenerationService {
             List<GroupMultiBillDto.RoomChargeSection> sections = sectionsByType.get(bt);
             if (chargeEntities == null || chargeEntities.isEmpty()) continue;
 
-            String invoiceNumber = suffixIdx == 0
-                    ? baseInvoiceNumber
-                    : baseInvoiceNumber + (char) ('a' + suffixIdx - 1);
+            String invoiceNumber = baseInvoiceNumber + "/" + (char) ('A' + suffixIdx);
             suffixIdx++;
 
             SectionTotals totals = sumSections(sections);
 
             GroupMultiBillDto.GroupBillSectionDto sectionDto = new GroupMultiBillDto.GroupBillSectionDto(
                     invoiceNumber, today, bt.name(),
-                    property.getName(), property.getAddress(), property.getGstNumber(),
+                    property.getName(), property.getAddress(), property.getAddressLine2(), property.getPostalCode(), property.getPhone(), property.getGstNumber(),
+                    property.getStateName(), property.getStateCode(),
                     reservation.getId(), reservation.getGroupReference(),
                     organizer.getFullName(), organizer.getPhone(), organizer.getEmail(), safeGst,
                     reservation.getCheckIn(), reservation.getCheckOut(), reservation.getCurrency(), now,
@@ -181,9 +179,10 @@ public class GroupBillGenerationService {
             folioChargeRepository.saveAll(chargeEntities);
 
             String localPath = groupPdfGenerationService.generateGroupBillPdf(sectionDto);
-            String objectKey = "invoices/" + billEntity.getInvoiceNumber() + ".pdf";
+            String fileKey = billEntity.getInvoiceNumber().replace("/", "");
+            String objectKey = "invoices/" + fileKey + ".pdf";
             String signedUrl = uploadToR2WithFallback(localPath, objectKey,
-                    "GRP_INV_" + billEntity.getInvoiceNumber() + ".pdf");
+                    "GRP_INV_" + fileKey + ".pdf");
             billEntity.setPdfFilePath(objectKey);
             groupBillRepository.save(billEntity);
             generatedBills.add(sectionDto.withPdfDownloadUrl(signedUrl));
@@ -258,7 +257,8 @@ public class GroupBillGenerationService {
         if (bill.getPdfFilePath() == null || bill.getPdfFilePath().isBlank()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No PDF available for this group bill");
         }
-        String fileName = "GRP_INV_" + bill.getInvoiceNumber() + ".pdf";
+        String fileKey = bill.getInvoiceNumber().replace("/", "");
+        String fileName = "GRP_INV_" + fileKey + ".pdf";
         return r2StorageService.generatePresignedDownloadUrl(bill.getPdfFilePath(), fileName);
     }
 
@@ -359,7 +359,7 @@ public class GroupBillGenerationService {
     private ChargeDto toChargeDto(FolioCharge c) {
         return new ChargeDto(
                 c.getId(), c.getChargeDate(), c.getPostingDate(),
-                c.getChargeCode(), c.getDescription(),
+                c.getChargeCode(), c.getDescription(), c.getReferenceType(),
                 c.getQuantity(), c.getUnitPrice(), c.getSubtotal(),
                 c.getTaxRate(), c.getTaxAmount(), c.getDiscountAmount(),
                 c.getTotalAmount(), c.isVoided(), c.getVoidReason(), c.getNotes()
@@ -368,15 +368,17 @@ public class GroupBillGenerationService {
 
     private String generateInvoiceNumber(com.adith.os.HMS.property.Property property) {
         LocalDate today = LocalDate.now(ZoneId.of("Asia/Kolkata"));
+        LocalDate fyStart = today.getMonthValue() >= 4
+                ? LocalDate.of(today.getYear(), 4, 1)
+                : LocalDate.of(today.getYear() - 1, 4, 1);
         PropertyInvoiceSequence seq = sequenceRepository
-                .findByPropertyAndDateWithLock(property.getId(), today)
-                .orElse(new PropertyInvoiceSequence(property, today, 1));
+                .findByPropertyAndDateWithLock(property.getId(), fyStart)
+                .orElse(new PropertyInvoiceSequence(property, fyStart, 1));
         int current = seq.getNextVal();
         seq.setNextVal(current + 1);
         sequenceRepository.save(seq);
-        return property.getCode().toUpperCase()
-                + today.format(DateTimeFormatter.ofPattern("yyyyMMdd"))
-                + String.format("%04d", current);
+        String fy = String.format("%02d%02d", fyStart.getYear() % 100, (fyStart.getYear() + 1) % 100);
+        return "FO/" + fy + "/" + String.format("%05d", current);
     }
 
     // =========================================================================
