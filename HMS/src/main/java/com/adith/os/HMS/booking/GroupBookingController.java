@@ -3,6 +3,7 @@ package com.adith.os.HMS.booking;
 import com.adith.os.HMS.booking.dto.GroupBookingCreationDto;
 import com.adith.os.HMS.booking.dto.GroupBookingSummaryDto;
 import com.adith.os.HMS.booking.dto.RescheduleReservationDto;
+import com.adith.os.HMS.booking.dto.ReservationUpdateDto;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -58,6 +59,19 @@ public class GroupBookingController {
             @PathVariable UUID propertyId,
             @PathVariable UUID reservationId) {
         return ResponseEntity.ok(groupBookingService.getGroupReservationSummary(propertyId, reservationId));
+    }
+
+    // -------------------------------------------------------------------------
+    // METADATA UPDATE
+    // -------------------------------------------------------------------------
+
+    @PatchMapping("/{reservationId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    public ResponseEntity<GroupBookingSummaryDto> updateReservation(
+            @PathVariable UUID propertyId,
+            @PathVariable UUID reservationId,
+            @Valid @RequestBody ReservationUpdateDto dto) {
+        return ResponseEntity.ok(groupBookingService.updateReservation(propertyId, reservationId, dto));
     }
 
     // -------------------------------------------------------------------------

@@ -3,6 +3,7 @@ import ModalShell from '../ModalShell';
 import BookingDetailModal from '../Booking/BookingDetailModal';
 import AddRoomModal from '../Booking/AddRoomModal';
 import RescheduleModal from './RescheduleModal';
+import EditReservationModal from './EditReservationModal';
 import reservationApi from '../../api/reservationApi';
 import type { GroupBookingSummaryDto, BookingSummaryDto } from '../../api/reservationApi';
 import bookingApi from '../../api/bookingApi';
@@ -43,6 +44,7 @@ export default function ReservationDetailModal({ propertyId, reservationId, onCl
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [showAddRoom, setShowAddRoom] = useState(false);
   const [showReschedule, setShowReschedule] = useState(false);
+  const [showEditReservation, setShowEditReservation] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -104,54 +106,49 @@ export default function ReservationDetailModal({ propertyId, reservationId, onCl
 
   return (
     <>
-    <ModalShell isOpen={true} onClose={onClose} title="Reservation" className="max-w-4xl">
-      <div className="p-6">
-        {error && <div className="mb-4 p-3 bg-rose-50 text-rose-700 text-sm rounded-md">{error}</div>}
+    <ModalShell onClose={onClose} title="Reservation" subtitle={reservation?.reservationNumber ? `#${reservation.reservationNumber}` : undefined} className="max-w-6xl">
+      <div>
+        {error && <div className="mb-4 p-3 bg-rose-50 text-rose-700 text-sm rounded-lg border border-rose-200">{error}</div>}
         {loading && <div className="text-sm text-slate-500">Loading…</div>}
 
         {reservation && (
           <>
-            {/* Header */}
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
+            {/* Header summary card */}
+            <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-5 shadow-sm">
               <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                    Reservation{reservation.reservationNumber && (
-                      <span className="ml-2 font-mono text-slate-400">#{reservation.reservationNumber}</span>
-                    )}
-                  </p>
-                  <h2 className="mt-1 text-xl font-extrabold text-slate-900">
+                <div className="min-w-0">
+                  <h2 className="text-2xl font-extrabold text-slate-900 leading-tight truncate">
                     {reservation.organizerGuestName}
-                    {reservation.groupReference && (
-                      <span className="ml-2 text-sm font-bold text-slate-500">· {reservation.groupReference}</span>
-                    )}
                   </h2>
-                  <p className="mt-1 text-sm text-slate-600">
-                    {fmtDate(reservation.checkIn)} → {fmtDate(reservation.checkOut)}
-                    {' · '}
-                    {diffDays(reservation.checkIn, reservation.checkOut)} nights
-                    {' · '}
-                    {reservation.totalRooms} {reservation.totalRooms === 1 ? 'room' : 'rooms'}
+                  {reservation.groupReference && (
+                    <p className="mt-0.5 text-sm font-semibold text-indigo-600">{reservation.groupReference}</p>
+                  )}
+                  <p className="mt-2 text-sm text-slate-600">
+                    <span className="font-semibold text-slate-800">{fmtDate(reservation.checkIn)} → {fmtDate(reservation.checkOut)}</span>
+                    {' · '}{diffDays(reservation.checkIn, reservation.checkOut)} nights
+                    {' · '}{reservation.totalRooms} {reservation.totalRooms === 1 ? 'room' : 'rooms'}
                   </p>
                 </div>
-                <span className={cn('inline-flex items-center rounded-full border px-3 py-1 text-xs font-bold', STATUS_BADGE[reservation.overallStatus] || STATUS_BADGE.PENDING)}>
+                <span className={cn('shrink-0 inline-flex items-center rounded-full border px-3 py-1 text-xs font-bold', STATUS_BADGE[reservation.overallStatus] || STATUS_BADGE.PENDING)}>
                   {reservation.overallStatus.replace('_', ' ')}
                 </span>
               </div>
-              <div className="mt-4 grid grid-cols-3 gap-4 text-xs">
-                <div>
-                  <div className="font-bold uppercase tracking-wider text-slate-400">Total</div>
-                  <div className="mt-0.5 font-bold text-slate-900">{reservation.currency} {reservation.totalGroupPrice.toFixed(2)}</div>
+
+              <div className="mt-4 grid grid-cols-3 divide-x divide-slate-200 rounded-xl border border-slate-200 bg-white/70 py-3 text-sm">
+                <div className="px-4 text-center">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total</div>
+                  <div className="mt-1 font-bold text-slate-900">{reservation.currency} {reservation.totalGroupPrice.toFixed(2)}</div>
                 </div>
-                <div>
-                  <div className="font-bold uppercase tracking-wider text-slate-400">Billing</div>
-                  <div className="mt-0.5 font-bold text-slate-900">{reservation.billingMode}</div>
+                <div className="px-4 text-center">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Billing</div>
+                  <div className="mt-1 font-bold text-slate-900">{reservation.billingMode}</div>
                 </div>
-                <div>
-                  <div className="font-bold uppercase tracking-wider text-slate-400">Created</div>
-                  <div className="mt-0.5 text-slate-700">{fmtDate(reservation.createdAt)}</div>
+                <div className="px-4 text-center">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Created</div>
+                  <div className="mt-1 font-bold text-slate-700">{fmtDate(reservation.createdAt)}</div>
                 </div>
               </div>
+
               {reservation.totalRooms > 1 && (
                 <div className="mt-3">
                   <button
@@ -168,16 +165,16 @@ export default function ReservationDetailModal({ propertyId, reservationId, onCl
             {/* Member bookings */}
             <div className="mt-6">
               <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500">Rooms ({reservation.bookings.length})</h3>
-              <ul className="mt-2 divide-y divide-slate-200 rounded-xl border border-slate-200">
+              <ul className="mt-2 space-y-2">
                 {reservation.bookings.map((b: BookingSummaryDto) => (
                   <li
                     key={b.bookingId}
-                    className="flex items-center justify-between gap-4 px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors"
+                    className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white px-4 py-3 cursor-pointer hover:border-slate-300 hover:shadow-sm transition-all"
                     onClick={() => setSelectedBookingId(b.bookingId)}
                   >
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-bold text-slate-900 truncate">{b.guestName}</div>
-                      <div className="text-xs text-slate-500">
+                      <div className="mt-0.5 text-xs text-slate-500">
                         {b.unitName} · Room {b.roomNumber || <span className="italic">unassigned</span>}
                         {b.isTwinBed && ' · twin'}
                       </div>
@@ -190,7 +187,7 @@ export default function ReservationDetailModal({ propertyId, reservationId, onCl
                         <span className={cn('inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold', STATUS_BADGE[b.status] || STATUS_BADGE.PENDING)}>
                           {b.status.replace('_', ' ')}
                         </span>
-                        <div className="mt-1 text-xs text-slate-600">
+                        <div className="mt-1 text-xs font-semibold text-slate-600">
                           {reservation.currency} {b.totalPrice.toFixed(2)}
                         </div>
                       </div>
@@ -240,21 +237,30 @@ export default function ReservationDetailModal({ propertyId, reservationId, onCl
             })()}
 
             {/* Footer actions */}
-            <div className="mt-6 flex items-center justify-end gap-3">
+            <div className="mt-6 flex items-center gap-2 border-t border-slate-100 pt-5">
               {reservation.overallStatus !== 'CANCELLED' && reservation.overallStatus !== 'CHECKED_OUT' && (
                 <button
                   type="button"
                   onClick={() => setShowAddRoom(true)}
-                  className="rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-bold text-indigo-700 hover:bg-indigo-100"
+                  className="whitespace-nowrap rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-bold text-indigo-700 hover:bg-indigo-100 transition-colors"
                 >
                   Add Room
+                </button>
+              )}
+              {reservation.overallStatus !== 'CANCELLED' && (
+                <button
+                  type="button"
+                  onClick={() => setShowEditReservation(true)}
+                  className="whitespace-nowrap rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors"
+                >
+                  Edit
                 </button>
               )}
               {(reservation.overallStatus === 'PENDING' || reservation.overallStatus === 'CONFIRMED') && (
                 <button
                   type="button"
                   onClick={() => setShowReschedule(true)}
-                  className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
+                  className="whitespace-nowrap rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors"
                 >
                   Reschedule
                 </button>
@@ -263,7 +269,7 @@ export default function ReservationDetailModal({ propertyId, reservationId, onCl
                 <button
                   type="button"
                   onClick={handleCancelReservation}
-                  className="rounded-lg bg-rose-50 px-4 py-2 text-sm font-bold text-rose-700 hover:bg-rose-100"
+                  className="whitespace-nowrap rounded-lg bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700 hover:bg-rose-100 transition-colors"
                 >
                   Cancel Reservation
                 </button>
@@ -306,6 +312,18 @@ export default function ReservationDetailModal({ propertyId, reservationId, onCl
         onClose={() => setShowReschedule(false)}
         onRescheduled={() => {
           setShowReschedule(false);
+          fetchData();
+          onUpdated?.();
+        }}
+      />
+    )}
+    {showEditReservation && reservation && (
+      <EditReservationModal
+        reservation={reservation}
+        propertyId={propertyId}
+        onClose={() => setShowEditReservation(false)}
+        onUpdated={() => {
+          setShowEditReservation(false);
           fetchData();
           onUpdated?.();
         }}

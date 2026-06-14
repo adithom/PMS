@@ -260,6 +260,70 @@ public class GroupBookingService {
     }
 
     // =========================================================================
+    // METADATA UPDATE
+    // =========================================================================
+
+    /**
+     * Updates reservation-level metadata (organizer guest, group reference, special requests)
+     * and the "important" per-booking fields (guest, occupancy) for member bookings.
+     */
+    @Transactional
+    public GroupBookingSummaryDto updateReservation(UUID propertyId, UUID reservationId, ReservationUpdateDto dto) {
+        Reservation reservation = getValidatedReservation(propertyId, reservationId);
+
+        if (dto.organizerGuestId() != null) {
+            Guest organizer = guestRepository.findById(dto.organizerGuestId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Organizer guest not found"));
+            reservation.setOrganizerGuest(organizer);
+        }
+        reservation.setGroupReference(dto.groupReference());
+        reservation.setSpecialRequests(dto.specialRequests());
+        reservationRepository.save(reservation);
+
+        if (dto.bookingUpdates() != null) {
+            for (BookingOccupancyUpdateDto bu : dto.bookingUpdates()) {
+                Booking booking = getValidatedBooking(propertyId, bu.bookingId(), reservationId);
+
+                if (bu.guestId() != null && !bu.guestId().equals(booking.getGuest().getId())) {
+                    Guest guest = guestRepository.findById(bu.guestId())
+                            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                                    "Guest not found for booking " + bu.bookingId()));
+                    booking.setGuest(guest);
+                }
+                if (bu.adults() != null) {
+                    booking.setAdults(bu.adults());
+                }
+                if (bu.children() != null) {
+                    booking.setChildren(bu.children());
+                }
+                if (bu.nightlyRate() != null) {
+                    long nights = ChronoUnit.DAYS.between(booking.getCheckIn(), booking.getCheckOut());
+                    booking.setTotalPrice(bu.nightlyRate().multiply(BigDecimal.valueOf(Math.max(nights, 0))));
+
+                    List<RoomAssignment> activeAssignments = roomAssignmentRepository.findByBookingId(booking.getId())
+                            .stream()
+                            .filter(a -> a.getStatus() == RoomAssignmentStatus.SCHEDULED || a.getStatus() == RoomAssignmentStatus.ACTIVE)
+                            .toList();
+                    if (!activeAssignments.isEmpty()) {
+                        for (RoomAssignment a : activeAssignments) {
+                            a.setNightlyRate(bu.nightlyRate());
+                        }
+                        roomAssignmentRepository.saveAll(activeAssignments);
+                        booking.setExpectedNightlyRate(null);
+                    } else {
+                        // Room not yet assigned — stash the rate to apply once a room is assigned.
+                        booking.setExpectedNightlyRate(bu.nightlyRate());
+                    }
+                }
+                bookingRepository.save(booking);
+            }
+        }
+
+        List<Booking> bookings = bookingRepository.findByReservationId(reservationId);
+        return buildReservationSummary(reservation, bookings);
+    }
+
+    // =========================================================================
     // CHECK-IN / CHECK-OUT
     // =========================================================================
 
@@ -578,6 +642,8 @@ public class GroupBookingService {
                             b.getUnit() != null ? b.getUnit().getName() : null,
                             b.getRoom() != null ? b.getRoom().getNumber() : null,
                             b.getStatus(),
+                            b.getAdults(),
+                            b.getChildren(),
                             b.getTotalPrice(),
                             b.getBalanceDue(),
                             folio != null ? folio.getId() : null,
@@ -592,14 +658,29 @@ public class GroupBookingService {
 
         String billingMode = reservation.isDefaultRouteToMaster() ? "CONSOLIDATED" : "SEPARATE";
 
+        List<Booking> activeBookings = bookings.stream()
+                .filter(b -> b.getStatus() != BookingStatus.CANCELLED)
+                .toList();
+        List<Booking> bookingsForDates = activeBookings.isEmpty() ? bookings : activeBookings;
+
+        LocalDate derivedCheckIn = bookingsForDates.stream()
+                .map(Booking::getCheckIn)
+                .min(Comparator.naturalOrder())
+                .orElse(reservation.getCheckIn());
+        LocalDate derivedCheckOut = bookingsForDates.stream()
+                .map(Booking::getCheckOut)
+                .max(Comparator.naturalOrder())
+                .orElse(reservation.getCheckOut());
+
         return new GroupBookingSummaryDto(
                 reservation.getId(),
                 reservation.getReservationNumber(),
                 reservation.getGroupReference(),
                 reservation.getOrganizerGuest().getId(),
                 reservation.getOrganizerGuest().getFullName(),
-                reservation.getCheckIn(),
-                reservation.getCheckOut(),
+                derivedCheckIn,
+                derivedCheckOut,
+                reservation.getSpecialRequests(),
                 overallStatus,
                 bookings.size(),
                 totalGroupPrice,

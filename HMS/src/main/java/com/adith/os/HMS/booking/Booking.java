@@ -83,6 +83,14 @@ public class Booking {
     @Column(name = "total_price", precision = 10, scale = 2, nullable = false)
     private BigDecimal totalPrice = BigDecimal.ZERO;
 
+    /**
+     * Nightly rate set before a room is assigned to this booking. Applied to the
+     * RoomAssignment.nightlyRate once a room is assigned (see BookingService.assignRoomToBooking),
+     * then cleared. Has no effect on billing until then.
+     */
+    @Column(name = "expected_nightly_rate", precision = 10, scale = 2)
+    private BigDecimal expectedNightlyRate;
+
     @Column(name = "paid_amount", precision = 10, scale = 2, nullable = false)
     private BigDecimal paidAmount = BigDecimal.ZERO;
 
@@ -300,6 +308,14 @@ public class Booking {
 
     public void setTotalPrice(BigDecimal totalPrice) {
         this.totalPrice = totalPrice;
+    }
+
+    public BigDecimal getExpectedNightlyRate() {
+        return expectedNightlyRate;
+    }
+
+    public void setExpectedNightlyRate(BigDecimal expectedNightlyRate) {
+        this.expectedNightlyRate = expectedNightlyRate;
     }
 
     public BigDecimal getPaidAmount() {

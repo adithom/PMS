@@ -1072,10 +1072,12 @@ public class BookingService {
 
         // Assign room
         booking.setRoom(room);
+        BigDecimal expectedNightlyRate = booking.getExpectedNightlyRate();
+        booking.setExpectedNightlyRate(null);
         Booking savedBooking = bookingRepository.save(booking);
 
-        // Create room assignment if none exists
-        roomAssignmentService.createInitialAssignment(savedBooking, null);
+        // Create room assignment if none exists, applying any rate set before assignment
+        roomAssignmentService.createInitialAssignment(savedBooking, expectedNightlyRate);
 
         return bookingMapper.toDto(savedBooking);
     }

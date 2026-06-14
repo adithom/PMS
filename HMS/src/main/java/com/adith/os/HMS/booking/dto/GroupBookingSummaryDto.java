@@ -23,6 +23,7 @@ public record GroupBookingSummaryDto(
         String organizerGuestName,
         LocalDate checkIn,
         LocalDate checkOut,
+        String specialRequests,
         BookingStatus overallStatus,    // Derived: worst-case status across bookings
         int totalRooms,
         BigDecimal totalGroupPrice,     // Sum of all member booking totalPrices
@@ -47,6 +48,8 @@ public record GroupBookingSummaryDto(
             String unitName,
             String roomNumber,          // null if not yet assigned
             BookingStatus status,
+            Integer adults,
+            Integer children,
             BigDecimal totalPrice,
             BigDecimal balanceDue,
             UUID folioId,
