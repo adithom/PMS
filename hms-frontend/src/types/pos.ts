@@ -50,7 +50,7 @@ export interface PosOrderItem {
 }
 
 export type MealType = 'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK';
-export type PosTicketStatus = 'OPEN' | 'CLOSED';
+export type PosTicketStatus = 'OPEN' | 'CLOSED' | 'CANCELLED';
 
 export interface PosTicket {
   id: string;
@@ -68,6 +68,7 @@ export interface PosTicket {
   createdAt: string;
   closedAt?: string;
   orders: PosOrder[];
+  cancellationReason?: string;
 }
 
 export interface PosTicketCreationDto {

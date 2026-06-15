@@ -119,6 +119,165 @@ function SettleNowModal({ isOpen, onClose, cart, location, propertyId: _property
   );
 }
 
+// ─── CloseTicketPaymentModal ─────────────────────────────────────────────────
+
+interface CloseTicketPaymentModalProps {
+  ticket: PosTicket;
+  onClose: () => void;
+  onSuccess: (closed: PosTicket) => void;
+}
+
+function CloseTicketPaymentModal({ ticket, onClose, onSuccess }: CloseTicketPaymentModalProps) {
+  const [paymentMethod, setPaymentMethod] = useState('CASH');
+  const [transactionReference, setTransactionReference] = useState('');
+  const [processing, setProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleConfirm = async () => {
+    setProcessing(true);
+    setError(null);
+    try {
+      const closed = await posApi.closeTicket(ticket.id, {
+        paymentMethod,
+        transactionReference: transactionReference || undefined,
+      });
+      onSuccess(closed);
+    } catch {
+      setError('Failed to close ticket. Please try again.');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const ticketTotal = ticket.orders.reduce((sum, o) => sum + o.totalAmount, 0);
+  const fmt = (n: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(n);
+  const inputCls = 'w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow';
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+          <h3 className="text-lg font-semibold text-gray-900">Settle — {ticket.guestName}</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-xl leading-none">&times;</button>
+        </div>
+
+        <div className="px-6 py-5 space-y-5">
+          <div className="bg-gray-50 rounded-xl p-4 flex justify-between items-center">
+            <div>
+              <div className="text-xs text-gray-500 mb-0.5">{ticket.orders.length} order{ticket.orders.length !== 1 ? 's' : ''}</div>
+              <div className="font-bold text-gray-900 text-lg">{fmt(ticketTotal)}</div>
+            </div>
+            <div className="text-xs text-gray-400 uppercase tracking-wide font-medium">Order Total</div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Payment Method</label>
+            <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} className={inputCls}>
+              <option value="CASH">Cash</option>
+              <option value="CREDIT_CARD">Credit Card</option>
+              <option value="DEBIT_CARD">Debit Card</option>
+              <option value="UPI">UPI</option>
+              <option value="BANK_TRANSFER">Bank Transfer</option>
+            </select>
+          </div>
+
+          {paymentMethod !== 'CASH' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                {paymentMethod === 'UPI' ? 'UPI Reference' : 'Transaction Reference'}
+              </label>
+              <input type="text" placeholder={paymentMethod === 'UPI' ? 'guest@upi or txn ref' : 'TXN123456'}
+                value={transactionReference} onChange={e => setTransactionReference(e.target.value)} className={inputCls} />
+            </div>
+          )}
+
+          {error && <div className="bg-red-50 border border-red-100 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>}
+        </div>
+
+        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3">
+          <button onClick={onClose} disabled={processing}
+            className="px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors">
+            Cancel
+          </button>
+          <button onClick={handleConfirm} disabled={processing}
+            className="px-5 py-2.5 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm">
+            {processing ? 'Processing...' : 'Confirm Payment'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── CancelTicketModal ────────────────────────────────────────────────────────
+
+interface CancelTicketModalProps {
+  ticket: PosTicket;
+  onClose: () => void;
+  onSuccess: (cancelled: PosTicket) => void;
+}
+
+function CancelTicketModal({ ticket, onClose, onSuccess }: CancelTicketModalProps) {
+  const [reason, setReason] = useState('');
+  const [processing, setProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleConfirm = async () => {
+    if (!reason.trim()) {
+      setError('Please enter a reason for cancelling this ticket.');
+      return;
+    }
+    setProcessing(true);
+    setError(null);
+    try {
+      const cancelled = await posApi.cancelTicket(ticket.id, reason.trim());
+      onSuccess(cancelled);
+    } catch {
+      setError('Failed to cancel ticket. Please try again.');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const inputCls = 'w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow';
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+          <h3 className="text-lg font-semibold text-gray-900">Cancel Ticket — {ticket.guestName}</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-xl leading-none">&times;</button>
+        </div>
+
+        <div className="px-6 py-5 space-y-4">
+          <p className="text-sm text-gray-500">
+            This ticket {ticket.orders.length > 0 ? `and its ${ticket.orders.length} order${ticket.orders.length !== 1 ? 's' : ''}` : ''} will be cancelled. No payment or charge will be recorded.
+          </p>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Reason</label>
+            <textarea rows={3} placeholder="e.g. Guest left without ordering"
+              value={reason} onChange={e => setReason(e.target.value)} className={inputCls} />
+          </div>
+
+          {error && <div className="bg-red-50 border border-red-100 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>}
+        </div>
+
+        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3">
+          <button onClick={onClose} disabled={processing}
+            className="px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors">
+            Back
+          </button>
+          <button onClick={handleConfirm} disabled={processing}
+            className="px-5 py-2.5 bg-rose-600 text-white rounded-lg text-sm font-semibold hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm">
+            {processing ? 'Cancelling...' : 'Cancel Ticket'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main PosInterface ───────────────────────────────────────────────────────
 
 export default function PosInterface() {
@@ -149,6 +308,8 @@ export default function PosInterface() {
   const [showOpenTicketModal, setShowOpenTicketModal] = useState(false);
   const [showTicketSheet, setShowTicketSheet] = useState(false);
   const [closingTicketId, setClosingTicketId] = useState<string | null>(null);
+  const [closePaymentTicket, setClosePaymentTicket] = useState<PosTicket | null>(null);
+  const [cancelTicketTarget, setCancelTicketTarget] = useState<PosTicket | null>(null);
 
   const fmt = (n: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(n);
 
@@ -243,22 +404,46 @@ export default function PosInterface() {
   };
 
   const handleCloseTicket = async (ticketId: string) => {
+    const ticket = openTickets.find(t => t.id === ticketId);
+    // Walk-in tickets (no linked booking/folio) require a payment method to close.
+    if (ticket && !ticket.bookingId && !ticket.mealPlanCovered) {
+      setClosePaymentTicket(ticket);
+      return;
+    }
+
     setClosingTicketId(ticketId);
     setOrderError(null);
     try {
       const closed = await posApi.closeTicket(ticketId);
-      setOpenTickets(prev => prev.filter(t => t.id !== ticketId));
-      if (activeTicketId === ticketId) setActiveTicketId(null);
-      const msg = closed.mealPlanCovered
-        ? `Ticket ${closed.ticketNumber} closed — covered by meal plan`
-        : `Receipt ${closed.invoiceNumber} generated`;
-      setSuccessMessage(msg);
-      setTimeout(() => setSuccessMessage(null), 4000);
+      handleTicketClosed(closed);
     } catch {
       setOrderError('Failed to close ticket');
     } finally {
       setClosingTicketId(null);
     }
+  };
+
+  const handleTicketClosed = (closed: PosTicket) => {
+    setOpenTickets(prev => prev.filter(t => t.id !== closed.id));
+    if (activeTicketId === closed.id) setActiveTicketId(null);
+    const msg = closed.mealPlanCovered
+      ? `Ticket ${closed.ticketNumber} closed — covered by meal plan`
+      : `Receipt ${closed.invoiceNumber} generated`;
+    setSuccessMessage(msg);
+    setTimeout(() => setSuccessMessage(null), 4000);
+  };
+
+  const handleClosePaymentSuccess = (closed: PosTicket) => {
+    setClosePaymentTicket(null);
+    handleTicketClosed(closed);
+  };
+
+  const handleCancelSuccess = (cancelled: PosTicket) => {
+    setCancelTicketTarget(null);
+    setOpenTickets(prev => prev.filter(t => t.id !== cancelled.id));
+    if (activeTicketId === cancelled.id) setActiveTicketId(null);
+    setSuccessMessage(`Ticket ${cancelled.ticketNumber} cancelled`);
+    setTimeout(() => setSuccessMessage(null), 4000);
   };
 
   const addToCart = (product: PosProduct) => {
@@ -452,13 +637,21 @@ export default function PosInterface() {
                             )}
                           </div>
                         </div>
-                        <button
-                          onClick={e => { e.stopPropagation(); handleCloseTicket(ticket.id); }}
-                          disabled={closingTicketId === ticket.id}
-                          className="ml-2 text-xs font-medium text-gray-400 hover:text-red-600 hover:bg-red-50 px-2 py-1 rounded-lg transition-colors flex-shrink-0 disabled:opacity-50"
-                        >
-                          {closingTicketId === ticket.id ? '...' : 'Close'}
-                        </button>
+                        <div className="ml-2 flex items-center gap-1 flex-shrink-0">
+                          <button
+                            onClick={e => { e.stopPropagation(); setCancelTicketTarget(ticket); }}
+                            className="text-xs font-medium text-gray-400 hover:text-rose-600 hover:bg-rose-50 px-2 py-1 rounded-lg transition-colors"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={e => { e.stopPropagation(); handleCloseTicket(ticket.id); }}
+                            disabled={closingTicketId === ticket.id}
+                            className="text-xs font-medium text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 px-2 py-1 rounded-lg transition-colors disabled:opacity-50"
+                          >
+                            {closingTicketId === ticket.id ? '...' : 'Close'}
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -790,13 +983,21 @@ export default function PosInterface() {
                       <span className="text-xs text-blue-600 font-medium mt-1 block">Active — tap to deselect</span>
                     )}
                   </button>
-                  <button
-                    onClick={() => { handleCloseTicket(ticket.id); setShowTicketSheet(false); }}
-                    disabled={closingTicketId === ticket.id}
-                    className="ml-3 text-sm font-medium text-gray-400 hover:text-red-600 bg-gray-100 hover:bg-red-50 px-3 py-2 rounded-xl transition-colors flex-shrink-0 disabled:opacity-50"
-                  >
-                    {closingTicketId === ticket.id ? '...' : 'Close'}
-                  </button>
+                  <div className="ml-3 flex flex-col items-stretch gap-1.5 flex-shrink-0">
+                    <button
+                      onClick={() => { handleCloseTicket(ticket.id); setShowTicketSheet(false); }}
+                      disabled={closingTicketId === ticket.id}
+                      className="text-sm font-medium text-gray-400 hover:text-emerald-600 bg-gray-100 hover:bg-emerald-50 px-3 py-2 rounded-xl transition-colors disabled:opacity-50"
+                    >
+                      {closingTicketId === ticket.id ? '...' : 'Close'}
+                    </button>
+                    <button
+                      onClick={() => { setCancelTicketTarget(ticket); setShowTicketSheet(false); }}
+                      className="text-sm font-medium text-gray-400 hover:text-rose-600 bg-gray-100 hover:bg-rose-50 px-3 py-2 rounded-xl transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -817,6 +1018,22 @@ export default function PosInterface() {
           locationId={location.id}
           propertyId={selectedPropertyId}
           onTicketCreated={handleTicketCreated}
+        />
+      )}
+
+      {closePaymentTicket && (
+        <CloseTicketPaymentModal
+          ticket={closePaymentTicket}
+          onClose={() => setClosePaymentTicket(null)}
+          onSuccess={handleClosePaymentSuccess}
+        />
+      )}
+
+      {cancelTicketTarget && (
+        <CancelTicketModal
+          ticket={cancelTicketTarget}
+          onClose={() => setCancelTicketTarget(null)}
+          onSuccess={handleCancelSuccess}
         />
       )}
     </div>

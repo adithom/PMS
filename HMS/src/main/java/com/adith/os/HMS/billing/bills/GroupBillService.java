@@ -6,6 +6,7 @@ import com.adith.os.HMS.billing.folio.Folio;
 import com.adith.os.HMS.billing.folio.FolioCharge;
 import com.adith.os.HMS.billing.folio.dto.ChargeDto;
 import com.adith.os.HMS.billing.bills.dto.GroupBillDto;
+import com.adith.os.HMS.billing.payment.PaymentRepository;
 import com.adith.os.HMS.property.PropertyRepository;
 import com.adith.os.HMS.reservation.Reservation;
 import com.adith.os.HMS.reservation.ReservationRepository;
@@ -26,14 +27,17 @@ public class GroupBillService {
     private final BookingRepository bookingRepository;
     private final PropertyRepository propertyRepository;
     private final ReservationRepository reservationRepository;
+    private final PaymentRepository paymentRepository;
 
     public GroupBillService(
             BookingRepository bookingRepository,
             PropertyRepository propertyRepository,
-            ReservationRepository reservationRepository) {
+            ReservationRepository reservationRepository,
+            PaymentRepository paymentRepository) {
         this.bookingRepository = bookingRepository;
         this.propertyRepository = propertyRepository;
         this.reservationRepository = reservationRepository;
+        this.paymentRepository = paymentRepository;
     }
 
     /**
@@ -121,6 +125,11 @@ public class GroupBillService {
             groupDiscountAmount = groupDiscountAmount.add(roomDiscountAmount);
             groupTotalAmount    = groupTotalAmount.add(roomTotalAmount);
             groupPaidAmount     = groupPaidAmount.add(roomPaidAmount);
+        }
+
+        BigDecimal reservationPayments = paymentRepository.sumCompletedByReservationId(reservationId);
+        if (reservationPayments != null) {
+            groupPaidAmount = groupPaidAmount.add(reservationPayments);
         }
 
         BigDecimal groupBalanceDue = groupTotalAmount.subtract(groupPaidAmount)

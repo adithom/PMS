@@ -78,6 +78,9 @@ const posApi = {
   closeTicket: (ticketId: string, data?: { paymentMethod?: string; transactionReference?: string }) =>
     api.post<PosTicket>(`/pos/tickets/${ticketId}/close`, data ?? null),
 
+  cancelTicket: (ticketId: string, reason: string) =>
+    api.post<PosTicket>(`/pos/tickets/${ticketId}/cancel`, { reason }),
+
   getOpenTickets: (locationId: string) =>
     api.get<PosTicket[]>('/pos/tickets', { locationId }),
 

@@ -19,6 +19,7 @@ import FrontDeskBillingManager from './pages/FrontDeskBillingManager';
 import Sandbox from './pages/Sandbox';
 import Reports from './pages/Reports'
 import AdminConsole from './pages/AdminConsole'
+import Invoices from './pages/Invoices'
 
 
 function AppRoutes() {
@@ -157,7 +158,19 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
-    
+
+      <Route
+        path="/invoices"
+        element={
+          <ProtectedRoute allowedRoles={['MANAGER']}>
+            <>
+              <Navigation allowedRoutes={allowedRoutes} />
+              <Invoices />
+            </>
+          </ProtectedRoute>
+        }
+      />
+
 
       <Route
         path="/frontdesk-billing"

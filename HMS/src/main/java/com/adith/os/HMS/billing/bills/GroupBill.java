@@ -84,7 +84,6 @@ public class GroupBill {
      * essentially a read-only audit snapshot.
      * Example shape: [{roomNumber, guestName, subtotal, taxAmount, totalAmount}, ...]
      */
-    @Lob
     @Column(name = "room_breakdown_json", columnDefinition = "TEXT")
     private String roomBreakdownJson;
 

@@ -1,4 +1,5 @@
 import apiClient from './fetchClient';
+import type { ChargeDto } from './folioApi';
 
 /* ────────────────────────────────────────────────────────────── */
 /* Types & DTOs                                                   */
@@ -13,6 +14,10 @@ export interface BillBatchRowDto {
   grandTotal: number;
   isVoided: boolean;
   billIds: string[];
+  reservationId?: string;
+  reservationNumber?: string;
+  checkIn?: string;
+  checkOut?: string;
 }
 
 export interface BillBatchPageDto {
@@ -80,7 +85,7 @@ export interface MultiBillDto {
 export interface GroupBill {
   id: string;
   invoiceNumber?: string;
-  category?: BillCategory;
+  billType?: BillCategory;
   guestGstNumber?: string;
   subtotal?: number;
   taxAmount?: number;
@@ -97,10 +102,46 @@ export interface GroupBill {
   voided?: boolean;
 }
 
-// GroupBillSectionDto & GroupDoubleBillDto are structurally massive in the JSON, 
+// GroupBillSectionDto & GroupDoubleBillDto are structurally massive in the JSON,
 // using 'any' fallback here for complex nested objects unless strict typing is required.
 export interface GroupMultiBillDto {
   bills: any[];
+}
+
+/** Consolidated billing view for a multi-room reservation — see GroupBillDto.java */
+export interface RoomBillSection {
+  bookingId: string;
+  folioId?: string;
+  folioNumber?: string;
+  guestId?: string;
+  guestName?: string;
+  roomNumber?: string;
+  unitName?: string;
+  subtotal: number;
+  taxAmount: number;
+  discountAmount: number;
+  totalAmount: number;
+  paidAmount: number;
+  balanceDue: number;
+  charges: ChargeDto[];
+}
+
+export interface GroupBillDto {
+  reservationId: string;
+  groupReference?: string;
+  organizerGuestName: string;
+  checkIn: string;
+  checkOut: string;
+  currency: string;
+  billingMode: 'SEPARATE' | 'CONSOLIDATED';
+  generatedAt: string;
+  groupSubtotal: number;
+  groupTaxAmount: number;
+  groupDiscountAmount: number;
+  groupTotalAmount: number;
+  groupPaidAmount: number;
+  groupBalanceDue: number;
+  rooms: RoomBillSection[];
 }
 
 /* ────────────────────────────────────────────────────────────── */
@@ -127,6 +168,10 @@ const billingApi = {
   },
 
   // Group Booking Bills
+  getGroupBillView: async (propertyId: string, reservationId: string): Promise<GroupBillDto> => {
+    return apiClient.get(`/properties/${propertyId}/reservations/${reservationId}/bills/view`);
+  },
+
   getGroupBills: async (propertyId: string, reservationId: string): Promise<GroupBill[]> => {
     return apiClient.get(`/properties/${propertyId}/reservations/${reservationId}/bills`);
   },

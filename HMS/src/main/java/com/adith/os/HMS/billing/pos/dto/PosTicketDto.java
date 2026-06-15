@@ -26,6 +26,7 @@ public record PosTicketDto(
         List<PosOrderDto> orders,
         String paymentMethod,
         BigDecimal paymentAmount,
-        String transactionReference
+        String transactionReference,
+        String cancellationReason
 ) {
 }

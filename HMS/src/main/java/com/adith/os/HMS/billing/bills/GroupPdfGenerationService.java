@@ -59,7 +59,8 @@ public class GroupPdfGenerationService {
     public String generateGroupBillPdf(GroupMultiBillDto.GroupBillSectionDto section) {
         ensureStorageDir();
 
-        String fileName = "GRP_INV_" + section.invoiceNumber() + ".pdf";
+        String fileKey = section.invoiceNumber() != null ? section.invoiceNumber().replace("/", "") : "INVOICE";
+        String fileName = "GRP_INV_" + fileKey + ".pdf";
         String fullPath = storagePath + fileName;
 
         try (PDDocument document = new PDDocument()) {
@@ -85,6 +86,18 @@ public class GroupPdfGenerationService {
             } catch (Exception ignored) {
                 // Logo missing — continue without it
             }
+
+            // PAN (top-left) and FSSAI (top-right) — 8pt margin from all edges, body font
+            if (section.propertyPan() != null && !section.propertyPan().isBlank())
+                drawText(state.cs, "PAN: " + section.propertyPan(), 8, 826, fontRegular, 7);
+            if (section.propertyFssaiNumber() != null && !section.propertyFssaiNumber().isBlank())
+                drawTextRight(state.cs, "FSSAI: " + section.propertyFssaiNumber(), 587, 826, fontRegular, 7);
+
+            // CIN (under PAN) and UDYAM (under FSSAI)
+            if (section.propertyCin() != null && !section.propertyCin().isBlank())
+                drawText(state.cs, "CIN: " + section.propertyCin(), 8, 817, fontRegular, 7);
+            if (section.propertyUdyamRegistrationNo() != null && !section.propertyUdyamRegistrationNo().isBlank())
+                drawTextRight(state.cs, "UDYAM: " + section.propertyUdyamRegistrationNo(), 587, 817, fontRegular, 7);
 
             // Header band: property title+address centered | invoice block right-flush at x=455
             String propName = section.propertyName() != null ? section.propertyName() : "HOTEL INVOICE";

@@ -16,6 +16,7 @@ import EarlyCheckoutModal from '../components/Booking/EarlyCheckoutModal';
 import RoomShiftModal from '../components/Booking/RoomShiftModal';
 import TaskListModal from '../components/Booking/TaskListModal';
 import BookingFoliosModal from '../components/Booking/BookingFoliosModal';
+import MasterFolioModal from '../components/Billing/MasterFolioModal';
 import BookingDetailModal from '../components/Booking/BookingDetailModal';
 import AssignRoomModal from '../components/Booking/AssignRoomModal';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -27,7 +28,7 @@ import { toDS, addDays, diffDays, shortDate, dayLabel, dateStr, fmtDate } from '
 import { getRoomId } from '../utils/roomHelpers';
 import {
   CELL_W, CELL_H, LABEL_W, MIN_CHART_ROWS,
-  STATUS_COLORS, cn, btnPrimary, btnSecondary,
+  STATUS_COLORS, cn, btnPrimary, btnSecondary, tintForReservation,
 } from '../components/Booking/TapeChartConstants';
 
 //todo: fix occupancy rate status bars
@@ -55,7 +56,7 @@ function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout, onEdit
   onEarlyCheckout: (bookingId: string) => void;
   onEditBooking: (booking: Booking) => void;
   onShiftRoom: (booking: Booking) => void;
-  onShowFolio: (bookingId: string, guestName: string) => void;
+  onShowFolio: (bookingId: string, guestName: string, reservationId?: string) => void;
   onViewBooking: (booking: Booking) => void;
   onAssignRoom: (booking: Booking) => void;
   onAddRoom: (booking: Booking) => void;
@@ -90,7 +91,7 @@ function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout, onEdit
       acts.push({ label: '✎ Edit Booking', doFn: async () => { onEditBooking(booking); onClose(); } });
     }
 
-    acts.push({ label: '⊞ Show Folio', doFn: async () => { onShowFolio(booking.id!, guestName); onClose(); } });
+    acts.push({ label: '⊞ Show Folio', doFn: async () => { onShowFolio(booking.id!, guestName, booking.reservationId); onClose(); } });
 
     // Assign Room — surfaced when the booking has no specific room pinned (ghost bar
     // on the chart, or unassigned booking opened from elsewhere). Pins via PATCH.
@@ -287,6 +288,8 @@ export default function Bookings() {
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [earlyCheckoutBookingId, setEarlyCheckoutBookingId] = useState<string | null>(null);
   const [viewFolioBooking, setViewFolioBooking] = useState<{ id: string; guestName: string } | null>(null);
+  const [viewMasterFolioReservationId, setViewMasterFolioReservationId] = useState<string | null>(null);
+  const [hoverGroup, setHoverGroup] = useState<string | null>(null);
   const [showList, setShowList] = useState(false);
   const [showTasksModal, setShowTasksModal] = useState(false);
   const [showUnassigned, setShowUnassigned] = useState(false);
@@ -520,6 +523,20 @@ export default function Bookings() {
     assignmentCacheRef.current.clear();
     await fetchBuffer(selectedPropId, winStartStr, winEndStr);
   }, [selectedPropId, winStartStr, winEndStr, fetchBuffer]);
+
+  // Multi-room reservations open a consolidated master folio; single-room
+  // reservations (and bookings without a reservationId) open the per-booking folio.
+  const handleShowFolio = useCallback(async (bookingId: string, guestName: string, reservationId?: string) => {
+    if (selectedPropId && reservationId) {
+      const res = await reservationApi.getReservation(selectedPropId, reservationId).catch(() => null);
+      if (res && res.totalRooms > 1) {
+        setViewMasterFolioReservationId(reservationId);
+        return;
+      }
+    }
+    setViewFolioBooking({ id: bookingId, guestName });
+  }, [selectedPropId]);
+
   const statClick = useCallback((t: StatType) => { setListType(t); setShowList(true); }, []);
 
   const handleDragStart = useCallback((rid: string, col: number, rowTop: number) => {
@@ -781,9 +798,13 @@ export default function Bookings() {
 
                               const sc = STATUS_COLORS[bk.status] ?? STATUS_COLORS.PENDING;
                               const guestName = bk.guestName || 'Guest';
+                              const tint = tintForReservation(bk.reservationId);
+                              const isHighlighted = !!hoverGroup && bk.reservationId === hoverGroup;
 
                               return (
                                 <div key={assignment.id}
+                                  onMouseEnter={() => bk.reservationId && setHoverGroup(bk.reservationId)}
+                                  onMouseLeave={() => setHoverGroup(null)}
                                   className={cn(
                                     'absolute flex overflow-hidden shadow-sm cursor-pointer transition-all hover:shadow-md hover:brightness-95',
                                     isGhost ? 'border-2 border-dashed opacity-80' : 'border',
@@ -798,6 +819,7 @@ export default function Bookings() {
                                     bleedsRight ? 'rounded-l-md rounded-r-none' :
                                     'rounded-md',
                                     isShifted && isCompleted && 'opacity-75',
+                                    isHighlighted && tint ? 'ring-2 ' + tint.split(' ')[1] : '',
                                   )}
                                   style={{
                                     left: leftPx,
@@ -961,6 +983,13 @@ export default function Bookings() {
           onClose={() => setViewFolioBooking(null)}
         />
       )}
+      {viewMasterFolioReservationId && selectedPropId && (
+        <MasterFolioModal
+          propertyId={selectedPropId}
+          reservationId={viewMasterFolioReservationId}
+          onClose={() => setViewMasterFolioReservationId(null)}
+        />
+      )}
       {showList && selectedPropId && (
         <BookingsList bookings={getFiltered()} propertyId={selectedPropId} listType={listType}
           onClose={() => setShowList(false)} onUpdate={refresh}
@@ -970,7 +999,7 @@ export default function Bookings() {
         <CtxMenu state={ctx} propertyId={selectedPropId} onClose={() => setCtx(null)}
           onAction={refresh} onEarlyCheckout={setEarlyCheckoutBookingId}
           onEditBooking={setEditBooking} onShiftRoom={setShiftRoomBooking}
-          onShowFolio={(id, name) => setViewFolioBooking({ id, guestName: name })}
+          onShowFolio={handleShowFolio}
           onViewBooking={setViewBooking}
           onAssignRoom={setAssignRoomBooking}
           onAddRoom={async (booking) => {
@@ -992,7 +1021,7 @@ export default function Bookings() {
           propertyId={selectedPropId}
           onClose={() => setViewBooking(null)}
           onEditBooking={(b) => { setViewBooking(null); setEditBooking(b); }}
-          onOpenFolio={(id, name) => { setViewBooking(null); setViewFolioBooking({ id, guestName: name }); }}
+          onOpenFolio={(id, name, resId) => { setViewBooking(null); handleShowFolio(id, name, resId); }}
         />
       )}
       {assignRoomBooking && selectedPropId && assignRoomBooking.id && assignRoomBooking.unitId && (

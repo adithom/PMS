@@ -8,6 +8,7 @@ import com.adith.os.HMS.billing.bills.dto.BillBatchRowDto;
 import com.adith.os.HMS.billing.bills.dto.BillDto;
 import com.adith.os.HMS.booking.Booking;
 import com.adith.os.HMS.guest.Guest;
+import com.adith.os.HMS.reservation.Reservation;
 import com.adith.os.HMS.property.Property;
 import com.adith.os.HMS.billing.payment.Payment;
 import com.adith.os.HMS.billing.payment.PaymentRepository;
@@ -121,8 +122,10 @@ public class BillMapper {
 
         BigDecimal finalAmountPaid;
         if (bill.getBillType() == BillType.ROOM_RENT) {
+            // Main bill absorbs payments first, up to its own total.
             finalAmountPaid = totalNetPaid.min(grandTotal);
-        } else {
+        } else if (bill.getBillType() == BillType.ANCILLARY) {
+            // Consolidated ancillary bill absorbs leftover payments beyond the room total.
             BigDecimal roomRentChargesTotal = folio.getCharges().stream()
                     .filter(c -> !c.isVoided())
                     .filter(c -> c.getChargeCode().getCategory() == ChargeCategory.ROOM_RENT
@@ -132,11 +135,16 @@ public class BillMapper {
             BigDecimal roomFolioDiscount = FolioDiscountCalculator.computeRoomDiscountAmount(folio);
             BigDecimal effectiveRoomTotal = roomRentChargesTotal.subtract(roomFolioDiscount).max(BigDecimal.ZERO);
             finalAmountPaid = totalNetPaid.subtract(effectiveRoomTotal).max(BigDecimal.ZERO);
+        } else {
+            // Split-mode POS bills (RESTAURANT, SPA, LAUNDRY, TRAVEL_DESK, SHOP, MISC) never show payments.
+            finalAmountPaid = BigDecimal.ZERO;
         }
 
         // Apply the booking's share of reservation-level payments (master credit) on the
         // designated bill (typically ROOM_RENT, the first bill in a multi-bill batch).
-        if (appliedMasterCredit != null && appliedMasterCredit.compareTo(BigDecimal.ZERO) > 0) {
+        // Never applied to split-mode POS bills, per the "no payments on POS bills" rule.
+        if (appliedMasterCredit != null && appliedMasterCredit.compareTo(BigDecimal.ZERO) > 0
+                && (bill.getBillType() == BillType.ROOM_RENT || bill.getBillType() == BillType.ANCILLARY)) {
             finalAmountPaid = finalAmountPaid.add(appliedMasterCredit);
         }
 
@@ -226,6 +234,9 @@ public class BillMapper {
 
         List<java.util.UUID> billIds = batchBills.stream().map(Bill::getId).toList();
 
+        Booking booking = folio.getBooking();
+        Reservation reservation = booking != null ? booking.getReservation() : null;
+
         return new BillBatchRowDto(
                 main.getGenerationBatchId() != null ? main.getGenerationBatchId() : main.getId(),
                 main.getInvoiceNumber(),
@@ -234,7 +245,11 @@ public class BillMapper {
                 guest.getFullName(),
                 grandTotal,
                 allVoided,
-                billIds
+                billIds,
+                reservation != null ? reservation.getId() : null,
+                reservation != null ? reservation.getReservationNumber() : null,
+                reservation != null ? reservation.getCheckIn() : null,
+                reservation != null ? reservation.getCheckOut() : null
         );
     }
 

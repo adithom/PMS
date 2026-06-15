@@ -25,6 +25,10 @@ public record GroupMultiBillDto(List<GroupBillSectionDto> bills) {
             String propertyGstNumber,
             String propertyStateName,
             String propertyStateCode,
+            String propertyPan,
+            String propertyCin,
+            String propertyFssaiNumber,
+            String propertyUdyamRegistrationNo,
 
             UUID parentBookingId,
             String groupReference,
@@ -59,6 +63,7 @@ public record GroupMultiBillDto(List<GroupBillSectionDto> bills) {
             return new GroupBillSectionDto(
                     invoiceNumber, invoiceDate, category,
                     propertyName, propertyAddress, propertyAddressLine2, propertyPostalCode, propertyPhone, propertyGstNumber, propertyStateName, propertyStateCode,
+                    propertyPan, propertyCin, propertyFssaiNumber, propertyUdyamRegistrationNo,
                     parentBookingId, groupReference,
                     organizerGuestName, organizerGuestPhone, organizerGuestEmail, organizerGuestGstNumber,
                     checkIn, checkOut, currency, generatedAt,

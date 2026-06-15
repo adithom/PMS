@@ -45,7 +45,7 @@ interface Props {
   propertyId: string;
   onClose: () => void;
   onEditBooking: (booking: Booking) => void;
-  onOpenFolio: (bookingId: string, guestName: string) => void;
+  onOpenFolio: (bookingId: string, guestName: string, reservationId?: string) => void;
 }
 
 export default function BookingDetailModal({ booking: bookingProp, propertyId, onClose, onEditBooking, onOpenFolio }: Props) {
@@ -437,7 +437,7 @@ export default function BookingDetailModal({ booking: bookingProp, propertyId, o
                 <button
                   type="button"
                   className="w-full rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
-                  onClick={() => { onClose(); onOpenFolio(booking.id!, booking.guestName); }}
+                  onClick={() => { onClose(); onOpenFolio(booking.id!, booking.guestName, booking.reservationId); }}
                 >
                   Open Folio →
                 </button>

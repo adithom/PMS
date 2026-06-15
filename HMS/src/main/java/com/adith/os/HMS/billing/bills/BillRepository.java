@@ -29,6 +29,7 @@ public interface BillRepository extends JpaRepository<Bill, UUID> {
             JOIN FETCH f.guest g
             LEFT JOIN FETCH f.booking bk
             LEFT JOIN FETCH bk.room r
+            LEFT JOIN FETCH bk.reservation re
             WHERE b.isVoided = false
               AND b.generatedAt >= :from
               AND b.generatedAt <= :to
@@ -43,6 +44,7 @@ public interface BillRepository extends JpaRepository<Bill, UUID> {
             JOIN FETCH f.guest g
             LEFT JOIN FETCH f.booking bk
             LEFT JOIN FETCH bk.room r
+            LEFT JOIN FETCH bk.reservation re
             WHERE b.generatedAt >= :from
               AND b.generatedAt <= :to
             ORDER BY b.generatedAt DESC

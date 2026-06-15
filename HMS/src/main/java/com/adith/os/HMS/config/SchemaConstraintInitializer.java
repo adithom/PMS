@@ -28,6 +28,7 @@ public class SchemaConstraintInitializer implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         applyRoomAssignmentOverlapConstraint();
         fixReservationNumberConstraint();
+        fixPosTicketStatusConstraint();
     }
 
     /**
@@ -93,6 +94,39 @@ public class SchemaConstraintInitializer implements ApplicationRunner {
             log.info("reservation_number constraint is correctly scoped to (property_id, reservation_number)");
         } catch (Exception e) {
             log.warn("Could not fix reservation_number constraint — continuing. Reason: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Hibernate auto-generated a CHECK constraint on pos_ticket.status limited to
+     * ('OPEN', 'CLOSED') when the column was first created. Replaces it with one
+     * that also allows 'CANCELLED'.
+     */
+    private void fixPosTicketStatusConstraint() {
+        try {
+            jdbcTemplate.execute("""
+                    DO $$
+                    DECLARE
+                      stale_name text;
+                    BEGIN
+                      SELECT c.conname INTO stale_name
+                      FROM pg_constraint c
+                      WHERE c.conrelid = 'pos_ticket'::regclass
+                        AND c.contype = 'c'
+                        AND pg_get_constraintdef(c.oid) ILIKE '%status%';
+                      IF stale_name IS NOT NULL THEN
+                        EXECUTE 'ALTER TABLE pos_ticket DROP CONSTRAINT ' || quote_ident(stale_name);
+                      END IF;
+
+                      ALTER TABLE pos_ticket
+                        ADD CONSTRAINT pos_ticket_status_check
+                        CHECK (status IN ('OPEN', 'CLOSED', 'CANCELLED'));
+                    END;
+                    $$""");
+
+            log.info("pos_ticket status constraint allows OPEN, CLOSED, CANCELLED");
+        } catch (Exception e) {
+            log.warn("Could not fix pos_ticket status constraint — continuing. Reason: {}", e.getMessage());
         }
     }
 }
