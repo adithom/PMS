@@ -1,5 +1,6 @@
 package com.adith.os.HMS.billing.bills;
 
+import com.adith.os.HMS.billing.bills.dto.GroupBillDto;
 import com.adith.os.HMS.billing.bills.dto.GroupMultiBillDto;
 import com.adith.os.HMS.security.UserPrincipal;
 import org.springframework.http.HttpStatus;
@@ -22,9 +23,19 @@ import java.util.UUID;
 public class GroupBillController {
 
     private final GroupBillGenerationService groupBillGenerationService;
+    private final GroupBillService groupBillService;
 
-    public GroupBillController(GroupBillGenerationService groupBillGenerationService) {
+    public GroupBillController(GroupBillGenerationService groupBillGenerationService, GroupBillService groupBillService) {
         this.groupBillGenerationService = groupBillGenerationService;
+        this.groupBillService = groupBillService;
+    }
+
+    @GetMapping("/view")
+    public ResponseEntity<GroupBillDto> getGroupBillView(
+            @PathVariable UUID propertyId,
+            @PathVariable UUID reservationId) {
+
+        return ResponseEntity.ok(groupBillService.getGroupBillView(propertyId, reservationId));
     }
 
     @PostMapping("/generate")

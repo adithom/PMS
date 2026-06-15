@@ -1,5 +1,6 @@
 package com.adith.os.HMS.billing.pos;
 
+import com.adith.os.HMS.billing.pos.dto.CancelTicketDto;
 import com.adith.os.HMS.billing.pos.dto.CloseTicketDto;
 import com.adith.os.HMS.billing.pos.dto.OrderSummaryDto;
 import com.adith.os.HMS.billing.pos.dto.PosOrderCreationDto;
@@ -54,6 +55,15 @@ public class PosTicketController {
             @RequestBody(required = false) CloseTicketDto dto,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ticketService.closeTicket(ticketId, dto, principal.getUsername()));
+    }
+
+    @PostMapping("/{ticketId}/cancel")
+    @PreAuthorize("hasAnyRole('MANAGER', 'POS')")
+    public ResponseEntity<PosTicketDto> cancelTicket(
+            @PathVariable UUID ticketId,
+            @RequestBody CancelTicketDto dto,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ticketService.cancelTicket(ticketId, dto, principal.getUsername()));
     }
 
     @GetMapping

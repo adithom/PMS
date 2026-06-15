@@ -58,6 +58,12 @@ export const routes: RouteConfig[] = [
     allowedRoles: ['ADMIN', 'MANAGER']
   },
   {
+    path: '/invoices',
+    label: 'Invoices',
+    component: 'Invoices',
+    allowedRoles: ['MANAGER']
+  },
+  {
     path: '/console',
     label: 'Console',
     component: 'AdminConsole',

@@ -3,6 +3,7 @@ package com.adith.os.HMS.billing.pos;
 import com.adith.os.HMS.billing.folio.ChargeCode;
 import com.adith.os.HMS.billing.folio.FolioService;
 import com.adith.os.HMS.billing.folio.dto.ChargeCreationDto;
+import com.adith.os.HMS.billing.pos.dto.CancelTicketDto;
 import com.adith.os.HMS.billing.pos.dto.CloseTicketDto;
 import com.adith.os.HMS.billing.pos.dto.OrderSummaryDto;
 import com.adith.os.HMS.billing.pos.dto.PosOrderCreationDto;
@@ -291,6 +292,38 @@ public class PosTicketService {
         return toDto(saved, orders);
     }
 
+    // ──────────────── Cancel ticket ────────────────
+
+    @Transactional
+    public PosTicketDto cancelTicket(UUID ticketId, CancelTicketDto dto, String cancelledBy) {
+        PosTicket ticket = ticketRepository.findById(ticketId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ticket not found"));
+
+        if (ticket.getStatus() != PosTicketStatus.OPEN) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ticket is already closed");
+        }
+
+        if (dto == null || dto.reason() == null || dto.reason().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A reason is required to cancel a ticket");
+        }
+
+        List<PosOrder> orders = orderRepository.findByTicketIdWithItems(ticketId);
+        orders.forEach(o -> {
+            o.setStatus(PosOrderStatus.CANCELLED);
+            o.setPaymentStatus("CANCELLED");
+            o.setCompletedAt(OffsetDateTime.now());
+        });
+        orderRepository.saveAll(orders);
+
+        ticket.setStatus(PosTicketStatus.CANCELLED);
+        ticket.setCancellationReason(dto.reason());
+        ticket.setClosedAt(OffsetDateTime.now());
+        PosTicket saved = ticketRepository.save(ticket);
+        saved.setOrders(orders);
+
+        return toDto(saved, orders);
+    }
+
     // ──────────────── Get open tickets ────────────────
 
     public List<PosTicketDto> getOpenTickets(UUID locationId) {
@@ -455,7 +488,8 @@ public class PosTicketService {
                 orderDtos,
                 ticket.getPaymentMethod(),
                 ticket.getPaymentAmount(),
-                ticket.getTransactionReference()
+                ticket.getTransactionReference(),
+                ticket.getCancellationReason()
         );
     }
 }

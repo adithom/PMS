@@ -5,7 +5,7 @@ import bookingApi from '../../api/bookingApi';
 import type { TapeChartDto, BookingStatus } from '../../types';
 import { addDays, dayLabel, dateStr, diffDays, shortDate, toDS } from '../../utils/dateHelpers';
 import {
-  CELL_W, CELL_H, LABEL_W, MIN_CHART_ROWS, STATUS_COLORS,
+  CELL_W, CELL_H, LABEL_W, MIN_CHART_ROWS, STATUS_COLORS, tintForReservation,
 } from '../Booking/TapeChartConstants';
 
 function cn(...classes: Array<string | false | null | undefined>) {
@@ -30,23 +30,6 @@ interface Props {
   propertyId: string;
   onOpenReservation: (reservationId: string) => void;
   onAssignRoom: (booking: { id: string; unitId: string; checkIn: string; checkOut: string }) => void;
-}
-
-// Pick a deterministic color tint for a reservation/group (rotating palette).
-const GROUP_TINTS = [
-  'border-indigo-400 ring-indigo-300',
-  'border-emerald-400 ring-emerald-300',
-  'border-amber-400 ring-amber-300',
-  'border-fuchsia-400 ring-fuchsia-300',
-  'border-cyan-400 ring-cyan-300',
-  'border-rose-400 ring-rose-300',
-];
-function tintForReservation(resId?: string): string | null {
-  if (!resId) return null;
-  let h = 0;
-  for (let i = 0; i < resId.length; i++) h = (h * 31 + resId.charCodeAt(i)) | 0;
-  const idx = Math.abs(h) % GROUP_TINTS.length;
-  return GROUP_TINTS[idx];
 }
 
 export default function ReservationCalendar({ propertyId, onOpenReservation, onAssignRoom }: Props) {

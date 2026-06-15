@@ -25,6 +25,23 @@ export const STATUS_COLORS: Record<BookingStatus, { bar: string; text: string; l
 
 export const cn = (...c: Array<string | false | null | undefined>) => c.filter(Boolean).join(' ');
 
+// Pick a deterministic color tint for a reservation/group (rotating palette).
+export const GROUP_TINTS = [
+  'border-indigo-400 ring-indigo-300',
+  'border-emerald-400 ring-emerald-300',
+  'border-amber-400 ring-amber-300',
+  'border-fuchsia-400 ring-fuchsia-300',
+  'border-cyan-400 ring-cyan-300',
+  'border-rose-400 ring-rose-300',
+];
+export function tintForReservation(resId?: string): string | null {
+  if (!resId) return null;
+  let h = 0;
+  for (let i = 0; i < resId.length; i++) h = (h * 31 + resId.charCodeAt(i)) | 0;
+  const idx = Math.abs(h) % GROUP_TINTS.length;
+  return GROUP_TINTS[idx];
+}
+
 export const btnPrimary =
   'inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
 

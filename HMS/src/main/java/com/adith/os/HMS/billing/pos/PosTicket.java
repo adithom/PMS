@@ -73,6 +73,9 @@ public class PosTicket {
     @Column(name = "closed_at")
     private OffsetDateTime closedAt;
 
+    @Column(name = "cancellation_reason", length = 500)
+    private String cancellationReason;
+
     @OneToMany(mappedBy = "ticket", fetch = FetchType.LAZY)
     private List<PosOrder> orders = new ArrayList<>();
 
@@ -138,6 +141,9 @@ public class PosTicket {
 
     public OffsetDateTime getClosedAt() { return closedAt; }
     public void setClosedAt(OffsetDateTime closedAt) { this.closedAt = closedAt; }
+
+    public String getCancellationReason() { return cancellationReason; }
+    public void setCancellationReason(String cancellationReason) { this.cancellationReason = cancellationReason; }
 
     public List<PosOrder> getOrders() { return orders; }
     public void setOrders(List<PosOrder> orders) { this.orders = orders; }

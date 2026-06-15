@@ -13,5 +13,9 @@ public record BillBatchRowDto(
         String guestName,
         BigDecimal grandTotal,
         boolean isVoided,
-        List<UUID> billIds
+        List<UUID> billIds,
+        UUID reservationId,
+        String reservationNumber,
+        LocalDate checkIn,
+        LocalDate checkOut
 ) {}

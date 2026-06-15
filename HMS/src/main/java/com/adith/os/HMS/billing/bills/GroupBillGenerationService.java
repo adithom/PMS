@@ -162,6 +162,7 @@ public class GroupBillGenerationService {
                     invoiceNumber, today, bt.name(),
                     property.getName(), property.getAddress(), property.getAddressLine2(), property.getPostalCode(), property.getPhone(), property.getGstNumber(),
                     property.getStateName(), property.getStateCode(),
+                    property.getPan(), property.getCin(), property.getFssaiNumber(), property.getUdyamRegistrationNo(),
                     reservation.getId(), reservation.getGroupReference(),
                     organizer.getFullName(), organizer.getPhone(), organizer.getEmail(), safeGst,
                     reservation.getCheckIn(), reservation.getCheckOut(), reservation.getCurrency(), now,
