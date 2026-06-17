@@ -158,6 +158,10 @@ public class GroupBookingService {
                     : BigDecimal.ZERO;
             booking.setTotalPrice(bookingTotal);
             booking.setPaidAmount(BigDecimal.ZERO);
+            // Stash the inclusive nightly rate so assignRoomToBooking can apply it to the room assignment.
+            if (vr.request().nightlyRate() != null && vr.request().nightlyRate().compareTo(BigDecimal.ZERO) > 0) {
+                booking.setExpectedNightlyRate(vr.request().nightlyRate());
+            }
             booking.setSpecialRequests(vr.request().specialRequests());
             booking.setStatus(BookingStatus.CONFIRMED);
             booking.setTwinBed(vr.request().isTwinBed() != null ? vr.request().isTwinBed() : false);
@@ -311,9 +315,11 @@ public class GroupBookingService {
                             .stream()
                             .filter(a -> a.getStatus() == RoomAssignmentStatus.SCHEDULED || a.getStatus() == RoomAssignmentStatus.ACTIVE)
                             .toList();
+                    BigDecimal exTaxRate = ChargeCode.computeExTaxFromInclusive(bu.nightlyRate());
                     if (!activeAssignments.isEmpty()) {
                         for (RoomAssignment a : activeAssignments) {
                             a.setNightlyRate(bu.nightlyRate());
+                            a.setNightlyRateExTax(exTaxRate);
                         }
                         roomAssignmentRepository.saveAll(activeAssignments);
                         booking.setExpectedNightlyRate(null);

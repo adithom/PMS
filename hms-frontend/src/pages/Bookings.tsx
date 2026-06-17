@@ -248,9 +248,8 @@ function DragOverlay({ drag, cellW }: { drag: { rid: string; startCol: number; e
 /* ────────────────────────────────────────────────────────────── */
 
 export default function Bookings() {
-  const { user } = useAuth();
+  const { user, selectedPropId, setSelectedPropId } = useAuth();
   const [properties, setProperties] = useState<Property[]>([]);
-  const [selectedPropId, setSelectedPropId] = useState<string | null>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [totalRooms, setTotalRooms] = useState(0);
 
@@ -335,10 +334,12 @@ export default function Bookings() {
           ? all
           : all.filter(p => user?.properties?.some(up => up.id === p.id));
         setProperties(filtered);
-        if (filtered.length) setSelectedPropId(filtered[0].id);
+        if (filtered.length && (!selectedPropId || !filtered.find(p => p.id === selectedPropId))) {
+          setSelectedPropId(filtered[0].id);
+        }
       } catch (e) { console.error(e); }
     })();
-  }, [user]);
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!selectedPropId) return;

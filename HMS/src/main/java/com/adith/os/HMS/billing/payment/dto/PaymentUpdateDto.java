@@ -1,9 +1,11 @@
 package com.adith.os.HMS.billing.payment.dto;
 
-import com.adith.os.HMS.billing.payment.PaymentStatus;
+import jakarta.validation.constraints.Positive;
+
+import java.math.BigDecimal;
 
 public record PaymentUpdateDto(
-        PaymentStatus paymentStatus,
-        String transactionId,
+        @Positive(message = "Payment amount must be positive")
+        BigDecimal amount,
         String notes
 ) {}

@@ -164,10 +164,11 @@ public class NightAuditService {
                         ? assignment.getNightlyRate()
                         : room.getBaseRate();
 
-                // Use stored ex-tax rate as the charge base; fall back to inclusive rate for legacy assignments
+                // Use stored ex-tax rate as the charge base; for assignments missing it,
+                // back-calculate from the inclusive rate rather than charging tax-on-tax.
                 BigDecimal exTaxRate = assignment.getNightlyRateExTax() != null
                         ? assignment.getNightlyRateExTax()
-                        : nightlyRate;
+                        : ChargeCode.computeExTaxFromInclusive(nightlyRate);
 
                 BigDecimal roomRentTaxRate = ChargeCode.computeRoomRentTaxRate(exTaxRate);
 

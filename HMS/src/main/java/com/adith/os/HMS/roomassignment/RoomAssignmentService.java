@@ -238,6 +238,7 @@ public class RoomAssignmentService {
                 dto.notes() != null ? dto.notes() : "Room shift from " + oldRoom.getNumber() + " to " + newRoom.getNumber(),
                 effectiveNewRate
         );
+        newAssignment.setNightlyRateExTax(ChargeCode.computeExTaxFromInclusive(effectiveNewRate));
         roomAssignmentRepository.save(newAssignment);
 
         // 7. Handle folio rate adjustments for already-posted future charges

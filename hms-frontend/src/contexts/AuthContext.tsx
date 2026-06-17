@@ -14,6 +14,8 @@ interface AuthContextType {
   logout: () => void;
   isLoading: boolean;
   isAuthenticated: boolean;
+  selectedPropId: string | null;
+  setSelectedPropId: (id: string) => void;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -22,6 +24,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [token, setToken] = useState<string | null>(localStorage.getItem('accessToken'));
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedPropId, setSelectedPropIdState] = useState<string | null>(
+    localStorage.getItem('selectedPropId')
+  );
+
+  const setSelectedPropId = (id: string) => {
+    localStorage.setItem('selectedPropId', id);
+    setSelectedPropIdState(id);
+  };
 
   // Check if user is authenticated on mount
   useEffect(() => {
@@ -111,7 +121,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     login,
     logout,
     isLoading,
-    isAuthenticated: !!token && !!user
+    isAuthenticated: !!token && !!user,
+    selectedPropId,
+    setSelectedPropId,
   };
 
   return (

@@ -2,6 +2,7 @@ package com.adith.os.HMS.billing.payment;
 
 import com.adith.os.HMS.billing.payment.dto.PaymentCreationDto;
 import com.adith.os.HMS.billing.payment.dto.PaymentDto;
+import com.adith.os.HMS.billing.payment.dto.PaymentUpdateDto;
 import com.adith.os.HMS.security.UserPrincipal;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -49,5 +50,37 @@ public class ReservationPaymentController {
             @PathVariable UUID reservationId) {
 
         return ResponseEntity.ok(paymentService.getPaymentsByReservation(propertyId, reservationId));
+    }
+
+    /** All payments for the reservation — both master-level and per-booking. */
+    @GetMapping("/all")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    public ResponseEntity<List<PaymentDto>> getAllPaymentsForReservation(
+            @PathVariable UUID propertyId,
+            @PathVariable UUID reservationId) {
+
+        return ResponseEntity.ok(paymentService.getAllPaymentsForReservation(propertyId, reservationId));
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<PaymentDto> updateReservationPayment(
+            @PathVariable UUID propertyId,
+            @PathVariable UUID reservationId,
+            @PathVariable("id") UUID paymentId,
+            @Valid @RequestBody PaymentUpdateDto dto) {
+
+        return ResponseEntity.ok(paymentService.updateReservationPayment(propertyId, reservationId, paymentId, dto));
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<Void> deleteReservationPayment(
+            @PathVariable UUID propertyId,
+            @PathVariable UUID reservationId,
+            @PathVariable("id") UUID paymentId) {
+
+        paymentService.deleteReservationPayment(propertyId, reservationId, paymentId);
+        return ResponseEntity.noContent().build();
     }
 }

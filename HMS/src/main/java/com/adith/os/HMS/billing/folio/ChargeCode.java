@@ -1,6 +1,7 @@
 package com.adith.os.HMS.billing.folio;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 public enum ChargeCode {
 
@@ -46,5 +47,21 @@ public enum ChargeCode {
             return new BigDecimal("5.00");
         }
         return new BigDecimal("18.00");
+    }
+
+    /**
+     * Back-calculate ex-tax amount from a GST-inclusive room rate.
+     * Slab: if (inclusive / 1.05) ≤ 7500 → 5% GST; otherwise → 18% GST.
+     * Mirrors the frontend computeRoomRentExTax() function.
+     */
+    public static BigDecimal computeExTaxFromInclusive(BigDecimal inclusiveRate) {
+        if (inclusiveRate == null || inclusiveRate.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal at5pct = inclusiveRate.divide(new BigDecimal("1.05"), 10, RoundingMode.HALF_UP);
+        BigDecimal divisor = at5pct.compareTo(new BigDecimal("7500")) <= 0
+                ? new BigDecimal("1.05")
+                : new BigDecimal("1.18");
+        return inclusiveRate.divide(divisor, 2, RoundingMode.HALF_UP);
     }
 }

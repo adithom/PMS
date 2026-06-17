@@ -151,52 +151,100 @@ public class PaymentService {
     }
 
     /**
-     * Update payment details
+     * Update amount and/or notes on a folio (booking-level) payment.
      */
     @Transactional
     public PaymentDto updatePayment(UUID propertyId, UUID folioId, UUID paymentId, @Valid PaymentUpdateDto dto) {
-        if (propertyId == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Property ID is required");
-        }
-        if (folioId == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Folio ID is required");
-        }
-        if (paymentId == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payment ID is required");
-        }
-        if (dto == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Update data is required");
-        }
-
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment not found"));
 
         Folio folio = resolveAndValidateFolioForPayment(propertyId, folioId, payment);
 
-        try {
-            if (dto.paymentStatus() != null) {
-                payment.setPaymentStatus(dto.paymentStatus());
-            }
-
-            if (dto.transactionId() != null && !dto.transactionId().isBlank()) {
-                payment.setTransactionId(dto.transactionId().trim());
-            }
-
-            if (dto.notes() != null) {
-                payment.setNotes(dto.notes());
-            }
-
-            Payment savedPayment = paymentRepository.save(payment);
-
-            if (dto.paymentStatus() == PaymentStatus.COMPLETED) {
-                folioService.recomputeFolioTotals(folio);
-            }
-
-            return paymentMapper.toDto(savedPayment);
-        } catch (Exception e) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
-                    "Failed to update payment: " + e.getMessage());
+        if (dto.amount() != null) {
+            payment.setAmount(dto.amount());
         }
+        if (dto.notes() != null) {
+            payment.setNotes(dto.notes());
+        }
+
+        Payment saved = paymentRepository.save(payment);
+        folioService.recomputeFolioTotals(folio);
+        return paymentMapper.toDto(saved);
+    }
+
+    /**
+     * Delete a folio (booking-level) payment and recompute folio totals.
+     */
+    @Transactional
+    public void deletePayment(UUID propertyId, UUID folioId, UUID paymentId) {
+        Payment payment = paymentRepository.findById(paymentId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment not found"));
+
+        Folio folio = resolveAndValidateFolioForPayment(propertyId, folioId, payment);
+        paymentRepository.delete(payment);
+        folioService.recomputeFolioTotals(folio);
+    }
+
+    /**
+     * Update amount and/or notes on a reservation-level (master) payment.
+     */
+    @Transactional
+    public PaymentDto updateReservationPayment(UUID propertyId, UUID reservationId, UUID paymentId, @Valid PaymentUpdateDto dto) {
+        Reservation reservation = reservationRepository.findById(reservationId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Reservation not found"));
+        if (!reservation.getProperty().getId().equals(propertyId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Reservation does not belong to the specified property");
+        }
+
+        Payment payment = paymentRepository.findById(paymentId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment not found"));
+        if (!reservationId.equals(payment.getReservationId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payment does not belong to the specified reservation");
+        }
+
+        if (dto.amount() != null) {
+            payment.setAmount(dto.amount());
+        }
+        if (dto.notes() != null) {
+            payment.setNotes(dto.notes());
+        }
+
+        return paymentMapper.toDto(paymentRepository.save(payment));
+    }
+
+    /**
+     * Delete a reservation-level (master) payment.
+     */
+    @Transactional
+    public void deleteReservationPayment(UUID propertyId, UUID reservationId, UUID paymentId) {
+        Reservation reservation = reservationRepository.findById(reservationId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Reservation not found"));
+        if (!reservation.getProperty().getId().equals(propertyId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Reservation does not belong to the specified property");
+        }
+
+        Payment payment = paymentRepository.findById(paymentId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment not found"));
+        if (!reservationId.equals(payment.getReservationId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payment does not belong to the specified reservation");
+        }
+
+        paymentRepository.delete(payment);
+    }
+
+    /**
+     * Get ALL payments for a reservation — both reservation-level (master) and
+     * booking-level (tagged via bookingId for each member booking).
+     */
+    public List<PaymentDto> getAllPaymentsForReservation(UUID propertyId, UUID reservationId) {
+        Reservation reservation = reservationRepository.findById(reservationId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Reservation not found"));
+        if (!reservation.getProperty().getId().equals(propertyId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Reservation does not belong to the specified property");
+        }
+
+        List<Payment> payments = paymentRepository.findAllByReservation(reservationId);
+        return paymentMapper.toDtoList(payments);
     }
 
     /**

@@ -35,6 +35,11 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
     @Query("SELECT p FROM Payment p WHERE p.reservationId = :reservationId ORDER BY p.paymentDate DESC")
     List<Payment> findByReservationId(@Param("reservationId") UUID reservationId);
 
+    @Query("SELECT p FROM Payment p WHERE p.reservationId = :reservationId " +
+            "OR p.bookingId IN (SELECT b.id FROM Booking b WHERE b.reservation.id = :reservationId) " +
+            "ORDER BY p.paymentDate DESC")
+    List<Payment> findAllByReservation(@Param("reservationId") UUID reservationId);
+
     // Property-scoped reporting queries: a payment is "in this property" if it tags a booking
     // or a reservation that belongs to the property.
 

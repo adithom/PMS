@@ -48,6 +48,28 @@ public class PaymentController {
         return ResponseEntity.ok(payments);
     }
 
+    // UPDATE (amount + notes only)
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<PaymentDto> updatePayment(
+            @PathVariable UUID propertyId,
+            @PathVariable UUID folioId,
+            @PathVariable("id") UUID paymentId,
+            @Valid @RequestBody PaymentUpdateDto dto) {
+        return ResponseEntity.ok(paymentService.updatePayment(propertyId, folioId, paymentId, dto));
+    }
+
+    // DELETE
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<Void> deletePayment(
+            @PathVariable UUID propertyId,
+            @PathVariable UUID folioId,
+            @PathVariable("id") UUID paymentId) {
+        paymentService.deletePayment(propertyId, folioId, paymentId);
+        return ResponseEntity.noContent().build();
+    }
+
     // REFUND
     @PostMapping("/{id}/refund")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')") // Refunds usually require manager approval
