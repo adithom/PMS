@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import propertyApi from '../../api/propertyApi';
 import guestApi from '../../api/guestApi';
 import bookingApi, { type BookingCreationDto } from '../../api/bookingApi';
 import travelAgentApi from '../../api/travelAgentApi';
-import mealPlanApi from '../../api/mealPlanApi';
 import roomApi from '../../api/roomApi';
 import availabilityApi from '../../api/availabilityApi';
 import { GuestIdType, GUEST_ID_TYPE_LABELS, BOOKING_SOURCE_OPTIONS } from '../../types';
-import type { Property, Room, UnitDto, Booking, TravelAgent, ContactPerson, MealPlan, MealPlanType, GuestSummary } from '../../types';
+import type { Property, Room, UnitDto, Booking, TravelAgent, ContactPerson, MealPlanType, GuestSummary } from '../../types';
 
 /* ────────────────────────────────────────────────────────────── */
 /* Helpers                                                      */
@@ -206,13 +206,6 @@ export default function BookingForm({
   // ── Meal Plan State ──
   const [mealPlanOpen, setMealPlanOpen] = useState<boolean>(!!booking?.mealPlanType);
   const [selectedMealPlan, setSelectedMealPlan] = useState<MealPlanType | null>(booking?.mealPlanType ?? null);
-  const [mealPlanPrice, setMealPlanPrice] = useState<string>(
-    booking?.mealPlanPricePerNight?.toString() ?? ''
-  );
-  const [mealPlanChildrenPrice, setMealPlanChildrenPrice] = useState<string>(
-    booking?.mealPlanChildrenPricePerNight?.toString() ?? ''
-  );
-  const [propertyMealPlans, setPropertyMealPlans] = useState<MealPlan[]>([]);
 
   // ── Extra Bed State ──
   const [extraBedOpen, setExtraBedOpen] = useState<boolean>(!!(booking?.extraBeds && booking.extraBeds > 0));
@@ -225,6 +218,9 @@ export default function BookingForm({
   const [error, setError] = useState<string | null>(null);
   const [checkingAvailability, setCheckingAvailability] = useState<boolean>(false);
   const [availabilityMessage, setAvailabilityMessage] = useState<{ type: 'error' | 'success', text: string } | null>(null);
+  const [advancedOpen, setAdvancedOpen] = useState<boolean>(
+    isEditMode && !!(booking?.travelAgentId || booking?.bookingSource || booking?.referenceNumber || (booking?.additionalGuests && booking.additionalGuests.length > 0))
+  );
 
   /* ═══════════════════════════════════════════════════════════ */
   /* Cascading Data Effects                                    */
@@ -383,24 +379,7 @@ export default function BookingForm({
     return () => { mounted = false; };
   }, [addGuestQuery]);
 
-  // Fetch property meal plans when property changes
-  useEffect(() => {
-    if (!selectedPropertyId) { setPropertyMealPlans([]); return; }
-    mealPlanApi.getByProperty(selectedPropertyId)
-      .then(plans => setPropertyMealPlans(plans || []))
-      .catch(() => setPropertyMealPlans([]));
-  }, [selectedPropertyId]);
 
-  // Auto-fill meal plan prices when plan type is selected (only if price not already set)
-  useEffect(() => {
-    if (!selectedMealPlan) return;
-    const plan = propertyMealPlans.find(p => p.mealPlanType === selectedMealPlan);
-    if (plan) {
-      if (!mealPlanPrice) setMealPlanPrice(plan.pricePerNight.toString());
-      if (!mealPlanChildrenPrice) setMealPlanChildrenPrice((plan.childrenPricePerNight ?? 0).toString());
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedMealPlan, propertyMealPlans]);
 
   // Travel Agent Search Effect
   useEffect(() => {
@@ -532,17 +511,11 @@ export default function BookingForm({
         ? Math.round((outD.getTime() - inD.getTime()) / (1000 * 60 * 60 * 24))
         : 0;
       const xBedNightly = extraBedOpen && extraBeds > 0 && extraBedRate ? extraBeds * Number(extraBedRate) : 0;
-      const adultMealNightly = mealPlanOpen && selectedMealPlan && mealPlanPrice ? adults * Number(mealPlanPrice) : 0;
-      const childMealNightly = mealPlanOpen && selectedMealPlan && mealPlanChildrenPrice ? children * Number(mealPlanChildrenPrice) : 0;
-      const computedTotalPrice = (nightlyRate + adultMealNightly + childMealNightly + xBedNightly) * nights;
+      const computedTotalPrice = (nightlyRate + xBedNightly) * nights;
       const nightlyRateExTax = computeRoomRentExTax(nightlyRate).exTax;
 
       const mealPlanPayload = mealPlanOpen && selectedMealPlan
-        ? {
-            mealPlanType: selectedMealPlan,
-            mealPlanPricePerNight: mealPlanPrice ? Number(mealPlanPrice) : undefined,
-            mealPlanChildrenPricePerNight: mealPlanChildrenPrice ? Number(mealPlanChildrenPrice) : undefined,
-          }
+        ? { mealPlanType: selectedMealPlan, mealPlanPricePerNight: 0, mealPlanChildrenPricePerNight: 0 }
         : isEditMode ? { clearMealPlan: true } : {};
 
       const extraBedPayload = extraBedOpen && extraBeds > 0
@@ -721,294 +694,6 @@ export default function BookingForm({
             {selectedGuestId && <span className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">✓ Guest Attached</span>}
           </div>
         )}
-
-        {/* ── Additional Guests ── */}
-        <div className="border-t border-slate-100 pt-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Additional Guests <span className="font-normal normal-case">(up to 3)</span></span>
-            {!addGuestOpen && additionalGuests.length < 3 && (
-              <button type="button" onClick={() => setAddGuestOpen(true)}
-                className="text-xs font-bold text-emerald-600 hover:text-emerald-700">
-                + Add Guest
-              </button>
-            )}
-          </div>
-
-          {additionalGuests.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {additionalGuests.map((g, i) => (
-                <div key={g.id} className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 pl-3 pr-1.5 py-1 text-sm font-medium text-slate-700">
-                  <span>{g.firstName} {g.lastName}</span>
-                  <button type="button"
-                    onClick={() => setAdditionalGuests(prev => prev.filter((_, idx) => idx !== i))}
-                    className="rounded-full w-4 h-4 flex items-center justify-center hover:bg-slate-300 text-slate-400 hover:text-slate-600 text-base leading-none">
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {addGuestOpen && (
-            <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3 space-y-3">
-              {creatingAdditional ? (
-                <div className="space-y-3">
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <label><span className={labelCls}>First Name *</span><input className={inputCls} value={newAddGuestFirstName} onChange={e => setNewAddGuestFirstName(e.target.value)} /></label>
-                    <label><span className={labelCls}>Last Name *</span><input className={inputCls} value={newAddGuestLastName} onChange={e => setNewAddGuestLastName(e.target.value)} /></label>
-                  </div>
-                  <label><span className={labelCls}>Email</span><input className={inputCls} value={newAddGuestEmail} onChange={e => setNewAddGuestEmail(e.target.value)} /></label>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <label><span className={labelCls}>Phone</span><input className={inputCls} value={newAddGuestPhone} onChange={e => setNewAddGuestPhone(e.target.value)} /></label>
-                    <label><span className={labelCls}>Document ID</span><input className={inputCls} value={newAddGuestIdNumber} onChange={e => setNewAddGuestIdNumber(e.target.value)} placeholder="e.g. A1234567" /></label>
-                  </div>
-                  <label>
-                    <span className={labelCls}>ID Type</span>
-                    <select className={inputCls} value={newAddGuestIdType} onChange={e => setNewAddGuestIdType(e.target.value as GuestIdType | '')}>
-                      <option value="">— Select type —</option>
-                      {Object.values(GuestIdType).map(t => (
-                        <option key={t} value={t}>{GUEST_ID_TYPE_LABELS[t]}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    <span className={labelCls}>Date of Birth</span>
-                    <input type="date" className={inputCls} value={newAddGuestDateOfBirth} onChange={e => setNewAddGuestDateOfBirth(e.target.value)} />
-                  </label>
-                  <div className="flex justify-end gap-2">
-                    <button type="button" onClick={() => setCreatingAdditional(false)} className={btnSecondary}>Back</button>
-                    <button type="button" onClick={createAndAddGuest}
-                      disabled={loading || !newAddGuestFirstName || !newAddGuestLastName}
-                      className={btnPrimary}>
-                      {loading ? 'Saving...' : 'Save & Add'}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="relative">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-slate-700">Search guest</span>
-                    <button type="button"
-                      onClick={() => { setCreatingAdditional(true); setAddGuestQuery(''); setAddGuestResults([]); }}
-                      className="text-xs font-bold text-emerald-600 hover:text-emerald-700">
-                      + Create Guest
-                    </button>
-                  </div>
-                  <input className={inputCls} placeholder="Type name or phone..." value={addGuestQuery}
-                    onChange={e => setAddGuestQuery(e.target.value)} />
-                  {addGuestResults.length > 0 && (
-                    <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
-                      {addGuestResults
-                        .filter(g => !additionalGuests.find(ag => ag.id === g.id) && g.id !== selectedGuestId)
-                        .map(g => (
-                          <button key={g.id} type="button"
-                            onClick={() => {
-                              setAdditionalGuests(prev => [...prev, g]);
-                              setAddGuestOpen(false);
-                              setAddGuestQuery(''); setAddGuestResults([]);
-                            }}
-                            className="flex w-full flex-col items-start px-4 py-3 text-left hover:bg-slate-50 border-b border-slate-100 last:border-0">
-                            <span className="font-semibold text-slate-900">{g.firstName} {g.lastName}</span>
-                            <span className="text-xs text-slate-500">{g.email ?? g.phone ?? 'No contact info'}</span>
-                          </button>
-                        ))}
-                    </div>
-                  )}
-                  <div className="flex justify-end mt-2">
-                    <button type="button"
-                      onClick={() => { setAddGuestOpen(false); setAddGuestQuery(''); setAddGuestResults([]); }}
-                      className={btnSecondary}>
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ── Travel Agent ── */}
-      <div className="space-y-4 rounded-xl border border-slate-100 bg-white p-5 shadow-sm">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-          <div>
-            <h4 className="text-sm font-bold tracking-tight text-slate-900">Travel Agent</h4>
-            {!agentSectionOpen && <p className="text-xs text-slate-400 mt-0.5">Optional — leave blank if direct booking</p>}
-          </div>
-          {!agentSectionOpen ? (
-            <button type="button" onClick={() => setAgentSectionOpen(true)}
-              className="text-xs font-bold text-emerald-600 hover:text-emerald-700">
-              + Add Travel Agent
-            </button>
-          ) : (
-            <button type="button" onClick={() => {
-              setAgentSectionOpen(false);
-              setSelectedAgentId(null); setSelectedAgentName(''); setAgentQuery('');
-              setAgentResults([]); setCreatingAgent(false);
-              setNewAgentName(''); setNewAgentEmail('');
-              setNewAgentPhone(''); setNewAgentGstin('');
-              setAgentContactPersons([]); setSelectedContactPersonId(null);
-              setCreatingContact(false); setNewContactName(''); setNewContactPhone(''); setNewContactEmail(''); setNewContactDesignation('');
-            }} className="text-xs font-medium text-slate-400 hover:text-rose-500">
-              Remove
-            </button>
-          )}
-        </div>
-
-        {agentSectionOpen && (
-          <>
-            {creatingAgent ? (
-              <div className="space-y-4 rounded-lg border border-emerald-100 bg-emerald-50/30 p-4">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <label><span className={labelCls}>Agency Name *</span>
-                    <input className={inputCls} value={newAgentName} onChange={e => setNewAgentName(e.target.value)} placeholder="e.g. Cox & Kings" /></label>
-                  <label><span className={labelCls}>GSTIN</span>
-                    <input className={inputCls} value={newAgentGstin} onChange={e => setNewAgentGstin(e.target.value)} placeholder="e.g. 29ABCDE1234F1Z5" /></label>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <label><span className={labelCls}>Email</span>
-                    <input type="email" className={inputCls} value={newAgentEmail} onChange={e => setNewAgentEmail(e.target.value)} /></label>
-                  <label><span className={labelCls}>Phone</span>
-                    <input className={inputCls} value={newAgentPhone} onChange={e => setNewAgentPhone(e.target.value)} /></label>
-                </div>
-                <div className="flex justify-end gap-2 pt-2">
-                  <button type="button" onClick={() => setCreatingAgent(false)} className={btnSecondary}>Cancel</button>
-                  <button type="button" disabled={!newAgentName.trim()}
-                    onClick={async () => {
-                      setLoading(true); setError(null);
-                      try {
-                        const created = await travelAgentApi.create({
-                          name: newAgentName.trim(),
-                          email: newAgentEmail.trim() || undefined,
-                          phone: newAgentPhone.trim() || undefined,
-                          gstin: newAgentGstin.trim() || undefined,
-                        });
-                        setSelectedAgentId(created.id);
-                        setSelectedAgentName(created.name);
-                        setAgentQuery(created.name);
-                        setCreatingAgent(false);
-                      } catch (err: any) {
-                        setError(err.message || 'Failed to create travel agent');
-                      } finally { setLoading(false); }
-                    }}
-                    className={btnPrimary}>
-                    {loading ? 'Saving...' : 'Save Agent'}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="relative">
-                  {!selectedAgentId && (
-                    <div className="flex items-center justify-between mb-2">
-                      <span className={labelCls} style={{ marginBottom: 0 }}>Search Existing Agent</span>
-                      <button type="button" onClick={() => { setCreatingAgent(true); setAgentQuery(''); setAgentResults([]); }}
-                        className="text-xs font-bold text-emerald-600 hover:text-emerald-700">
-                        + New Agent
-                      </button>
-                    </div>
-                  )}
-                  {selectedAgentId ? (
-                    <div className="flex items-center justify-between rounded-lg border border-emerald-100 bg-emerald-50/50 px-3 py-2">
-                      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
-                        ✓ {selectedAgentName}
-                      </span>
-                      <button type="button" onClick={() => {
-                        setSelectedAgentId(null); setSelectedAgentName(''); setAgentQuery(''); setAgentResults([]);
-                        setAgentContactPersons([]); setSelectedContactPersonId(null);
-                        setCreatingContact(false);
-                      }} className="text-xs text-slate-400 hover:text-rose-500 font-medium">Change</button>
-                    </div>
-                  ) : (
-                    <>
-                      <input className={inputCls} placeholder="Type agency name..." value={agentQuery}
-                        onChange={e => { setAgentQuery(e.target.value); setSelectedAgentId(null); }} />
-                      {agentResults.length > 0 && (
-                        <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
-                          {agentResults.map(a => (
-                            <button key={a.id} type="button"
-                              onClick={() => { setSelectedAgentId(a.id); setSelectedAgentName(a.name); setAgentQuery(a.name); setAgentResults([]); }}
-                              className="flex w-full flex-col items-start px-4 py-3 text-left hover:bg-slate-50 border-b border-slate-100 last:border-0">
-                              <span className="font-semibold text-slate-900">{a.name}</span>
-                              <span className="text-xs text-slate-500">
-                                {[a.gstin, a.email, a.phone].filter(Boolean).join(' · ') || 'No contact info'}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-
-                {/* Contact Person — shown once an agent is selected */}
-                {selectedAgentId && (
-                  <div className="space-y-2 pt-1">
-                    <div className="flex items-center justify-between">
-                      <span className={labelCls} style={{ marginBottom: 0 }}>Contact Person</span>
-                      {!creatingContact && (
-                        <button type="button" onClick={() => setCreatingContact(true)}
-                          className="text-xs font-bold text-emerald-600 hover:text-emerald-700">
-                          + New Contact
-                        </button>
-                      )}
-                    </div>
-                    {creatingContact ? (
-                      <div className="rounded-lg border border-emerald-100 bg-emerald-50/30 p-3 space-y-3">
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <label><span className={labelCls}>Name *</span>
-                            <input className={inputCls} value={newContactName} onChange={e => setNewContactName(e.target.value)} placeholder="Full name" /></label>
-                          <label><span className={labelCls}>Designation</span>
-                            <input className={inputCls} value={newContactDesignation} onChange={e => setNewContactDesignation(e.target.value)} placeholder="e.g. Sales Manager" /></label>
-                        </div>
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <label><span className={labelCls}>Phone</span>
-                            <input className={inputCls} value={newContactPhone} onChange={e => setNewContactPhone(e.target.value)} /></label>
-                          <label><span className={labelCls}>Email</span>
-                            <input type="email" className={inputCls} value={newContactEmail} onChange={e => setNewContactEmail(e.target.value)} /></label>
-                        </div>
-                        <div className="flex justify-end gap-2">
-                          <button type="button" onClick={() => { setCreatingContact(false); setNewContactName(''); setNewContactPhone(''); setNewContactEmail(''); setNewContactDesignation(''); }} className={btnSecondary}>Cancel</button>
-                          <button type="button" disabled={savingContact || !newContactName.trim()} className={btnPrimary}
-                            onClick={async () => {
-                              if (!selectedAgentId || !newContactName.trim()) return;
-                              setSavingContact(true);
-                              try {
-                                const created = await travelAgentApi.createContact(selectedAgentId, {
-                                  name: newContactName.trim(),
-                                  phone: newContactPhone.trim() || undefined,
-                                  email: newContactEmail.trim() || undefined,
-                                  designation: newContactDesignation.trim() || undefined,
-                                });
-                                setAgentContactPersons(prev => [...prev, created]);
-                                setSelectedContactPersonId(created.id);
-                                setCreatingContact(false);
-                                setNewContactName(''); setNewContactPhone(''); setNewContactEmail(''); setNewContactDesignation('');
-                              } catch (err: any) {
-                                setError(err.message || 'Failed to create contact person');
-                              } finally { setSavingContact(false); }
-                            }}>
-                            {savingContact ? 'Saving...' : 'Add Contact'}
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <select className={inputCls} value={selectedContactPersonId ?? ''}
-                        onChange={e => setSelectedContactPersonId(e.target.value || null)}>
-                        <option value="">— Optional —</option>
-                        {agentContactPersons.map(cp => (
-                          <option key={cp.id} value={cp.id}>
-                            {cp.name}{cp.designation ? ` (${cp.designation})` : ''}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </>
-        )}
       </div>
 
       {/* ── Meal Plan ── */}
@@ -1027,8 +712,6 @@ export default function BookingForm({
             <button type="button" onClick={() => {
               setMealPlanOpen(false);
               setSelectedMealPlan(null);
-              setMealPlanPrice('');
-              setMealPlanChildrenPrice('');
             }} className="text-xs font-medium text-slate-400 hover:text-rose-500">
               Remove
             </button>
@@ -1039,7 +722,6 @@ export default function BookingForm({
           <div className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-3">
               {(['CP', 'MAP', 'AP'] as MealPlanType[]).map(type => {
-                const plan = propertyMealPlans.find(p => p.mealPlanType === type);
                 const label = type === 'CP' ? 'Continental (CP)' : type === 'MAP' ? 'Half Board (MAP)' : 'Full Board (AP)';
                 return (
                   <label key={type}
@@ -1055,63 +737,16 @@ export default function BookingForm({
                         name="mealPlanType"
                         value={type}
                         checked={selectedMealPlan === type}
-                        onChange={() => {
-                          setMealPlanPrice('');
-                          setMealPlanChildrenPrice('');
-                          setSelectedMealPlan(type);
-                        }}
+                        onChange={() => setSelectedMealPlan(type)}
                         className="h-4 w-4 border-slate-300 text-emerald-600 focus:ring-emerald-500"
                       />
                       <span className="text-sm font-semibold text-slate-800">{label}</span>
                     </div>
-                    {plan && (
-                      <span className="pl-6 text-xs text-slate-400">
-                        ₹{plan.pricePerNight.toLocaleString()} adult · ₹{(plan.childrenPricePerNight ?? 0).toLocaleString()} child /person/night
-                      </span>
-                    )}
                   </label>
                 );
               })}
             </div>
 
-            {selectedMealPlan && (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label>
-                  <span className={labelCls}>Adult price / person / night <span className="font-normal text-slate-400">(editable)</span></span>
-                  <input
-                    type="number"
-                    min={0}
-                    step={0.01}
-                    className={inputCls}
-                    placeholder="Adult price per person"
-                    value={mealPlanPrice}
-                    onChange={e => setMealPlanPrice(e.target.value)}
-                  />
-                </label>
-                <label>
-                  <span className={labelCls}>Child price / person / night <span className="font-normal text-slate-400">(editable)</span></span>
-                  <input
-                    type="number"
-                    min={0}
-                    step={0.01}
-                    className={inputCls}
-                    placeholder="Children price per person"
-                    value={mealPlanChildrenPrice}
-                    onChange={e => setMealPlanChildrenPrice(e.target.value)}
-                  />
-                </label>
-              </div>
-            )}
-            {selectedMealPlan && (mealPlanPrice || mealPlanChildrenPrice) && (
-              <div className="rounded-lg bg-slate-50 border border-slate-100 px-3 py-2 text-xs text-slate-600">
-                <span className="font-medium">Adds to nightly rate: </span>
-                {adults} adult{adults !== 1 ? 's' : ''} × {currency} {Number(mealPlanPrice || 0).toLocaleString()} = {currency} {(adults * Number(mealPlanPrice || 0)).toLocaleString()}
-                {Number(mealPlanChildrenPrice || 0) > 0 && (
-                  <> &nbsp;+&nbsp; {children} child{children !== 1 ? 'ren' : ''} × {currency} {Number(mealPlanChildrenPrice).toLocaleString()} = {currency} {(children * Number(mealPlanChildrenPrice)).toLocaleString()}</>
-                )}
-                <span className="font-semibold"> = {currency} {(adults * Number(mealPlanPrice || 0) + children * Number(mealPlanChildrenPrice || 0)).toLocaleString()} / night</span>
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -1247,28 +882,21 @@ export default function BookingForm({
               <input
                 type="number" className={inputCls}
                 value={nightlyRateInputStr !== '' ? nightlyRateInputStr : (() => {
-                  const adultMeal = mealPlanOpen && selectedMealPlan && mealPlanPrice ? Number(mealPlanPrice) : 0;
-                  const childMeal = mealPlanOpen && selectedMealPlan && mealPlanChildrenPrice ? Number(mealPlanChildrenPrice) : 0;
                   const xBed = extraBedOpen && extraBeds > 0 && extraBedRate ? extraBeds * Number(extraBedRate) : 0;
-                  return (nightlyRate + adults * adultMeal + children * childMeal + xBed) || '';
+                  return (nightlyRate + xBed) || '';
                 })()}
                 onChange={e => setNightlyRateInputStr(e.target.value)}
                 onBlur={e => {
                   const result = distributeRate(
                     Number(e.target.value) || 0,
                     adults, children,
-                    mealPlanOpen && selectedMealPlan && mealPlanPrice ? Number(mealPlanPrice) : 0,
-                    mealPlanOpen && selectedMealPlan && mealPlanChildrenPrice ? Number(mealPlanChildrenPrice) : 0,
-                    mealPlanOpen && !!selectedMealPlan,
+                    0, 0,
+                    false,
                     extraBeds,
                     extraBedOpen && extraBeds > 0 && extraBedRate ? Number(extraBedRate) : 0,
                     extraBedOpen && extraBeds > 0,
                   );
                   setNightlyRate(result.roomRent);
-                  if (mealPlanOpen && selectedMealPlan) {
-                    setMealPlanPrice(result.mealAdultPrice.toString());
-                    setMealPlanChildrenPrice(result.mealChildrenPrice.toString());
-                  }
                   if (extraBedOpen && extraBeds > 0) {
                     setExtraBedRate(result.bedRate.toString());
                   }
@@ -1276,26 +904,16 @@ export default function BookingForm({
                 }}
               />
             </label>
-            {(room || (mealPlanOpen && selectedMealPlan && (mealPlanPrice || mealPlanChildrenPrice)) || (extraBedOpen && extraBeds > 0 && extraBedRate)) && (
+            {(room || (extraBedOpen && extraBeds > 0 && extraBedRate)) && (
               <div className="mt-1.5 space-y-0.5">
                 {room && (
                   <p className="text-xs text-slate-500">
                     Base rate: {currency} {room.baseRate.toLocaleString()}/night
                   </p>
                 )}
-                {mealPlanOpen && selectedMealPlan && mealPlanPrice && (
-                  <p className="text-xs text-slate-400">
-                    + {adults} adult{adults !== 1 ? 's' : ''} × {currency} {Number(mealPlanPrice).toLocaleString()} = {currency} {(adults * Number(mealPlanPrice)).toLocaleString()}
-                  </p>
-                )}
-                {mealPlanOpen && selectedMealPlan && mealPlanChildrenPrice && children > 0 && (
-                  <p className="text-xs text-slate-400">
-                    + {children} child{children !== 1 ? 'ren' : ''} × {currency} {Number(mealPlanChildrenPrice).toLocaleString()} = {currency} {(children * Number(mealPlanChildrenPrice)).toLocaleString()}
-                  </p>
-                )}
                 {extraBedOpen && extraBeds > 0 && extraBedRate && Number(extraBedRate) > 0 && (
                   <p className="text-xs text-slate-400">
-                    + {extraBeds} extra bed{extraBeds !== 1 ? 'ren' : ''} × {currency} {Number(extraBedRate).toLocaleString()} = {currency} {(extraBeds * Number(extraBedRate)).toLocaleString()}
+                    + {extraBeds} extra bed{extraBeds !== 1 ? 's' : ''} × {currency} {Number(extraBedRate).toLocaleString()} = {currency} {(extraBeds * Number(extraBedRate)).toLocaleString()}
                   </p>
                 )}
               </div>
@@ -1321,11 +939,8 @@ export default function BookingForm({
                   const inD = new Date(checkIn), outD = new Date(checkOut);
                   if (outD <= inD) return 0;
                   const nights = Math.round((outD.getTime() - inD.getTime()) / (1000 * 60 * 60 * 24));
-                  const adultMeal = mealPlanOpen && selectedMealPlan && mealPlanPrice ? Number(mealPlanPrice) : 0;
-                  const childMeal = mealPlanOpen && selectedMealPlan && mealPlanChildrenPrice ? Number(mealPlanChildrenPrice) : 0;
-                  const effectiveMeal = adults * adultMeal + children * childMeal;
                   const xBed = extraBedOpen && extraBeds > 0 && extraBedRate ? extraBeds * Number(extraBedRate) : 0;
-                  return (nightlyRate + effectiveMeal + xBed) * nights;
+                  return (nightlyRate + xBed) * nights;
                 })()}
                 readOnly
                 tabIndex={-1}
@@ -1336,13 +951,9 @@ export default function BookingForm({
               const inD = new Date(checkIn), outD = new Date(checkOut);
               if (outD <= inD) return null;
               const nights = Math.round((outD.getTime() - inD.getTime()) / (1000 * 60 * 60 * 24));
-              const adultMeal = mealPlanOpen && selectedMealPlan && mealPlanPrice ? Number(mealPlanPrice) : 0;
-              const childMeal = mealPlanOpen && selectedMealPlan && mealPlanChildrenPrice ? Number(mealPlanChildrenPrice) : 0;
-              const effectiveMeal = adults * adultMeal + children * childMeal;
               const xBed = extraBedOpen && extraBeds > 0 && extraBedRate ? extraBeds * Number(extraBedRate) : 0;
-              const effectiveNightly = nightlyRate + effectiveMeal + xBed;
+              const effectiveNightly = nightlyRate + xBed;
               const parts: string[] = [];
-              if (effectiveMeal > 0) parts.push(`${selectedMealPlan} ${currency} ${effectiveMeal.toLocaleString()} meal`);
               if (xBed > 0) parts.push(`extra bed ${currency} ${xBed.toLocaleString()}`);
               return (
                 <div className="mt-1.5 space-y-0.5">
@@ -1390,35 +1001,254 @@ export default function BookingForm({
         </div>
 
         <label>
-          <span className={labelCls}>Booking Source <span className="font-normal text-slate-400">(Optional)</span></span>
-          <input
-            list="booking-source-options"
-            className={inputCls}
-            placeholder="e.g. Direct / Walk-In"
-            value={bookingSource}
-            onChange={e => setBookingSource(e.target.value)}
-          />
-          <datalist id="booking-source-options">
-            {BOOKING_SOURCE_OPTIONS.map(opt => (
-              <option key={opt} value={opt} />
-            ))}
-          </datalist>
-        </label>
-
-        <label>
-          <span className={labelCls}>Reference Number <span className="font-normal text-slate-400">(Optional)</span></span>
-          <input
-            className={inputCls}
-            placeholder="e.g. BKG-20250301-1234"
-            value={referenceNumber}
-            onChange={e => setReferenceNumber(e.target.value)}
-          />
-        </label>
-
-        <label>
           <span className={labelCls}>Notes / Special Requests</span>
           <textarea className={inputCls} rows={3} value={specialRequests} onChange={e => setSpecialRequests(e.target.value)} />
         </label>
+      </div>
+
+      {/* ── Advanced / Optional ── */}
+      <div className="rounded-xl border border-slate-100 bg-white shadow-sm overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setAdvancedOpen(v => !v)}
+          className="flex w-full items-center justify-between px-5 py-4 text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors"
+        >
+          <span>
+            Advanced / Optional
+            {(selectedAgentId || additionalGuests.length > 0 || bookingSource || referenceNumber) && (
+              <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-emerald-700">
+                {[selectedAgentId && 'Agent', additionalGuests.length > 0 && `${additionalGuests.length} guest${additionalGuests.length > 1 ? 's' : ''}`, bookingSource && 'Source', referenceNumber && 'Ref'].filter(Boolean).join(' · ')}
+              </span>
+            )}
+          </span>
+          {advancedOpen ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
+        </button>
+
+        {advancedOpen && (
+          <div className="border-t border-slate-100 p-5 space-y-6">
+
+            {/* Additional Guests */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Additional Guests <span className="normal-case font-normal">(up to 3)</span></span>
+                {!addGuestOpen && additionalGuests.length < 3 && (
+                  <button type="button" onClick={() => setAddGuestOpen(true)}
+                    className="text-xs font-bold text-emerald-600 hover:text-emerald-700">+ Add Guest</button>
+                )}
+              </div>
+              {additionalGuests.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {additionalGuests.map((g, i) => (
+                    <div key={g.id} className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 pl-3 pr-1.5 py-1 text-sm font-medium text-slate-700">
+                      <span>{g.firstName} {g.lastName}</span>
+                      <button type="button"
+                        onClick={() => setAdditionalGuests(prev => prev.filter((_, idx) => idx !== i))}
+                        className="rounded-full w-4 h-4 flex items-center justify-center hover:bg-slate-300 text-slate-400 hover:text-slate-600 text-base leading-none">×</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {addGuestOpen && (
+                <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3 space-y-3">
+                  {creatingAdditional ? (
+                    <div className="space-y-3">
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <label><span className={labelCls}>First Name *</span><input className={inputCls} value={newAddGuestFirstName} onChange={e => setNewAddGuestFirstName(e.target.value)} /></label>
+                        <label><span className={labelCls}>Last Name *</span><input className={inputCls} value={newAddGuestLastName} onChange={e => setNewAddGuestLastName(e.target.value)} /></label>
+                      </div>
+                      <label><span className={labelCls}>Email</span><input className={inputCls} value={newAddGuestEmail} onChange={e => setNewAddGuestEmail(e.target.value)} /></label>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <label><span className={labelCls}>Phone</span><input className={inputCls} value={newAddGuestPhone} onChange={e => setNewAddGuestPhone(e.target.value)} /></label>
+                        <label><span className={labelCls}>Document ID</span><input className={inputCls} value={newAddGuestIdNumber} onChange={e => setNewAddGuestIdNumber(e.target.value)} placeholder="e.g. A1234567" /></label>
+                      </div>
+                      <label>
+                        <span className={labelCls}>ID Type</span>
+                        <select className={inputCls} value={newAddGuestIdType} onChange={e => setNewAddGuestIdType(e.target.value as GuestIdType | '')}>
+                          <option value="">— Select type —</option>
+                          {Object.values(GuestIdType).map(t => <option key={t} value={t}>{GUEST_ID_TYPE_LABELS[t]}</option>)}
+                        </select>
+                      </label>
+                      <label><span className={labelCls}>Date of Birth</span>
+                        <input type="date" className={inputCls} value={newAddGuestDateOfBirth} onChange={e => setNewAddGuestDateOfBirth(e.target.value)} /></label>
+                      <div className="flex justify-end gap-2">
+                        <button type="button" onClick={() => setCreatingAdditional(false)} className={btnSecondary}>Back</button>
+                        <button type="button" onClick={createAndAddGuest} disabled={loading || !newAddGuestFirstName || !newAddGuestLastName} className={btnPrimary}>
+                          {loading ? 'Saving...' : 'Save & Add'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-slate-700">Search guest</span>
+                        <button type="button" onClick={() => { setCreatingAdditional(true); setAddGuestQuery(''); setAddGuestResults([]); }}
+                          className="text-xs font-bold text-emerald-600 hover:text-emerald-700">+ Create Guest</button>
+                      </div>
+                      <input className={inputCls} placeholder="Type name or phone..." value={addGuestQuery}
+                        onChange={e => setAddGuestQuery(e.target.value)} />
+                      {addGuestResults.length > 0 && (
+                        <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
+                          {addGuestResults.filter(g => !additionalGuests.find(ag => ag.id === g.id) && g.id !== selectedGuestId).map(g => (
+                            <button key={g.id} type="button"
+                              onClick={() => { setAdditionalGuests(prev => [...prev, g]); setAddGuestOpen(false); setAddGuestQuery(''); setAddGuestResults([]); }}
+                              className="flex w-full flex-col items-start px-4 py-3 text-left hover:bg-slate-50 border-b border-slate-100 last:border-0">
+                              <span className="font-semibold text-slate-900">{g.firstName} {g.lastName}</span>
+                              <span className="text-xs text-slate-500">{g.email ?? g.phone ?? 'No contact info'}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex justify-end mt-2">
+                        <button type="button" onClick={() => { setAddGuestOpen(false); setAddGuestQuery(''); setAddGuestResults([]); }} className={btnSecondary}>Cancel</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Travel Agent */}
+            <div className="space-y-3 border-t border-slate-100 pt-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Travel Agent</span>
+                {!agentSectionOpen ? (
+                  <button type="button" onClick={() => setAgentSectionOpen(true)}
+                    className="text-xs font-bold text-emerald-600 hover:text-emerald-700">+ Add</button>
+                ) : (
+                  <button type="button" onClick={() => {
+                    setAgentSectionOpen(false);
+                    setSelectedAgentId(null); setSelectedAgentName(''); setAgentQuery(''); setAgentResults([]); setCreatingAgent(false);
+                    setNewAgentName(''); setNewAgentEmail(''); setNewAgentPhone(''); setNewAgentGstin('');
+                    setAgentContactPersons([]); setSelectedContactPersonId(null);
+                    setCreatingContact(false); setNewContactName(''); setNewContactPhone(''); setNewContactEmail(''); setNewContactDesignation('');
+                  }} className="text-xs font-medium text-slate-400 hover:text-rose-500">Remove</button>
+                )}
+              </div>
+              {agentSectionOpen && (
+                <>
+                  {creatingAgent ? (
+                    <div className="space-y-4 rounded-lg border border-emerald-100 bg-emerald-50/30 p-4">
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <label><span className={labelCls}>Agency Name *</span><input className={inputCls} value={newAgentName} onChange={e => setNewAgentName(e.target.value)} placeholder="e.g. Cox & Kings" /></label>
+                        <label><span className={labelCls}>GSTIN</span><input className={inputCls} value={newAgentGstin} onChange={e => setNewAgentGstin(e.target.value)} placeholder="e.g. 29ABCDE1234F1Z5" /></label>
+                      </div>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <label><span className={labelCls}>Email</span><input type="email" className={inputCls} value={newAgentEmail} onChange={e => setNewAgentEmail(e.target.value)} /></label>
+                        <label><span className={labelCls}>Phone</span><input className={inputCls} value={newAgentPhone} onChange={e => setNewAgentPhone(e.target.value)} /></label>
+                      </div>
+                      <div className="flex justify-end gap-2 pt-2">
+                        <button type="button" onClick={() => setCreatingAgent(false)} className={btnSecondary}>Cancel</button>
+                        <button type="button" disabled={!newAgentName.trim()}
+                          onClick={async () => {
+                            setLoading(true); setError(null);
+                            try {
+                              const created = await travelAgentApi.create({ name: newAgentName.trim(), email: newAgentEmail.trim() || undefined, phone: newAgentPhone.trim() || undefined, gstin: newAgentGstin.trim() || undefined });
+                              setSelectedAgentId(created.id); setSelectedAgentName(created.name); setAgentQuery(created.name); setCreatingAgent(false);
+                            } catch (err: any) { setError(err.message || 'Failed to create travel agent'); }
+                            finally { setLoading(false); }
+                          }} className={btnPrimary}>{loading ? 'Saving...' : 'Save Agent'}</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="relative">
+                        {selectedAgentId ? (
+                          <div className="flex items-center justify-between rounded-lg border border-emerald-100 bg-emerald-50/50 px-3 py-2">
+                            <span className="text-xs font-semibold text-emerald-700">✓ {selectedAgentName}</span>
+                            <button type="button" onClick={() => { setSelectedAgentId(null); setSelectedAgentName(''); setAgentQuery(''); setAgentResults([]); setAgentContactPersons([]); setSelectedContactPersonId(null); setCreatingContact(false); }}
+                              className="text-xs text-slate-400 hover:text-rose-500 font-medium">Change</button>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex items-center justify-between mb-2">
+                              <span className={labelCls} style={{ marginBottom: 0 }}>Search Agent</span>
+                              <button type="button" onClick={() => { setCreatingAgent(true); setAgentQuery(''); setAgentResults([]); }}
+                                className="text-xs font-bold text-emerald-600 hover:text-emerald-700">+ New Agent</button>
+                            </div>
+                            <input className={inputCls} placeholder="Type agency name..." value={agentQuery}
+                              onChange={e => { setAgentQuery(e.target.value); setSelectedAgentId(null); }} />
+                            {agentResults.length > 0 && (
+                              <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
+                                {agentResults.map(a => (
+                                  <button key={a.id} type="button"
+                                    onClick={() => { setSelectedAgentId(a.id); setSelectedAgentName(a.name); setAgentQuery(a.name); setAgentResults([]); }}
+                                    className="flex w-full flex-col items-start px-4 py-3 text-left hover:bg-slate-50 border-b border-slate-100 last:border-0">
+                                    <span className="font-semibold text-slate-900">{a.name}</span>
+                                    <span className="text-xs text-slate-500">{[a.gstin, a.email, a.phone].filter(Boolean).join(' · ') || 'No contact info'}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                      {selectedAgentId && (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className={labelCls} style={{ marginBottom: 0 }}>Contact Person</span>
+                            {!creatingContact && (
+                              <button type="button" onClick={() => setCreatingContact(true)}
+                                className="text-xs font-bold text-emerald-600 hover:text-emerald-700">+ New Contact</button>
+                            )}
+                          </div>
+                          {creatingContact ? (
+                            <div className="rounded-lg border border-emerald-100 bg-emerald-50/30 p-3 space-y-3">
+                              <div className="grid gap-3 sm:grid-cols-2">
+                                <label><span className={labelCls}>Name *</span><input className={inputCls} value={newContactName} onChange={e => setNewContactName(e.target.value)} placeholder="Full name" /></label>
+                                <label><span className={labelCls}>Designation</span><input className={inputCls} value={newContactDesignation} onChange={e => setNewContactDesignation(e.target.value)} placeholder="e.g. Sales Manager" /></label>
+                              </div>
+                              <div className="grid gap-3 sm:grid-cols-2">
+                                <label><span className={labelCls}>Phone</span><input className={inputCls} value={newContactPhone} onChange={e => setNewContactPhone(e.target.value)} /></label>
+                                <label><span className={labelCls}>Email</span><input type="email" className={inputCls} value={newContactEmail} onChange={e => setNewContactEmail(e.target.value)} /></label>
+                              </div>
+                              <div className="flex justify-end gap-2">
+                                <button type="button" onClick={() => { setCreatingContact(false); setNewContactName(''); setNewContactPhone(''); setNewContactEmail(''); setNewContactDesignation(''); }} className={btnSecondary}>Cancel</button>
+                                <button type="button" disabled={savingContact || !newContactName.trim()} className={btnPrimary}
+                                  onClick={async () => {
+                                    if (!selectedAgentId || !newContactName.trim()) return;
+                                    setSavingContact(true);
+                                    try {
+                                      const created = await travelAgentApi.createContact(selectedAgentId, { name: newContactName.trim(), phone: newContactPhone.trim() || undefined, email: newContactEmail.trim() || undefined, designation: newContactDesignation.trim() || undefined });
+                                      setAgentContactPersons(prev => [...prev, created]); setSelectedContactPersonId(created.id); setCreatingContact(false);
+                                      setNewContactName(''); setNewContactPhone(''); setNewContactEmail(''); setNewContactDesignation('');
+                                    } catch (err: any) { setError(err.message || 'Failed to create contact person'); }
+                                    finally { setSavingContact(false); }
+                                  }}>{savingContact ? 'Saving...' : 'Add Contact'}</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <select className={inputCls} value={selectedContactPersonId ?? ''} onChange={e => setSelectedContactPersonId(e.target.value || null)}>
+                              <option value="">— Optional —</option>
+                              {agentContactPersons.map(cp => <option key={cp.id} value={cp.id}>{cp.name}{cp.designation ? ` (${cp.designation})` : ''}</option>)}
+                            </select>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Booking Source & Reference Number */}
+            <div className="grid gap-4 sm:grid-cols-2 border-t border-slate-100 pt-4">
+              <label>
+                <span className={labelCls}>Booking Source</span>
+                <input list="booking-source-options" className={inputCls} placeholder="e.g. Direct / Walk-In"
+                  value={bookingSource} onChange={e => setBookingSource(e.target.value)} />
+                <datalist id="booking-source-options">
+                  {BOOKING_SOURCE_OPTIONS.map(opt => <option key={opt} value={opt} />)}
+                </datalist>
+              </label>
+              <label>
+                <span className={labelCls}>Reference Number</span>
+                <input className={inputCls} placeholder="e.g. BKG-20250301-1234"
+                  value={referenceNumber} onChange={e => setReferenceNumber(e.target.value)} />
+              </label>
+            </div>
+
+          </div>
+        )}
       </div>
 
       {/* ── Actions ── */}

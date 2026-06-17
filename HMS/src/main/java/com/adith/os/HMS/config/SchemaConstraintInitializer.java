@@ -29,6 +29,7 @@ public class SchemaConstraintInitializer implements ApplicationRunner {
         applyRoomAssignmentOverlapConstraint();
         fixReservationNumberConstraint();
         fixPosTicketStatusConstraint();
+        zeroMealPlanPrices();
     }
 
     /**
@@ -127,6 +128,23 @@ public class SchemaConstraintInitializer implements ApplicationRunner {
             log.info("pos_ticket status constraint allows OPEN, CLOSED, CANCELLED");
         } catch (Exception e) {
             log.warn("Could not fix pos_ticket status constraint — continuing. Reason: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Meal plan pricing is currently included in the room rate (inclusive model).
+     * Zero out all stored prices so the night audit never posts a separate meal plan charge.
+     */
+    private void zeroMealPlanPrices() {
+        try {
+            int updated = jdbcTemplate.update(
+                    "UPDATE property_meal_plan SET price_per_night = 0, children_price_per_night = 0 " +
+                    "WHERE price_per_night <> 0 OR children_price_per_night <> 0");
+            if (updated > 0) {
+                log.info("Zeroed meal plan prices on {} record(s) — pricing is now inclusive in room rate", updated);
+            }
+        } catch (Exception e) {
+            log.warn("Could not zero meal plan prices — continuing. Reason: {}", e.getMessage());
         }
     }
 }

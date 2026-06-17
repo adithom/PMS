@@ -212,6 +212,12 @@ public class NightAuditService {
                             var effectivePrice = booking.getMealPlanPricePerNight() != null
                                     ? booking.getMealPlanPricePerNight()
                                     : plan.getPricePerNight();
+                            if (effectivePrice == null || effectivePrice.compareTo(BigDecimal.ZERO) <= 0) {
+                                log.debug("Night Audit: Meal plan {} price is zero for booking {}. Skipping charge.",
+                                        mealPlanType, booking.getId());
+                                mealPlanChargesSkipped++;
+                                continue;
+                            }
                             ChargeCreationDto mealPlanCharge = new ChargeCreationDto(
                                     chargeDate,
                                     ChargeCode.MEAL_PLAN,

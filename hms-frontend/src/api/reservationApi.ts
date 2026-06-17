@@ -25,6 +25,16 @@ export interface GroupBookingCreationDto {
   specialRequests?: string;
   currency?: string;
   billingMode?: 'SEPARATE' | 'CONSOLIDATED';
+  travelAgentId?: string;
+  // Meal plan applied to all rooms
+  mealPlanType?: string;
+  mealPlanPricePerNight?: number;
+  mealPlanChildrenPricePerNight?: number;
+  // Booking source
+  bookingSource?: string;
+  // Advance payment on organizer's folio
+  advancePaymentAmount?: number;
+  advancePaymentMethod?: string;
 }
 
 // Member booking summary inside a reservation (Phase C shape).
