@@ -7,6 +7,8 @@ import apiClient from './fetchClient';
 export interface PaymentDto {
   id: string;
   paymentNumber?: string;
+  bookingId?: string;       // set for folio (booking-level) payments
+  reservationId?: string;   // set for reservation-level (master) payments
   folioId?: string;
   folioNumber?: string;
   amount?: number;
@@ -28,6 +30,11 @@ export interface PaymentDto {
   createdAt?: string;
   notes?: string;
   travelAgentId?: string;
+}
+
+export interface PaymentUpdateDto {
+  amount?: number;
+  notes?: string;
 }
 
 export interface PaymentCreationDto {
@@ -73,6 +80,26 @@ const paymentApi = {
 
   getPaymentsByReservation: async (propertyId: string, reservationId: string): Promise<PaymentDto[]> => {
     return apiClient.get(`/properties/${propertyId}/reservations/${reservationId}/payments`);
+  },
+
+  getAllPaymentsForReservation: async (propertyId: string, reservationId: string): Promise<PaymentDto[]> => {
+    return apiClient.get(`/properties/${propertyId}/reservations/${reservationId}/payments/all`);
+  },
+
+  updateFolioPayment: async (propertyId: string, folioId: string, id: string, data: PaymentUpdateDto): Promise<PaymentDto> => {
+    return apiClient.put(`/properties/${propertyId}/folios/${folioId}/payments/${id}`, data);
+  },
+
+  deleteFolioPayment: async (propertyId: string, folioId: string, id: string): Promise<void> => {
+    return apiClient.delete(`/properties/${propertyId}/folios/${folioId}/payments/${id}`);
+  },
+
+  updateReservationPayment: async (propertyId: string, reservationId: string, id: string, data: PaymentUpdateDto): Promise<PaymentDto> => {
+    return apiClient.put(`/properties/${propertyId}/reservations/${reservationId}/payments/${id}`, data);
+  },
+
+  deleteReservationPayment: async (propertyId: string, reservationId: string, id: string): Promise<void> => {
+    return apiClient.delete(`/properties/${propertyId}/reservations/${reservationId}/payments/${id}`);
   },
 
   refundPayment: async (propertyId: string, folioId: string, id: string, data: RefundDto): Promise<PaymentDto> => {

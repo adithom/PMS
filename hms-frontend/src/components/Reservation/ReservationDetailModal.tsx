@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import ModalShell from '../ModalShell';
 import BookingDetailModal from '../Booking/BookingDetailModal';
 import AddRoomModal from '../Booking/AddRoomModal';
@@ -8,8 +8,10 @@ import PaymentForm from '../Billing/PaymentForm';
 import reservationApi from '../../api/reservationApi';
 import type { GroupBookingSummaryDto, BookingSummaryDto } from '../../api/reservationApi';
 import bookingApi from '../../api/bookingApi';
+import paymentApi from '../../api/paymentApi';
+import type { PaymentDto } from '../../api/paymentApi';
 import type { Booking } from '../../types';
-import { fmtDate, diffDays } from '../../utils/dateHelpers';
+import { fmtDate, fmtDateTime, diffDays } from '../../utils/dateHelpers';
 
 function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(' ');
@@ -47,6 +49,14 @@ export default function ReservationDetailModal({ propertyId, reservationId, onCl
   const [showReschedule, setShowReschedule] = useState(false);
   const [showEditReservation, setShowEditReservation] = useState(false);
   const [showAddPayment, setShowAddPayment] = useState(false);
+  const [activeTab, setActiveTab] = useState<'detail' | 'payments'>('detail');
+
+  // Payments tab state
+  const [allPayments, setAllPayments] = useState<PaymentDto[]>([]);
+  const [paymentsLoading, setPaymentsLoading] = useState(false);
+  const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
+  const [paymentEditForm, setPaymentEditForm] = useState<{ amount: string; notes: string }>({ amount: '', notes: '' });
+  const [paymentProcessingId, setPaymentProcessingId] = useState<string | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -69,6 +79,23 @@ export default function ReservationDetailModal({ propertyId, reservationId, onCl
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId, reservationId]);
+
+  const loadPayments = async () => {
+    setPaymentsLoading(true);
+    try {
+      const data = await paymentApi.getAllPaymentsForReservation(propertyId, reservationId);
+      setAllPayments(data || []);
+    } catch {
+      // non-critical
+    } finally {
+      setPaymentsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'payments') loadPayments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, reservationId]);
 
   const handleCancelReservation = async () => {
     const reason = window.prompt('Cancellation reason (optional):');
@@ -104,6 +131,68 @@ export default function ReservationDetailModal({ propertyId, reservationId, onCl
     }
   };
 
+  const guestNameForPayment = (p: PaymentDto): string => {
+    if (p.reservationId && !p.bookingId) return 'Master';
+    const match = reservation?.bookings.find(b => b.bookingId === p.bookingId);
+    return match?.guestName ?? 'Guest';
+  };
+
+  const totalPayments = useMemo(
+    () => allPayments.reduce((s, p) => s + (p.amount ?? 0), 0),
+    [allPayments]
+  );
+
+  const startEditPayment = (p: PaymentDto) => {
+    setEditingPaymentId(p.id);
+    setPaymentEditForm({ amount: String(p.amount ?? ''), notes: p.notes ?? '' });
+  };
+
+  const handleSavePaymentEdit = async (p: PaymentDto) => {
+    const amt = parseFloat(paymentEditForm.amount);
+    if (isNaN(amt) || amt <= 0) return;
+    setPaymentProcessingId(p.id);
+    try {
+      if (p.reservationId && !p.bookingId) {
+        await paymentApi.updateReservationPayment(propertyId, reservationId, p.id, {
+          amount: amt,
+          notes: paymentEditForm.notes,
+        });
+      } else {
+        const b = reservation?.bookings.find(b => b.bookingId === p.bookingId);
+        if (!b?.folioId) throw new Error('Folio not found for payment');
+        await paymentApi.updateFolioPayment(propertyId, b.folioId, p.id, {
+          amount: amt,
+          notes: paymentEditForm.notes,
+        });
+      }
+      setEditingPaymentId(null);
+      await loadPayments();
+    } catch (err: any) {
+      alert(err.message || 'Failed to update payment.');
+    } finally {
+      setPaymentProcessingId(null);
+    }
+  };
+
+  const handleDeletePayment = async (p: PaymentDto) => {
+    if (!window.confirm(`Delete payment ${p.paymentNumber ?? p.id} of ${reservation?.currency} ${p.amount?.toFixed(2)}? This cannot be undone.`)) return;
+    setPaymentProcessingId(p.id);
+    try {
+      if (p.reservationId && !p.bookingId) {
+        await paymentApi.deleteReservationPayment(propertyId, reservationId, p.id);
+      } else {
+        const b = reservation?.bookings.find(b => b.bookingId === p.bookingId);
+        if (!b?.folioId) throw new Error('Folio not found for payment');
+        await paymentApi.deleteFolioPayment(propertyId, b.folioId, p.id);
+      }
+      await loadPayments();
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete payment.');
+    } finally {
+      setPaymentProcessingId(null);
+    }
+  };
+
   const selectedBooking = selectedBookingId ? bookings.find(b => b.id === selectedBookingId) ?? null : null;
 
   const isSingleRoom = reservation?.totalRooms === 1;
@@ -116,13 +205,33 @@ export default function ReservationDetailModal({ propertyId, reservationId, onCl
 
   return (
     <>
-    <ModalShell onClose={onClose} title="Reservation" subtitle={reservation?.reservationNumber ? `#${reservation.reservationNumber}` : undefined} className="max-w-6xl">
+    <ModalShell onClose={onClose} title="Reservation" subtitle={reservation?.reservationNumber ? `#${reservation.reservationNumber}` : undefined} size="wide">
       <div>
         {error && <div className="mb-4 p-3 bg-rose-50 text-rose-700 text-sm rounded-lg border border-rose-200">{error}</div>}
         {loading && <div className="text-sm text-slate-500">Loading…</div>}
 
         {reservation && (
           <>
+            {/* Tab strip */}
+            <div className="mb-5 flex gap-1 border-b border-slate-200">
+              {(['detail', 'payments'] as const).map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={cn(
+                    'px-4 py-2 text-sm font-bold capitalize transition-colors',
+                    activeTab === tab
+                      ? 'border-b-2 border-indigo-600 text-indigo-700'
+                      : 'text-slate-500 hover:text-slate-700'
+                  )}
+                >
+                  {tab === 'detail' ? 'Detail' : 'Payments'}
+                </button>
+              ))}
+            </div>
+
+            {/* ── DETAIL TAB ── */}
+            {activeTab === 'detail' && (<>
             {/* Header summary card */}
             <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-5 shadow-sm">
               <div className="flex items-start justify-between gap-4">
@@ -301,6 +410,134 @@ export default function ReservationDetailModal({ propertyId, reservationId, onCl
                 )}
               </div>
             </div>
+            </>)}
+
+            {/* ── PAYMENTS TAB ── */}
+            {activeTab === 'payments' && (
+              <div>
+                {paymentsLoading ? (
+                  <div className="py-12 text-center text-sm text-slate-400">Loading payments…</div>
+                ) : allPayments.length === 0 ? (
+                  <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-400">
+                    No payments recorded for this reservation.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+                    <table className="w-full min-w-[700px] text-left text-sm">
+                      <thead className="border-b border-slate-100 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                        <tr>
+                          <th className="px-4 py-2.5">Date</th>
+                          <th className="px-4 py-2.5">Ref #</th>
+                          <th className="px-4 py-2.5">Guest</th>
+                          <th className="px-4 py-2.5">Method</th>
+                          <th className="px-4 py-2.5">Notes</th>
+                          <th className="px-4 py-2.5 text-right">Amount</th>
+                          <th className="px-4 py-2.5 text-center">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {allPayments.map(p => {
+                          const isEditing = editingPaymentId === p.id;
+                          const isProcessing = paymentProcessingId === p.id;
+                          if (isEditing) {
+                            return (
+                              <tr key={p.id} className="bg-emerald-50/60">
+                                <td className="px-4 py-3 text-xs text-slate-500">{fmtDateTime(p.paymentDate)}</td>
+                                <td className="px-4 py-3 text-xs text-slate-500">{p.paymentNumber}</td>
+                                <td className="px-4 py-3 text-xs font-medium text-slate-700">{guestNameForPayment(p)}</td>
+                                <td className="px-4 py-3 text-xs text-slate-500">{p.paymentMethod?.replace(/_/g, ' ')}</td>
+                                <td className="px-4 py-3">
+                                  <input
+                                    type="text"
+                                    value={paymentEditForm.notes}
+                                    onChange={e => setPaymentEditForm(f => ({ ...f, notes: e.target.value }))}
+                                    className="w-full rounded border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                                    placeholder="Notes"
+                                  />
+                                </td>
+                                <td className="px-4 py-3 text-right">
+                                  <input
+                                    type="number"
+                                    min="0.01"
+                                    step="0.01"
+                                    value={paymentEditForm.amount}
+                                    onChange={e => setPaymentEditForm(f => ({ ...f, amount: e.target.value }))}
+                                    className="w-28 rounded border border-slate-200 px-2 py-1 text-right text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                                  />
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                  <div className="flex items-center justify-center gap-2">
+                                    <button
+                                      onClick={() => handleSavePaymentEdit(p)}
+                                      disabled={isProcessing}
+                                      className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 hover:text-emerald-800 disabled:opacity-50"
+                                    >
+                                      {isProcessing ? 'Saving…' : 'Save'}
+                                    </button>
+                                    <span className="text-slate-300">|</span>
+                                    <button
+                                      onClick={() => setEditingPaymentId(null)}
+                                      className="text-[10px] font-bold uppercase tracking-wider text-slate-400 hover:text-slate-600"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          }
+                          return (
+                            <tr key={p.id} className="transition-colors hover:bg-slate-50">
+                              <td className="px-4 py-3 text-xs text-slate-500">{fmtDateTime(p.paymentDate)}</td>
+                              <td className="px-4 py-3 text-xs text-slate-500">{p.paymentNumber}</td>
+                              <td className="px-4 py-3">
+                                <span className={cn(
+                                  'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold',
+                                  p.reservationId && !p.bookingId
+                                    ? 'bg-indigo-100 text-indigo-700'
+                                    : 'bg-slate-100 text-slate-600'
+                                )}>
+                                  {guestNameForPayment(p)}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-xs font-medium text-slate-700">{p.paymentMethod?.replace(/_/g, ' ')}</td>
+                              <td className="px-4 py-3 text-xs text-slate-500 max-w-[160px] truncate">{p.notes || '—'}</td>
+                              <td className="px-4 py-3 text-right font-semibold text-emerald-700">
+                                {reservation.currency} {(p.amount ?? 0).toFixed(2)}
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <div className="flex items-center justify-center gap-2">
+                                  <button
+                                    onClick={() => startEditPayment(p)}
+                                    className="text-[10px] font-bold uppercase tracking-wider text-indigo-500 hover:text-indigo-700"
+                                  >
+                                    Edit
+                                  </button>
+                                  <span className="text-slate-300">|</span>
+                                  <button
+                                    onClick={() => handleDeletePayment(p)}
+                                    disabled={isProcessing}
+                                    className="text-[10px] font-bold uppercase tracking-wider text-rose-500 hover:text-rose-700 disabled:opacity-50"
+                                  >
+                                    {isProcessing ? '…' : 'Delete'}
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    <div className="flex justify-end border-t-2 border-slate-200 bg-slate-50 px-4 py-2.5">
+                      <div className="text-right">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Payments</p>
+                        <p className="text-sm font-extrabold text-emerald-700">{reservation.currency} {totalPayments.toFixed(2)}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>

@@ -5,6 +5,8 @@ import folioApi from '../../api/folioApi';
 import type { FolioDetailDto, ChargeDto, ChargeUpdateDto, DiscountBillType, DiscountType } from '../../api/folioApi';
 import billingApi from '../../api/billingApi';
 import type { BillDto } from '../../api/billingApi';
+import paymentApi from '../../api/paymentApi';
+import type { PaymentDto } from '../../api/paymentApi';
 import { triggerPresignedDownload } from '../../utils/downloadUtils';
 import LoadingSpinner from '../LoadingSpinner';
 import ModalShell from '../ModalShell';
@@ -61,6 +63,12 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
   const [discountSubmitting, setDiscountSubmitting] = useState(false);
   const [discountError, setDiscountError] = useState<string | null>(null);
 
+  // Payments list
+  const [payments, setPayments] = useState<PaymentDto[]>([]);
+  const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
+  const [paymentEditForm, setPaymentEditForm] = useState<{ amount: string; notes: string }>({ amount: '', notes: '' });
+  const [paymentProcessingId, setPaymentProcessingId] = useState<string | null>(null);
+
   // Sub-modal states
   const [showAddCharge, setShowAddCharge] = useState(false);
   const [showAddPayment, setShowAddPayment] = useState(false);
@@ -71,6 +79,7 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
   useEffect(() => {
     loadFolio();
     loadBills();
+    loadPayments();
   }, [propertyId, folioId]);
 
   const loadFolio = async () => {
@@ -91,6 +100,15 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
       setBills(data || []);
     } catch {
       // Non-critical — bills section just stays empty
+    }
+  };
+
+  const loadPayments = async () => {
+    try {
+      const data = await paymentApi.getPaymentsByFolio(propertyId, folioId);
+      setPayments(data || []);
+    } catch {
+      // Non-critical
     }
   };
 
@@ -230,6 +248,47 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
     }
   };
 
+  const startEditPayment = (p: PaymentDto) => {
+    setEditingPaymentId(p.id);
+    setPaymentEditForm({ amount: String(p.amount ?? ''), notes: p.notes ?? '' });
+  };
+
+  const handleSavePaymentEdit = async (p: PaymentDto) => {
+    const amt = parseFloat(paymentEditForm.amount);
+    if (isNaN(amt) || amt <= 0) return;
+    setPaymentProcessingId(p.id);
+    try {
+      await paymentApi.updateFolioPayment(propertyId, folioId, p.id, {
+        amount: amt,
+        notes: paymentEditForm.notes,
+      });
+      setEditingPaymentId(null);
+      await Promise.all([loadPayments(), loadFolio()]);
+    } catch (err: any) {
+      alert(err.message || 'Failed to update payment.');
+    } finally {
+      setPaymentProcessingId(null);
+    }
+  };
+
+  const handleDeletePayment = async (p: PaymentDto) => {
+    if (!window.confirm(`Delete payment ${p.paymentNumber ?? p.id} of ${folio?.currency} ${p.amount?.toFixed(2)}? This cannot be undone.`)) return;
+    setPaymentProcessingId(p.id);
+    try {
+      await paymentApi.deleteFolioPayment(propertyId, folioId, p.id);
+      await Promise.all([loadPayments(), loadFolio()]);
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete payment.');
+    } finally {
+      setPaymentProcessingId(null);
+    }
+  };
+
+  const totalPayments = useMemo(
+    () => payments.reduce((s, p) => s + (p.amount ?? 0), 0),
+    [payments]
+  );
+
   // Charge totals for discount live preview
   const roomChargesTotal = useMemo(() => {
     if (!folio?.charges) return 0;
@@ -322,8 +381,123 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
         {/* ─── Body (Split Layout) ─── */}
         <div className="flex flex-1 overflow-hidden">
           
-          {/* LEFT PANEL: Charge Ledger grouped by category */}
+          {/* LEFT PANEL: Payments + Charge Ledger */}
           <div className="flex-1 overflow-y-auto p-6">
+
+            {/* ── Payments ── */}
+            <div className="mb-8">
+              <h3 className="mb-4 text-sm font-bold uppercase tracking-widest text-slate-400">Payments</h3>
+              {payments.length === 0 ? (
+                <div className="rounded-xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-400 shadow-sm">
+                  No payments recorded yet.
+                </div>
+              ) : (
+                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                  <table className="w-full text-left text-sm">
+                    <thead className="border-b border-slate-100 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                      <tr>
+                        <th className="px-4 py-2.5">Date</th>
+                        <th className="px-4 py-2.5">Ref #</th>
+                        <th className="px-4 py-2.5">Method</th>
+                        <th className="px-4 py-2.5">Notes</th>
+                        <th className="px-4 py-2.5 text-right">Amount</th>
+                        {!readOnly && <th className="px-4 py-2.5 text-center">Action</th>}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {payments.map(p => {
+                        const isEditing = editingPaymentId === p.id;
+                        const isProcessing = paymentProcessingId === p.id;
+                        if (isEditing) {
+                          return (
+                            <tr key={p.id} className="bg-emerald-50/60">
+                              <td className="px-4 py-3 text-xs text-slate-500">{fmtDateTime(p.paymentDate)}</td>
+                              <td className="px-4 py-3 text-xs text-slate-500">{p.paymentNumber}</td>
+                              <td className="px-4 py-3 text-xs text-slate-500">{p.paymentMethod?.replace(/_/g, ' ')}</td>
+                              <td className="px-4 py-3">
+                                <input
+                                  type="text"
+                                  value={paymentEditForm.notes}
+                                  onChange={e => setPaymentEditForm(f => ({ ...f, notes: e.target.value }))}
+                                  className="w-full rounded border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                                  placeholder="Notes"
+                                />
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <input
+                                  type="number"
+                                  min="0.01"
+                                  step="0.01"
+                                  value={paymentEditForm.amount}
+                                  onChange={e => setPaymentEditForm(f => ({ ...f, amount: e.target.value }))}
+                                  className="w-28 rounded border border-slate-200 px-2 py-1 text-right text-sm focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                                />
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <div className="flex items-center justify-center gap-2">
+                                  <button
+                                    onClick={() => handleSavePaymentEdit(p)}
+                                    disabled={isProcessing}
+                                    className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 hover:text-emerald-800 disabled:opacity-50"
+                                  >
+                                    {isProcessing ? 'Saving…' : 'Save'}
+                                  </button>
+                                  <span className="text-slate-300">|</span>
+                                  <button
+                                    onClick={() => setEditingPaymentId(null)}
+                                    className="text-[10px] font-bold uppercase tracking-wider text-slate-400 hover:text-slate-600"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        }
+                        return (
+                          <tr key={p.id} className="transition-colors hover:bg-slate-50">
+                            <td className="px-4 py-3 text-xs text-slate-500">{fmtDateTime(p.paymentDate)}</td>
+                            <td className="px-4 py-3 text-xs text-slate-500">{p.paymentNumber}</td>
+                            <td className="px-4 py-3 text-xs font-medium text-slate-700">{p.paymentMethod?.replace(/_/g, ' ')}</td>
+                            <td className="px-4 py-3 text-xs text-slate-500 max-w-[160px] truncate">{p.notes || '—'}</td>
+                            <td className="px-4 py-3 text-right font-semibold text-emerald-700">
+                              {folio?.currency} {(p.amount ?? 0).toFixed(2)}
+                            </td>
+                            {!readOnly && (
+                              <td className="px-4 py-3 text-center">
+                                <div className="flex items-center justify-center gap-2">
+                                  <button
+                                    onClick={() => startEditPayment(p)}
+                                    className="text-[10px] font-bold uppercase tracking-wider text-indigo-500 hover:text-indigo-700"
+                                  >
+                                    Edit
+                                  </button>
+                                  <span className="text-slate-300">|</span>
+                                  <button
+                                    onClick={() => handleDeletePayment(p)}
+                                    disabled={isProcessing}
+                                    className="text-[10px] font-bold uppercase tracking-wider text-rose-500 hover:text-rose-700 disabled:opacity-50"
+                                  >
+                                    {isProcessing ? '…' : 'Delete'}
+                                  </button>
+                                </div>
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  <div className="flex justify-end border-t-2 border-slate-200 bg-slate-50 px-4 py-2.5">
+                    <div className="text-right">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Payments</p>
+                      <p className="text-sm font-extrabold text-emerald-700">{folio?.currency} {totalPayments.toFixed(2)}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <h3 className="mb-4 text-sm font-bold uppercase tracking-widest text-slate-400">Charge Ledger</h3>
 
             {categorizedCharges.length === 0 ? (
@@ -749,7 +923,7 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
              propertyId={propertyId}
              folioId={folioId}
              balanceDue={folio.balanceDue}
-             onSuccess={() => { setShowAddPayment(false); loadFolio(); }}
+             onSuccess={() => { setShowAddPayment(false); loadFolio(); loadPayments(); }}
              onCancel={() => setShowAddPayment(false)}
            />
         </ModalShell>

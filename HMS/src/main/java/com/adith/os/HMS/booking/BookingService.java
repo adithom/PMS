@@ -1076,8 +1076,10 @@ public class BookingService {
         booking.setExpectedNightlyRate(null);
         Booking savedBooking = bookingRepository.save(booking);
 
-        // Create room assignment if none exists, applying any rate set before assignment
-        roomAssignmentService.createInitialAssignment(savedBooking, expectedNightlyRate);
+        // Create room assignment if none exists, applying any rate set before assignment.
+        // expectedNightlyRate is the GST-inclusive tariff; compute the ex-tax base for billing.
+        BigDecimal exTaxRate = ChargeCode.computeExTaxFromInclusive(expectedNightlyRate);
+        roomAssignmentService.createInitialAssignment(savedBooking, expectedNightlyRate, exTaxRate);
 
         return bookingMapper.toDto(savedBooking);
     }

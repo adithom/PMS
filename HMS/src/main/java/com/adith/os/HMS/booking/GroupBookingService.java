@@ -2,6 +2,9 @@ package com.adith.os.HMS.booking;
 
 import com.adith.os.HMS.billing.folio.*;
 import com.adith.os.HMS.billing.folio.dto.FolioCreationDto;
+import com.adith.os.HMS.billing.payment.PaymentMethod;
+import com.adith.os.HMS.billing.payment.PaymentService;
+import com.adith.os.HMS.billing.payment.dto.PaymentCreationDto;
 import com.adith.os.HMS.booking.dto.*;
 import com.adith.os.HMS.guest.Guest;
 import com.adith.os.HMS.guest.GuestRepository;
@@ -45,6 +48,7 @@ public class GroupBookingService {
     private final RoomRepository roomRepository;
     private final BookingRepository bookingRepository;
     private final FolioService folioService;
+    private final PaymentService paymentService;
     private final TravelAgentService travelAgentService;
     private final ReservationRepository reservationRepository;
     private final FolioChargeRepository folioChargeRepository;
@@ -58,6 +62,7 @@ public class GroupBookingService {
             RoomRepository roomRepository,
             BookingRepository bookingRepository,
             FolioService folioService,
+            PaymentService paymentService,
             TravelAgentService travelAgentService,
             ReservationRepository reservationRepository,
             FolioChargeRepository folioChargeRepository,
@@ -69,6 +74,7 @@ public class GroupBookingService {
         this.roomRepository = roomRepository;
         this.bookingRepository = bookingRepository;
         this.folioService = folioService;
+        this.paymentService = paymentService;
         this.travelAgentService = travelAgentService;
         this.reservationRepository = reservationRepository;
         this.folioChargeRepository = folioChargeRepository;
@@ -138,6 +144,7 @@ public class GroupBookingService {
         // ---- Create one Booking per room request, plus a folio for each ----
         List<Booking> savedBookings = new ArrayList<>();
         BigDecimal totalGroupPrice = BigDecimal.ZERO;
+        UUID organizerFolioId = null;
 
         for (ValidatedRoomRequest vr : validated) {
             Booking booking = new Booking();
@@ -152,15 +159,37 @@ public class GroupBookingService {
             booking.setChildren(vr.request().children());
             booking.setCurrency(dto.currency());
             long nights = ChronoUnit.DAYS.between(dto.checkIn(), dto.checkOut());
-            BigDecimal bookingTotal = (vr.request().nightlyRate() != null
-                    && vr.request().nightlyRate().compareTo(BigDecimal.ZERO) > 0 && nights > 0)
-                    ? vr.request().nightlyRate().multiply(BigDecimal.valueOf(nights))
-                    : BigDecimal.ZERO;
+
+            // Meal plan (applied uniformly to all rooms)
+            int adults = vr.request().adults() != null ? vr.request().adults() : 1;
+            int children = vr.request().children() != null ? vr.request().children() : 0;
+            BigDecimal mealNightly = BigDecimal.ZERO;
+            if (dto.mealPlanType() != null) {
+                booking.setMealPlanType(dto.mealPlanType());
+                BigDecimal adultPrice = dto.mealPlanPricePerNight() != null ? dto.mealPlanPricePerNight() : BigDecimal.ZERO;
+                BigDecimal childPrice = dto.mealPlanChildrenPricePerNight() != null ? dto.mealPlanChildrenPricePerNight() : BigDecimal.ZERO;
+                booking.setMealPlanPricePerNight(adultPrice);
+                booking.setMealPlanChildrenPricePerNight(childPrice);
+                mealNightly = adultPrice.multiply(BigDecimal.valueOf(adults))
+                        .add(childPrice.multiply(BigDecimal.valueOf(children)));
+            }
+
+            BigDecimal roomNightly = vr.request().nightlyRate() != null ? vr.request().nightlyRate() : BigDecimal.ZERO;
+            BigDecimal totalNightly = roomNightly.add(mealNightly);
+            BigDecimal bookingTotal = nights > 0 ? totalNightly.multiply(BigDecimal.valueOf(nights)) : BigDecimal.ZERO;
             booking.setTotalPrice(bookingTotal);
             booking.setPaidAmount(BigDecimal.ZERO);
+
+            // Stash the inclusive room nightly rate so assignRoomToBooking can apply it to the room assignment.
+            if (roomNightly.compareTo(BigDecimal.ZERO) > 0) {
+                booking.setExpectedNightlyRate(roomNightly);
+            }
             booking.setSpecialRequests(vr.request().specialRequests());
             booking.setStatus(BookingStatus.CONFIRMED);
             booking.setTwinBed(vr.request().isTwinBed() != null ? vr.request().isTwinBed() : false);
+            if (dto.bookingSource() != null && !dto.bookingSource().isBlank()) {
+                booking.setBookingSource(dto.bookingSource());
+            }
             if (travelAgent != null) {
                 booking.setTravelAgent(travelAgent);
             }
@@ -176,7 +205,30 @@ public class GroupBookingService {
                     vr.request().specialRequests(),
                     "SYSTEM"
             );
-            folioService.createFolio(propertyId, folioDto);
+            var createdFolio = folioService.createFolio(propertyId, folioDto);
+            // Track organizer's folio for advance payment
+            if (organizerFolioId == null && vr.guest().getId().equals(organizer.getId())) {
+                organizerFolioId = createdFolio.id();
+            }
+        }
+
+        // Record advance payment on organizer's folio if provided
+        if (organizerFolioId != null
+                && dto.advancePaymentAmount() != null
+                && dto.advancePaymentAmount().compareTo(BigDecimal.ZERO) > 0) {
+            PaymentMethod method = dto.advancePaymentMethod() != null
+                    ? dto.advancePaymentMethod()
+                    : PaymentMethod.CASH;
+            paymentService.recordPayment(propertyId, organizerFolioId,
+                    new PaymentCreationDto(
+                            dto.advancePaymentAmount(), method,
+                            null, null, null,
+                            null, null, null,
+                            null,
+                            "Advance payment at reservation creation",
+                            "SYSTEM",
+                            null),
+                    "SYSTEM");
         }
 
         return buildReservationSummary(savedReservation, savedBookings);
@@ -311,9 +363,11 @@ public class GroupBookingService {
                             .stream()
                             .filter(a -> a.getStatus() == RoomAssignmentStatus.SCHEDULED || a.getStatus() == RoomAssignmentStatus.ACTIVE)
                             .toList();
+                    BigDecimal exTaxRate = ChargeCode.computeExTaxFromInclusive(bu.nightlyRate());
                     if (!activeAssignments.isEmpty()) {
                         for (RoomAssignment a : activeAssignments) {
                             a.setNightlyRate(bu.nightlyRate());
+                            a.setNightlyRateExTax(exTaxRate);
                         }
                         roomAssignmentRepository.saveAll(activeAssignments);
                         booking.setExpectedNightlyRate(null);

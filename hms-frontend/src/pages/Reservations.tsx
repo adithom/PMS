@@ -34,9 +34,8 @@ type Mode = 'calendar' | 'list';
 
 export default function Reservations() {
   const isMobile = useIsMobile();
-  const { user } = useAuth();
+  const { user, selectedPropId, setSelectedPropId } = useAuth();
   const [properties, setProperties] = useState<Property[]>([]);
-  const [selectedPropId, setSelectedPropId] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>('calendar');
   const [openReservationId, setOpenReservationId] = useState<string | null>(null);
   const [showGroupModal, setShowGroupModal] = useState(false);
@@ -53,10 +52,12 @@ export default function Reservations() {
           ? all
           : all.filter(p => user?.properties?.some(up => up.id === p.id));
         setProperties(filtered);
-        if (filtered.length) setSelectedPropId(filtered[0].id);
+        if (filtered.length && (!selectedPropId || !filtered.find(p => p.id === selectedPropId))) {
+          setSelectedPropId(filtered[0].id);
+        }
       } catch (e) { console.error(e); }
     })();
-  }, [user]);
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-slate-50 pb-20">
