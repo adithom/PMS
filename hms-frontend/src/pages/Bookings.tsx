@@ -24,7 +24,7 @@ import ModalShell from '../components/ModalShell';
 import ConfirmModal from '../components/ConfirmModal';
 import { PlaneLanding, FileText, List, Users, ChevronLeft, ChevronRight, BedSingle } from 'lucide-react';
 import type { Property, Room, Booking, RoomAssignmentDto, GhostAssignmentDto } from '../types';
-import { toDS, addDays, diffDays, shortDate, dayLabel, dateStr, fmtDate } from '../utils/dateHelpers';
+import { toDS, addDays, diffDays, shortDate, dayLabel, dateStr, fmtDate, todayIST } from '../utils/dateHelpers';
 import { getRoomId } from '../utils/roomHelpers';
 import {
   CELL_W, CELL_H, LABEL_W, MIN_CHART_ROWS,
@@ -257,8 +257,8 @@ export default function Bookings() {
   const [winStart, setWinStart] = useState<Date>(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; });
   const dateCols = useMemo(() => Array.from({ length: numDays }, (_, i) => addDays(winStart, i)), [winStart, numDays]);
   const winStartStr = useMemo(() => toDS(winStart), [winStart]);
-  const winEndStr = useMemo(() => toDS(addDays(winStart, numDays - 1)), [winStart, numDays]);
-  const todayStr = useMemo(() => toDS(new Date()), []);
+  const winEndStr = useMemo(() => toDS(addDays(winStart, numDays)), [winStart, numDays]);
+  const todayStr = todayIST();
 
   const [bookingBuffer, setBookingBuffer] = useState<Booking[]>([]);
   const [bufferRange, setBufferRange] = useState<{ from: string; to: string } | null>(null);

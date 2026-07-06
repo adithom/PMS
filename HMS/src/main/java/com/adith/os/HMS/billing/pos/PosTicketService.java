@@ -15,16 +15,20 @@ import com.adith.os.HMS.billing.pos.dto.PosTicketHistoryDto;
 import com.adith.os.HMS.booking.Booking;
 import com.adith.os.HMS.booking.BookingRepository;
 import com.adith.os.HMS.storage.R2StorageService;
+import com.adith.os.HMS.storage.R2UploadException;
 import com.adith.os.HMS.property.mealplan.MealPlanType;
 import com.adith.os.HMS.roomassignment.RoomAssignment;
 import com.adith.os.HMS.roomassignment.RoomAssignmentStatus;
 import jakarta.transaction.Transactional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -33,6 +37,8 @@ import java.util.stream.Collectors;
 
 @Service
 public class PosTicketService {
+
+    private static final Logger log = LoggerFactory.getLogger(PosTicketService.class);
 
     private final PosTicketRepository ticketRepository;
     private final PosOrderRepository orderRepository;
@@ -229,7 +235,7 @@ public class PosTicketService {
             saved.setOrders(orders);
 
             String receiptPath = receiptService.generateReceipt(saved);
-            saved.setReceiptUrl(receiptPath);
+            saved.setReceiptUrl(uploadReceiptToR2(receiptPath, invoiceNumber));
             ticketRepository.save(saved);
 
             return toDto(saved, orders);
@@ -280,7 +286,7 @@ public class PosTicketService {
             saved.setOrders(orders);
 
             String receiptPath = receiptService.generateReceipt(saved);
-            saved.setReceiptUrl(receiptPath);
+            saved.setReceiptUrl(uploadReceiptToR2(receiptPath, invoiceNumber));
             ticketRepository.save(saved);
 
             return toDto(saved, orders);
@@ -450,6 +456,20 @@ public class PosTicketService {
                     );
                 })
                 .collect(Collectors.toList());
+    }
+
+    private String uploadReceiptToR2(String localPath, String invoiceNumber) {
+        if (!r2StorageService.isConfigured()) {
+            return localPath;
+        }
+        String objectKey = "pos-receipts/" + invoiceNumber + ".pdf";
+        try {
+            r2StorageService.uploadPdf(Path.of(localPath), objectKey);
+            return objectKey;
+        } catch (R2UploadException e) {
+            log.error("R2 upload failed for POS receipt key={}. PDF is saved locally at {}.", objectKey, localPath, e);
+            return localPath;
+        }
     }
 
     public String getReceiptUrl(UUID ticketId) {

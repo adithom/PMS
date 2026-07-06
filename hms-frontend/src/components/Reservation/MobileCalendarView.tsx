@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import availabilityApi from '../../api/availabilityApi';
 import bookingApi from '../../api/bookingApi';
 import type { TapeChartDto, BookingStatus } from '../../types';
-import { addDays, dayLabel, dateStr, diffDays, shortDate, toDS } from '../../utils/dateHelpers';
+import { addDays, dayLabel, dateStr, diffDays, shortDate, toDS, todayIST } from '../../utils/dateHelpers';
 import { STATUS_COLORS } from '../Booking/TapeChartConstants';
 
 function cn(...classes: Array<string | false | null | undefined>) {
@@ -50,8 +50,8 @@ export default function MobileCalendarView({ propertyId, onOpenReservation }: Pr
   const [winStart, setWinStart] = useState<Date>(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; });
   const dateCols = useMemo(() => Array.from({ length: NUM_DAYS }, (_, i) => addDays(winStart, i)), [winStart]);
   const winStartStr = useMemo(() => toDS(winStart), [winStart]);
-  const winEndStr   = useMemo(() => toDS(addDays(winStart, NUM_DAYS - 1)), [winStart]);
-  const todayStr    = useMemo(() => toDS(new Date()), []);
+  const winEndStr   = useMemo(() => toDS(addDays(winStart, NUM_DAYS)), [winStart]);
+  const todayStr    = todayIST();
 
   const [data, setData]     = useState<TapeChartDto | null>(null);
   const [loading, setLoading] = useState(true);

@@ -180,13 +180,13 @@ export default function BookingDetailModal({ booking: bookingProp, propertyId, o
                     <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Meal Plan</p>
                     <p className="mt-0.5 font-semibold text-slate-800">{booking.mealPlanDisplayName ?? booking.mealPlanType}</p>
                   </div>
-                  {booking.mealPlanPricePerNight != null && (
+                  {booking.mealPlanPricePerNight != null && booking.mealPlanPricePerNight > 0 && (
                     <div>
                       <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Adult Rate / Night</p>
                       <p className="mt-0.5 font-semibold text-slate-800">{booking.currency} {booking.mealPlanPricePerNight.toFixed(2)}</p>
                     </div>
                   )}
-                  {booking.mealPlanChildrenPricePerNight != null && booking.children > 0 && (
+                  {booking.mealPlanChildrenPricePerNight != null && booking.mealPlanChildrenPricePerNight > 0 && booking.children > 0 && (
                     <div>
                       <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Child Rate / Night</p>
                       <p className="mt-0.5 font-semibold text-slate-800">{booking.currency} {booking.mealPlanChildrenPricePerNight.toFixed(2)}</p>
