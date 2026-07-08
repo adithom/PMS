@@ -510,9 +510,25 @@ export default function BookingForm({
       const nights = checkIn && checkOut && outD > inD
         ? Math.round((outD.getTime() - inD.getTime()) / (1000 * 60 * 60 * 24))
         : 0;
-      const xBedNightly = extraBedOpen && extraBeds > 0 && extraBedRate ? extraBeds * Number(extraBedRate) : 0;
-      const computedTotalPrice = (nightlyRate + xBedNightly) * nights;
-      const nightlyRateExTax = computeRoomRentExTax(nightlyRate).exTax;
+      // If the user typed a new rate but never blurred, run distributeRate now so the split is correct.
+      let effectiveNightlyRate = nightlyRate;
+      let effectiveExtraBedRate = extraBedRate ? Number(extraBedRate) : 0;
+      if (nightlyRateInputStr !== '') {
+        const distributed = distributeRate(
+          Number(nightlyRateInputStr) || 0,
+          adults, children,
+          0, 0,
+          false,
+          extraBeds,
+          effectiveExtraBedRate,
+          extraBedOpen && extraBeds > 0,
+        );
+        effectiveNightlyRate = distributed.roomRent;
+        if (extraBedOpen && extraBeds > 0) effectiveExtraBedRate = distributed.bedRate;
+      }
+      const xBedNightly = extraBedOpen && extraBeds > 0 ? extraBeds * effectiveExtraBedRate : 0;
+      const computedTotalPrice = (effectiveNightlyRate + xBedNightly) * nights;
+      const nightlyRateExTax = computeRoomRentExTax(effectiveNightlyRate).exTax;
 
       const mealPlanPayload = mealPlanOpen && selectedMealPlan
         ? { mealPlanType: selectedMealPlan, mealPlanPricePerNight: 0, mealPlanChildrenPricePerNight: 0 }
@@ -521,7 +537,7 @@ export default function BookingForm({
       const extraBedPayload = extraBedOpen && extraBeds > 0
         ? {
             extraBeds,
-            extraBedRatePerNight: extraBedRate ? Number(extraBedRate) : undefined,
+            extraBedRatePerNight: effectiveExtraBedRate || undefined,
             extraBedChargeCode,
           }
         : { extraBeds: 0, extraBedRatePerNight: undefined, extraBedChargeCode: undefined };
@@ -539,8 +555,8 @@ export default function BookingForm({
         ...(!isEditMode && reservationId ? { reservationId } : {}),
         ...(!isEditMode && paidAmount > 0 ? { advancePaymentMethod } : {}),
         ...(isEditMode
-          ? { totalPrice: computedTotalPrice, nightlyRate, nightlyRateExTax }
-          : { nightlyRate, nightlyRateExTax }),
+          ? { totalPrice: computedTotalPrice, nightlyRate: effectiveNightlyRate, nightlyRateExTax }
+          : { nightlyRate: effectiveNightlyRate, nightlyRateExTax }),
         ...travelAgentPayload,
         ...mealPlanPayload,
         ...extraBedPayload

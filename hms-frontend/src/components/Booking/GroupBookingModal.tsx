@@ -428,22 +428,19 @@ export default function GroupBookingModal({ propertyId, onClose, onSuccess }: Gr
                             <label className={labelCls}># Rooms</label>
                             <input type="number" min={1} className={inputCls}
                               value={block.roomCount === 0 ? '' : block.roomCount}
-                              onChange={e => updateBlock(i, { roomCount: parseInt(e.target.value) || 0 })}
-                              onBlur={e => { if (!e.target.value || Number(e.target.value) < 1) updateBlock(i, { roomCount: 1 }); }} />
+                              onChange={e => updateBlock(i, { roomCount: e.target.value === '' ? 0 : parseInt(e.target.value) })} />
                           </div>
                           <div>
                             <label className={labelCls}>Adults/room</label>
                             <input type="number" min={1} className={inputCls}
                               value={block.adults === 0 ? '' : block.adults}
-                              onChange={e => updateBlock(i, { adults: parseInt(e.target.value) || 0 })}
-                              onBlur={e => { if (!e.target.value || Number(e.target.value) < 1) updateBlock(i, { adults: 1 }); }} />
+                              onChange={e => updateBlock(i, { adults: e.target.value === '' ? 0 : parseInt(e.target.value) })} />
                           </div>
                           <div>
                             <label className={labelCls}>Children/room</label>
                             <input type="number" min={0} className={inputCls}
                               value={block.children === 0 ? '' : block.children}
-                              onChange={e => updateBlock(i, { children: parseInt(e.target.value) || 0 })}
-                              onBlur={e => { if (!e.target.value) updateBlock(i, { children: 0 }); }} />
+                              onChange={e => updateBlock(i, { children: e.target.value === '' ? 0 : parseInt(e.target.value) })} />
                           </div>
                         </div>
 
@@ -452,8 +449,7 @@ export default function GroupBookingModal({ propertyId, onClose, onSuccess }: Gr
                             <label className={labelCls}>Nightly Rate (room only)</label>
                             <input type="number" min={0} step={0.01} className={inputCls}
                               value={block.nightlyRate === 0 ? '' : block.nightlyRate}
-                              onChange={e => updateBlock(i, { nightlyRate: parseFloat(e.target.value) || 0 })}
-                              onBlur={e => { if (!e.target.value) updateBlock(i, { nightlyRate: 0 }); }} />
+                              onChange={e => updateBlock(i, { nightlyRate: e.target.value === '' ? 0 : parseFloat(e.target.value) })} />
                             {block.unitId && roomsByUnit[block.unitId]?.[0] && (
                               <p className="mt-1 text-[10px] text-slate-400">
                                 Base rate: ₹{roomsByUnit[block.unitId][0].baseRate.toLocaleString()}/night

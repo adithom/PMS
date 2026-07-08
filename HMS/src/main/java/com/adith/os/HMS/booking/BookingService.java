@@ -1078,7 +1078,11 @@ public class BookingService {
 
         // Create room assignment if none exists, applying any rate set before assignment.
         // expectedNightlyRate is the GST-inclusive tariff; compute the ex-tax base for billing.
-        BigDecimal exTaxRate = ChargeCode.computeExTaxFromInclusive(expectedNightlyRate);
+        // Only compute ex-tax when a real rate is present — passing null avoids persisting ZERO
+        // (which the night audit would then treat as a valid 0-rate charge).
+        BigDecimal exTaxRate = (expectedNightlyRate != null && expectedNightlyRate.compareTo(BigDecimal.ZERO) > 0)
+                ? ChargeCode.computeExTaxFromInclusive(expectedNightlyRate)
+                : null;
         roomAssignmentService.createInitialAssignment(savedBooking, expectedNightlyRate, exTaxRate);
 
         return bookingMapper.toDto(savedBooking);
