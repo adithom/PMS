@@ -33,6 +33,7 @@ export interface PosProduct {
   isAvailable: boolean;
   preparationTime?: number;
   imageUrl?: string;
+  isPriceOverridable?: boolean;
 }
 
 export interface PosOrderItem {
@@ -107,6 +108,7 @@ export interface PosOrderCreationDto {
   items: {
     posProductId: string;
     quantity: number;
+    priceOverride?: number;
   }[];
   discountRate?: number;
 }
@@ -206,4 +208,5 @@ export interface PosTicketHistory {
 export interface CartEntry {
   product: PosProduct;
   quantity: number;
+  priceOverride?: number;
 }

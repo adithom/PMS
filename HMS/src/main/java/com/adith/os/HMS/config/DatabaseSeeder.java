@@ -1,5 +1,6 @@
 package com.adith.os.HMS.config;
 
+import com.adith.os.HMS.billing.pos.PosSeeder;
 import com.adith.os.HMS.security.Role;
 import com.adith.os.HMS.security.User;
 import com.adith.os.HMS.security.UserRepository;
@@ -26,12 +27,14 @@ public class DatabaseSeeder {
     public CommandLineRunner seedDatabase(
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
-            RoomInventorySeeder roomInventorySeeder
+            RoomInventorySeeder roomInventorySeeder,
+            PosSeeder posSeeder
     ) {
         return args -> {
             seedAdminUser(userRepository, passwordEncoder);
             roomInventorySeeder.seedAll();
             roomInventorySeeder.syncAllTotalRooms();
+            posSeeder.seedChefsSpecial();
         };
     }
 

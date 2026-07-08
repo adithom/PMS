@@ -16,5 +16,6 @@ public record PosProductDto(
         BigDecimal discountRate,
         boolean isAvailable,
         Integer preparationTime,
-        String imageUrl) {
+        String imageUrl,
+        boolean isPriceOverridable) {
 }

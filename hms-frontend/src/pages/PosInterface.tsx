@@ -42,7 +42,11 @@ function SettleNowModal({ isOpen, onClose, cart, location, propertyId: _property
         mealType: (() => { const h = new Date().getHours(); return h < 11 ? 'BREAKFAST' : h < 15 ? 'LUNCH' : 'DINNER'; })() as import('../types/pos').MealType,
       });
       await posApi.addOrderToTicket(ticket.id, {
-        items: cart.map(e => ({ posProductId: e.product.id, quantity: e.quantity })),
+        items: cart.map(e => ({
+          posProductId: e.product.id,
+          quantity: e.quantity,
+          ...(e.priceOverride != null ? { priceOverride: e.priceOverride } : {}),
+        })),
         discountRate: orderDiscountRate > 0 ? orderDiscountRate : undefined,
       });
       await posApi.closeTicket(ticket.id, {
@@ -278,6 +282,97 @@ function CancelTicketModal({ ticket, onClose, onSuccess }: CancelTicketModalProp
   );
 }
 
+// ─── TicketDetailModal ───────────────────────────────────────────────────────
+
+interface TicketDetailModalProps {
+  ticket: PosTicket;
+  onClose: () => void;
+}
+
+function TicketDetailModal({ ticket, onClose }: TicketDetailModalProps) {
+  const fmt = (n: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(n);
+  const ticketTotal = ticket.orders.reduce((s, o) => s + o.totalAmount, 0);
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center flex-shrink-0">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">
+              {ticket.roomNumber ? `Room ${ticket.roomNumber}` : ticket.guestName}
+            </h3>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {ticket.mealType.charAt(0) + ticket.mealType.slice(1).toLowerCase()} · {ticket.ticketNumber}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-xl leading-none">&times;</button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-6 py-4">
+          {ticket.orders.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-8">No orders on this ticket yet.</p>
+          ) : (
+            <div className="space-y-4">
+              {ticket.orders.map((order, idx) => (
+                <div key={order.id} className="border border-gray-100 rounded-xl overflow-hidden">
+                  <div className="bg-gray-50 px-4 py-2.5 flex justify-between items-center">
+                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      Order {idx + 1} · {order.orderNumber}
+                    </span>
+                    <span className="text-xs font-semibold text-gray-700">{fmt(order.totalAmount)}</span>
+                  </div>
+                  <div className="divide-y divide-gray-50">
+                    {order.items.map((item, iIdx) => (
+                      <div key={item.id ?? iIdx} className="flex justify-between items-center px-4 py-2.5">
+                        <div className="flex-1 min-w-0">
+                          <span className="text-sm text-gray-800">{item.itemName}</span>
+                          {item.quantity > 1 && (
+                            <span className="text-xs text-gray-400 ml-1.5">×{item.quantity}</span>
+                          )}
+                        </div>
+                        <span className="text-sm font-medium text-gray-700 ml-3 flex-shrink-0">{fmt(item.totalAmount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {(order.discountAmount > 0 || order.taxAmount > 0) && (
+                    <div className="px-4 py-2 border-t border-gray-100 space-y-1">
+                      {order.discountAmount > 0 && (
+                        <div className="flex justify-between text-xs text-emerald-600">
+                          <span>Discount {order.discountRate ? `(${order.discountRate}%)` : ''}</span>
+                          <span>−{fmt(order.discountAmount)}</span>
+                        </div>
+                      )}
+                      {order.taxAmount > 0 && (
+                        <div className="flex justify-between text-xs text-gray-400">
+                          <span>Tax</span><span>{fmt(order.taxAmount)}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {ticket.orders.length > 0 && (
+          <div className="px-6 py-3 border-t border-gray-100 bg-gray-50/50 flex justify-between items-center flex-shrink-0">
+            <span className="text-sm font-semibold text-gray-700">Total</span>
+            <span className="text-base font-bold text-gray-900">{fmt(ticketTotal)}</span>
+          </div>
+        )}
+
+        <div className="px-6 py-4 border-t border-gray-100 flex-shrink-0">
+          <button onClick={onClose}
+            className="w-full py-2.5 bg-gray-100 text-gray-700 rounded-xl text-sm font-semibold hover:bg-gray-200 transition-colors">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main PosInterface ───────────────────────────────────────────────────────
 
 export default function PosInterface() {
@@ -310,6 +405,7 @@ export default function PosInterface() {
   const [closingTicketId, setClosingTicketId] = useState<string | null>(null);
   const [closePaymentTicket, setClosePaymentTicket] = useState<PosTicket | null>(null);
   const [cancelTicketTarget, setCancelTicketTarget] = useState<PosTicket | null>(null);
+  const [viewingTicket, setViewingTicket] = useState<PosTicket | null>(null);
 
   const fmt = (n: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(n);
 
@@ -389,7 +485,11 @@ export default function PosInterface() {
     try {
       await posApi.addOrderToTicket(activeTicketId, {
         posLocationId: location.id,
-        items: cart.map(e => ({ posProductId: e.product.id, quantity: e.quantity })),
+        items: cart.map(e => ({
+          posProductId: e.product.id,
+          quantity: e.quantity,
+          ...(e.priceOverride != null ? { priceOverride: e.priceOverride } : {}),
+        })),
         discountRate: orderDiscountRate > 0 ? orderDiscountRate : undefined,
       });
       clearCart();
@@ -446,16 +546,21 @@ export default function PosInterface() {
     setTimeout(() => setSuccessMessage(null), 4000);
   };
 
-  const addToCart = (product: PosProduct) => {
+  const addToCart = (product: PosProduct, priceOverride?: number) => {
     setCart(prev => {
       const existing = prev.find(e => e.product.id === product.id);
-      if (existing) return prev.map(e => e.product.id === product.id ? { ...e, quantity: e.quantity + 1 } : e);
-      return [...prev, { product, quantity: 1 }];
+      if (existing && !product.isPriceOverridable) {
+        return prev.map(e => e.product.id === product.id ? { ...e, quantity: e.quantity + 1 } : e);
+      }
+      return [...prev, { product, quantity: 1, priceOverride }];
     });
   };
 
-  const updateCartQuantity = (productId: string, delta: number) => {
-    setCart(prev => prev.map(e => e.product.id === productId ? { ...e, quantity: e.quantity + delta } : e).filter(e => e.quantity > 0));
+  const updateCartQuantity = (productId: string, delta: number, idx?: number) => {
+    setCart(prev => prev.map((e, i) => {
+      const match = idx !== undefined ? i === idx : e.product.id === productId;
+      return match ? { ...e, quantity: e.quantity + delta } : e;
+    }).filter(e => e.quantity > 0));
   };
 
   const clearCart = () => { setCart([]); setOrderDiscountRate(0); };
@@ -463,8 +568,8 @@ export default function PosInterface() {
   const categories = ['All', ...Array.from(new Set(products.map(p => p.categoryName).filter(Boolean)))];
   const filteredProducts = categoryFilter === 'All' ? products : products.filter(p => p.categoryName === categoryFilter);
 
-  const cartSubtotal = cart.reduce((sum, e) => sum + e.product.price * e.quantity, 0);
-  const cartTax = cart.reduce((sum, e) => sum + (e.product.price * e.quantity * e.product.taxRate) / 100, 0);
+  const cartSubtotal = cart.reduce((sum, e) => sum + (e.priceOverride ?? e.product.price) * e.quantity, 0);
+  const cartTax = cart.reduce((sum, e) => sum + ((e.priceOverride ?? e.product.price) * e.quantity * e.product.taxRate) / 100, 0);
   const discountAmount = orderDiscountRate > 0 ? (cartSubtotal * orderDiscountRate) / 100 : 0;
   const cartTotal = cartSubtotal + cartTax - discountAmount;
   const cartItemCount = cart.reduce((s, e) => s + e.quantity, 0);
@@ -616,14 +721,16 @@ export default function PosInterface() {
                     {openTickets.map(ticket => (
                       <div
                         key={ticket.id}
-                        onClick={() => setActiveTicketId(activeTicketId === ticket.id ? null : ticket.id)}
-                        className={`flex items-center justify-between rounded-xl px-3 py-2 cursor-pointer border transition-all ${
+                        className={`flex items-center justify-between rounded-xl px-3 py-2 border transition-all ${
                           activeTicketId === ticket.id
                             ? 'border-blue-400 bg-blue-50 ring-1 ring-blue-400'
                             : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
                         }`}
                       >
-                        <div className="min-w-0">
+                        <button
+                          className="flex-1 min-w-0 text-left"
+                          onClick={() => setActiveTicketId(activeTicketId === ticket.id ? null : ticket.id)}
+                        >
                           <div className="text-sm font-semibold text-gray-900 truncate">
                             {ticket.roomNumber ? `Room ${ticket.roomNumber}` : ticket.guestName}
                           </div>
@@ -636,16 +743,24 @@ export default function PosInterface() {
                               </>
                             )}
                           </div>
-                        </div>
+                        </button>
                         <div className="ml-2 flex items-center gap-1 flex-shrink-0">
+                          {ticket.orders.length > 0 && (
+                            <button
+                              onClick={() => setViewingTicket(ticket)}
+                              className="text-xs font-medium text-blue-500 hover:text-blue-700 hover:bg-blue-50 px-2 py-1 rounded-lg transition-colors"
+                            >
+                              View
+                            </button>
+                          )}
                           <button
-                            onClick={e => { e.stopPropagation(); setCancelTicketTarget(ticket); }}
+                            onClick={() => setCancelTicketTarget(ticket)}
                             className="text-xs font-medium text-gray-400 hover:text-rose-600 hover:bg-rose-50 px-2 py-1 rounded-lg transition-colors"
                           >
                             Cancel
                           </button>
                           <button
-                            onClick={e => { e.stopPropagation(); handleCloseTicket(ticket.id); }}
+                            onClick={() => handleCloseTicket(ticket.id)}
                             disabled={closingTicketId === ticket.id}
                             className="text-xs font-medium text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 px-2 py-1 rounded-lg transition-colors disabled:opacity-50"
                           >
@@ -665,29 +780,44 @@ export default function PosInterface() {
                   </div>
                 ) : (
                   <div className="divide-y divide-gray-50">
-                    {cart.map(entry => (
-                      <div key={entry.product.id} className="flex items-center gap-3 py-3.5">
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium text-gray-800 truncate">{entry.product.name}</div>
-                          <div className="text-xs text-gray-400 mt-0.5">
-                            {fmt(entry.product.price)}
-                            {entry.product.discountRate != null && entry.product.discountRate > 0 && (
-                              <span className="ml-1 text-emerald-600">−{entry.product.discountRate}%</span>
+                    {cart.map((entry, idx) => {
+                      const unitPrice = entry.priceOverride ?? entry.product.price;
+                      return (
+                        <div key={`${entry.product.id}-${idx}`} className="flex items-center gap-3 py-3.5">
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium text-gray-800 truncate">{entry.product.name}</div>
+                            {entry.product.isPriceOverridable ? (
+                              <div className="relative mt-0.5 w-24">
+                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none">₹</span>
+                                <input
+                                  type="number" min="0" step="0.01"
+                                  value={entry.priceOverride ?? ''}
+                                  onChange={e => setCart(prev => prev.map((en, i) => i === idx ? { ...en, priceOverride: parseFloat(e.target.value) || 0 } : en))}
+                                  className="w-full border border-gray-200 rounded pl-5 pr-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                />
+                              </div>
+                            ) : (
+                              <div className="text-xs text-gray-400 mt-0.5">
+                                {fmt(entry.product.price)}
+                                {entry.product.discountRate != null && entry.product.discountRate > 0 && (
+                                  <span className="ml-1 text-emerald-600">−{entry.product.discountRate}%</span>
+                                )}
+                              </div>
                             )}
                           </div>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <button onClick={() => updateCartQuantity(entry.product.id, -1, idx)}
+                              className="w-8 h-8 lg:w-7 lg:h-7 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 flex items-center justify-center font-bold transition-colors text-base leading-none">−</button>
+                            <span className="w-7 text-center text-sm font-semibold text-gray-800">{entry.quantity}</span>
+                            <button onClick={() => updateCartQuantity(entry.product.id, 1, idx)}
+                              className="w-8 h-8 lg:w-7 lg:h-7 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 flex items-center justify-center font-bold transition-colors text-base leading-none">+</button>
+                          </div>
+                          <div className="text-sm font-semibold text-gray-900 w-20 text-right shrink-0">
+                            {fmt(unitPrice * entry.quantity)}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                          <button onClick={() => updateCartQuantity(entry.product.id, -1)}
-                            className="w-8 h-8 lg:w-7 lg:h-7 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 flex items-center justify-center font-bold transition-colors text-base leading-none">−</button>
-                          <span className="w-7 text-center text-sm font-semibold text-gray-800">{entry.quantity}</span>
-                          <button onClick={() => updateCartQuantity(entry.product.id, 1)}
-                            className="w-8 h-8 lg:w-7 lg:h-7 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 flex items-center justify-center font-bold transition-colors text-base leading-none">+</button>
-                        </div>
-                        <div className="text-sm font-semibold text-gray-900 w-20 text-right shrink-0">
-                          {fmt(entry.product.price * entry.quantity)}
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -802,29 +932,44 @@ export default function PosInterface() {
                 <div className="flex-1 overflow-y-auto">
                   {/* Cart items — no inner scroll, list all */}
                   <div className="px-5 divide-y divide-gray-50">
-                    {cart.map(entry => (
-                      <div key={entry.product.id} className="flex items-center gap-3 py-3.5">
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium text-gray-800 truncate">{entry.product.name}</div>
-                          <div className="text-xs text-gray-400 mt-0.5">
-                            {fmt(entry.product.price)}
-                            {entry.product.discountRate != null && entry.product.discountRate > 0 && (
-                              <span className="ml-1 text-emerald-600">−{entry.product.discountRate}%</span>
+                    {cart.map((entry, idx) => {
+                      const unitPrice = entry.priceOverride ?? entry.product.price;
+                      return (
+                        <div key={`${entry.product.id}-${idx}`} className="flex items-center gap-3 py-3.5">
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium text-gray-800 truncate">{entry.product.name}</div>
+                            {entry.product.isPriceOverridable ? (
+                              <div className="relative mt-0.5 w-24">
+                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none">₹</span>
+                                <input
+                                  type="number" min="0" step="0.01"
+                                  value={entry.priceOverride ?? ''}
+                                  onChange={e => setCart(prev => prev.map((en, i) => i === idx ? { ...en, priceOverride: parseFloat(e.target.value) || 0 } : en))}
+                                  className="w-full border border-gray-200 rounded pl-5 pr-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                />
+                              </div>
+                            ) : (
+                              <div className="text-xs text-gray-400 mt-0.5">
+                                {fmt(entry.product.price)}
+                                {entry.product.discountRate != null && entry.product.discountRate > 0 && (
+                                  <span className="ml-1 text-emerald-600">−{entry.product.discountRate}%</span>
+                                )}
+                              </div>
                             )}
                           </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <button onClick={() => updateCartQuantity(entry.product.id, -1, idx)}
+                              className="w-9 h-9 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center font-bold text-lg leading-none active:bg-gray-200">−</button>
+                            <span className="w-7 text-center text-sm font-semibold text-gray-800">{entry.quantity}</span>
+                            <button onClick={() => updateCartQuantity(entry.product.id, 1, idx)}
+                              className="w-9 h-9 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center font-bold text-lg leading-none active:bg-gray-200">+</button>
+                          </div>
+                          <div className="text-sm font-semibold text-gray-900 w-20 text-right shrink-0">
+                            {fmt(unitPrice * entry.quantity)}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <button onClick={() => updateCartQuantity(entry.product.id, -1)}
-                            className="w-9 h-9 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center font-bold text-lg leading-none active:bg-gray-200">−</button>
-                          <span className="w-7 text-center text-sm font-semibold text-gray-800">{entry.quantity}</span>
-                          <button onClick={() => updateCartQuantity(entry.product.id, 1)}
-                            className="w-9 h-9 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center font-bold text-lg leading-none active:bg-gray-200">+</button>
-                        </div>
-                        <div className="text-sm font-semibold text-gray-900 w-20 text-right shrink-0">
-                          {fmt(entry.product.price * entry.quantity)}
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
 
                   {/* Tickets strip — only when tickets exist */}
@@ -984,6 +1129,14 @@ export default function PosInterface() {
                     )}
                   </button>
                   <div className="ml-3 flex flex-col items-stretch gap-1.5 flex-shrink-0">
+                    {ticket.orders.length > 0 && (
+                      <button
+                        onClick={() => { setViewingTicket(ticket); setShowTicketSheet(false); }}
+                        className="text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-2 rounded-xl transition-colors"
+                      >
+                        View
+                      </button>
+                    )}
                     <button
                       onClick={() => { handleCloseTicket(ticket.id); setShowTicketSheet(false); }}
                       disabled={closingTicketId === ticket.id}
@@ -1034,6 +1187,13 @@ export default function PosInterface() {
           ticket={cancelTicketTarget}
           onClose={() => setCancelTicketTarget(null)}
           onSuccess={handleCancelSuccess}
+        />
+      )}
+
+      {viewingTicket && (
+        <TicketDetailModal
+          ticket={viewingTicket}
+          onClose={() => setViewingTicket(null)}
         />
       )}
     </div>

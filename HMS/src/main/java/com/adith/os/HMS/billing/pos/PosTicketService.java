@@ -144,11 +144,17 @@ public class PosTicketService {
                     item.setItemName(product.getName());
                     item.setQuantity(itemDto.quantity());
 
-                    BigDecimal unitPrice = product.getPrice();
-                    if (product.getDiscountRate() != null && product.getDiscountRate().compareTo(BigDecimal.ZERO) > 0) {
-                        BigDecimal multiplier = BigDecimal.ONE.subtract(
-                                product.getDiscountRate().divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP));
-                        unitPrice = unitPrice.multiply(multiplier).setScale(2, RoundingMode.HALF_UP);
+                    BigDecimal unitPrice;
+                    if (product.isPriceOverridable() && itemDto.priceOverride() != null
+                            && itemDto.priceOverride().compareTo(BigDecimal.ZERO) > 0) {
+                        unitPrice = itemDto.priceOverride().setScale(2, RoundingMode.HALF_UP);
+                    } else {
+                        unitPrice = product.getPrice();
+                        if (product.getDiscountRate() != null && product.getDiscountRate().compareTo(BigDecimal.ZERO) > 0) {
+                            BigDecimal multiplier = BigDecimal.ONE.subtract(
+                                    product.getDiscountRate().divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP));
+                            unitPrice = unitPrice.multiply(multiplier).setScale(2, RoundingMode.HALF_UP);
+                        }
                     }
                     item.setUnitPrice(unitPrice);
 
