@@ -149,12 +149,12 @@ export default function GroupBookingModal({ propertyId, onClose, onSuccess }: Gr
 
   /* ────────────────── Inline guest create ────────────────── */
   const saveNewGuest = async () => {
-    if (!newFirstName.trim() || !newLastName.trim()) { setError('First and last name are required.'); return; }
+    if (!newFirstName.trim()) { setError('First name is required.'); return; }
     setLoading(true); setError('');
     try {
       const created = await guestApi.create({
         firstName: newFirstName.trim(),
-        lastName: newLastName.trim(),
+        ...(newLastName.trim() && { lastName: newLastName.trim() }),
         ...(newEmail && { email: newEmail.trim() }),
         ...(newPhone && { phone: newPhone.trim() }),
       }) as any;
@@ -313,7 +313,7 @@ export default function GroupBookingModal({ propertyId, onClose, onSuccess }: Gr
                       <div className="space-y-3">
                         <div className="grid gap-3 sm:grid-cols-2">
                           <div><label className={labelCls}>First Name *</label><input className={inputCls} value={newFirstName} onChange={e => setNewFirstName(e.target.value)} placeholder="First name" /></div>
-                          <div><label className={labelCls}>Last Name *</label><input className={inputCls} value={newLastName} onChange={e => setNewLastName(e.target.value)} placeholder="Last name" /></div>
+                          <div><label className={labelCls}>Last Name</label><input className={inputCls} value={newLastName} onChange={e => setNewLastName(e.target.value)} placeholder="Last name" /></div>
                         </div>
                         <div className="grid gap-3 sm:grid-cols-2">
                           <div><label className={labelCls}>Email</label><input type="email" className={inputCls} value={newEmail} onChange={e => setNewEmail(e.target.value)} /></div>

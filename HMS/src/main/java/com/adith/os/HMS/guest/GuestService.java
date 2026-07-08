@@ -161,10 +161,6 @@ public class GuestService {
         if (dto.firstName() == null || dto.firstName().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "First name is required for full update");
         }
-        if (dto.lastName() == null || dto.lastName().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Last name is required for full update");
-        }
-
         // Check for duplicate email (excluding current guest)
         if (dto.email() != null && !dto.email().isBlank()) {
             String cleanEmail = dto.email().trim().toLowerCase();
@@ -194,7 +190,7 @@ public class GuestService {
 
         try {
             guest.setFirstName(dto.firstName().trim());
-            guest.setLastName(dto.lastName().trim());
+            guest.setLastName(dto.lastName() != null && !dto.lastName().isBlank() ? dto.lastName().trim() : null);
             guest.setEmail(dto.email() != null && !dto.email().isBlank() ? dto.email().trim().toLowerCase() : null);
             guest.setPhone(dto.phone() != null && !dto.phone().isBlank() ? dto.phone().trim() : null);
             guest.setIdNumber(dto.idNumber() != null && !dto.idNumber().isBlank() ? dto.idNumber().trim() : null);

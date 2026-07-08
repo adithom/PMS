@@ -72,7 +72,7 @@ export const GUEST_ID_TYPE_LABELS: Record<GuestIdType, string> = {
 export interface Guest {
   id: string;
   firstName: string;
-  lastName: string;
+  lastName?: string;
   fullName: string;
   email?: string;
   phone?: string;

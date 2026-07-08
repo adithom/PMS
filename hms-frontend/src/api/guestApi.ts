@@ -4,7 +4,7 @@ import type { Guest, GuestIdType, GuestProfile } from '../types';
 
 export interface GuestCreationDto {
   firstName: string;
-  lastName: string;
+  lastName?: string;
   email?: string;
   phone?: string;
   idNumber?: string;

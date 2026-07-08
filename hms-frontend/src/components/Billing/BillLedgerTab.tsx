@@ -2,6 +2,9 @@ import { Fragment, useState, useEffect, useMemo } from 'react';
 import { Download, ChevronDown, ChevronRight } from 'lucide-react';
 import billingApi from '../../api/billingApi';
 import type { BillBatchRowDto, BillBatchPageDto } from '../../api/billingApi';
+import posApi from '../../api/posApi';
+import type { PosTicketHistory } from '../../types/pos';
+import { triggerPresignedDownload } from '../../utils/downloadUtils';
 import { fmtDate } from '../../utils/dateHelpers';
 
 const ZIP_LIMIT = 150;
@@ -47,6 +50,8 @@ export default function BillLedgerTab() {
   const [propertyFilter, setPropertyFilter] = useState<string>('ALL');
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [posTicketsByReservation, setPosTicketsByReservation] = useState<Record<string, PosTicketHistory[]>>({});
+  const [downloadingReceiptId, setDownloadingReceiptId] = useState<string | null>(null);
 
   const loadLedger = async () => {
     setLoading(true);
@@ -121,24 +126,45 @@ export default function BillLedgerTab() {
     return [...map.values()];
   }, [filteredBatches]);
 
-  const toggleExpanded = (key: string) => {
+  const toggleExpanded = (key: string, reservationId?: string) => {
     setExpanded(prev => {
       const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+        if (reservationId && !(reservationId in posTicketsByReservation)) {
+          posApi.getTicketsByReservationId(reservationId)
+            .then(tickets => setPosTicketsByReservation(r => ({ ...r, [reservationId]: tickets })))
+            .catch(() => setPosTicketsByReservation(r => ({ ...r, [reservationId]: [] })));
+        }
+      }
       return next;
     });
   };
 
+  const handleDownloadReceipt = async (ticketId: string) => {
+    setDownloadingReceiptId(ticketId);
+    try {
+      const url = await posApi.getReceiptUrl(ticketId);
+      triggerPresignedDownload(url);
+    } catch {
+      alert('Failed to get receipt link.');
+    } finally {
+      setDownloadingReceiptId(null);
+    }
+  };
+
   const handleDownloadZip = async () => {
     const allBillIds = filteredBatches.flatMap(b => b.billIds);
+    const allReservationIds = [...new Set(groups.map(g => g.reservationId).filter(Boolean) as string[])];
     if (allBillIds.length > ZIP_LIMIT) {
       alert(`Too many bills (${allBillIds.length}). Narrow the date range or search to fewer invoices before downloading.`);
       return;
     }
     setZipping(true);
     try {
-      await billingApi.downloadLedgerZip(allBillIds);
+      await billingApi.downloadLedgerZip(allBillIds, allReservationIds);
     } catch (err: any) {
       alert(err.message || 'Failed to download ZIP');
     } finally {
@@ -171,14 +197,14 @@ export default function BillLedgerTab() {
     URL.revokeObjectURL(url);
   };
 
-  const handleDownloadIds = async (id: string, billIds: string[]) => {
+  const handleDownloadIds = async (id: string, billIds: string[], reservationIds: string[] = []) => {
     if (billIds.length > ZIP_LIMIT) {
       alert(`Too many bills (${billIds.length}). Narrow the date range or search to fewer invoices before downloading.`);
       return;
     }
     setDownloadingId(id);
     try {
-      await billingApi.downloadLedgerZip(billIds);
+      await billingApi.downloadLedgerZip(billIds, reservationIds);
     } catch (err: any) {
       alert(err.message || 'Failed to download bills.');
     } finally {
@@ -306,7 +332,7 @@ export default function BillLedgerTab() {
                 return (
                   <Fragment key={group.key}>
                     <tr
-                      onClick={() => toggleExpanded(group.key)}
+                      onClick={() => toggleExpanded(group.key, group.reservationId)}
                       className={`cursor-pointer transition-colors hover:bg-slate-50/60 ${group.hasVoided ? 'opacity-60' : ''}`}
                     >
                       <td className="px-4 py-2 text-slate-400">
@@ -334,7 +360,11 @@ export default function BillLedgerTab() {
                       </td>
                       <td className="px-4 py-2 text-center">
                         <button
-                          onClick={(e) => { e.stopPropagation(); void handleDownloadIds(group.key, group.billIds); }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const resIds = group.reservationId ? [group.reservationId] : [];
+                            void handleDownloadIds(group.key, group.billIds, resIds);
+                          }}
                           disabled={downloadingId === group.key}
                           title={`Download ${group.billIds.length > 1 ? `${group.billIds.length} PDFs as ZIP` : 'PDF'}`}
                           className="flex h-6 w-6 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600 disabled:opacity-40 mx-auto"
@@ -376,6 +406,38 @@ export default function BillLedgerTab() {
                             disabled={downloadingId === batch.batchId}
                             title={`Download ${batch.billIds.length > 1 ? `${batch.billIds.length} PDFs as ZIP` : 'PDF'}`}
                             className="flex h-6 w-6 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600 disabled:opacity-40 mx-auto"
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {isOpen && group.reservationId && (posTicketsByReservation[group.reservationId] ?? []).map(ticket => (
+                      <tr key={ticket.id} className="bg-amber-50/40 transition-colors hover:bg-amber-50/60">
+                        <td className="px-4 py-1.5"></td>
+                        <td className="px-3 py-1.5" colSpan={2}>
+                          <div className="flex items-center gap-1.5 pl-2">
+                            <span className="font-mono text-[11px] font-semibold text-slate-700">
+                              {ticket.invoiceNumber ?? '—'}
+                            </span>
+                            <span className="rounded-md bg-amber-100 px-1 py-0.5 text-[9px] font-bold uppercase text-amber-700">
+                              POS · {ticket.locationName ?? ticket.mealType ?? 'Receipt'}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-1.5 text-[11px] text-slate-500 whitespace-nowrap" colSpan={2}>
+                          {ticket.closedAt ? fmtDate(ticket.closedAt.slice(0, 10)) : '—'}
+                        </td>
+                        <td className="px-3 py-1.5 text-center text-[11px] text-slate-400">1</td>
+                        <td className="px-3 py-1.5 text-right text-xs font-medium text-slate-700 whitespace-nowrap">
+                          ₹{ticket.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-4 py-1.5 text-center">
+                          <button
+                            onClick={() => void handleDownloadReceipt(ticket.id)}
+                            disabled={downloadingReceiptId === ticket.id}
+                            title="Download POS receipt"
+                            className="flex h-6 w-6 items-center justify-center rounded-lg text-amber-400 transition-colors hover:bg-amber-100 hover:text-amber-700 disabled:opacity-40 mx-auto"
                           >
                             <Download className="h-3.5 w-3.5" />
                           </button>

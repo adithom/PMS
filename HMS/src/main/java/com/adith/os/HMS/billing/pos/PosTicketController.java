@@ -90,6 +90,12 @@ public class PosTicketController {
         return ResponseEntity.ok(ticketService.getTicketsByBookingId(bookingId));
     }
 
+    @GetMapping("/reservation/{reservationId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    public ResponseEntity<List<PosTicketHistoryDto>> getTicketsByReservation(@PathVariable UUID reservationId) {
+        return ResponseEntity.ok(ticketService.getTicketsByReservationId(reservationId));
+    }
+
     @GetMapping("/{ticketId}/receipt-url")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
     public ResponseEntity<String> getReceiptUrl(@PathVariable UUID ticketId) {

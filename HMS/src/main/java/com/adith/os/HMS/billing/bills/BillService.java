@@ -5,6 +5,8 @@ import com.adith.os.HMS.billing.folio.FolioDiscountCalculator;
 import com.adith.os.HMS.billing.folio.dto.ChargeDto;
 import com.adith.os.HMS.billing.bills.dto.*;
 import com.adith.os.HMS.billing.payment.PaymentRepository;
+import com.adith.os.HMS.billing.pos.PosTicket;
+import com.adith.os.HMS.billing.pos.PosTicketRepository;
 import com.adith.os.HMS.booking.Booking;
 import com.adith.os.HMS.booking.BookingRepository;
 import com.adith.os.HMS.property.Property;
@@ -52,6 +54,7 @@ public class BillService {
     private final PaymentRepository paymentRepository;
     private final BookingRepository bookingRepository;
     private final BillMapper billMapper;
+    private final PosTicketRepository posTicketRepository;
 
     public BillService(FolioRepository folioRepository,
                        FolioChargeRepository folioChargeRepository,
@@ -62,7 +65,8 @@ public class BillService {
                        R2StorageService r2StorageService,
                        PaymentRepository paymentRepository,
                        BookingRepository bookingRepository,
-                       BillMapper billMapper) {
+                       BillMapper billMapper,
+                       PosTicketRepository posTicketRepository) {
         this.folioRepository = folioRepository;
         this.folioChargeRepository = folioChargeRepository;
         this.billRepository = billRepository;
@@ -73,6 +77,7 @@ public class BillService {
         this.paymentRepository = paymentRepository;
         this.bookingRepository = bookingRepository;
         this.billMapper = billMapper;
+        this.posTicketRepository = posTicketRepository;
     }
 
     /**
@@ -266,20 +271,31 @@ public class BillService {
         return new BillBatchPageDto(batchRows, batchRows.size(), grandTotalSum);
     }
 
-    public void downloadBillsAsZip(List<UUID> billIds, OutputStream out) throws IOException {
-        List<Bill> bills = billRepository.findActiveByIds(billIds);
+    public void downloadBillsAsZip(List<UUID> billIds, List<UUID> reservationIds, OutputStream out) throws IOException {
+        List<Bill> bills = billIds.isEmpty() ? List.of() : billRepository.findActiveByIds(billIds);
 
-        // Group bills into batches; the folder name is the lexicographically smallest invoice
-        // number in each batch (the base number without a suffix letter).
         Map<UUID, List<Bill>> byBatch = bills.stream()
                 .collect(Collectors.groupingBy(b ->
                         b.getGenerationBatchId() != null ? b.getGenerationBatchId() : b.getId()));
 
+        List<PosTicket> posTickets = reservationIds.isEmpty() ? List.of()
+                : posTicketRepository.findClosedByReservationIds(reservationIds);
+
         try (ZipOutputStream zip = new ZipOutputStream(new BufferedOutputStream(out))) {
             for (List<Bill> batch : byBatch.values()) {
-                String folderName = batch.stream()
+                String guestName = batch.stream()
+                        .map(b -> b.getFolio().getGuest())
+                        .filter(g -> g != null)
+                        .findFirst()
+                        .map(g -> sanitizeName(g.getFirstName() + " " + g.getLastName()))
+                        .orElse("Unknown");
+
+                // "FO/2627/00003/A" → "00003"
+                String sequence = batch.stream()
                         .map(Bill::getInvoiceNumber)
-                        .min(Comparator.naturalOrder())
+                        .filter(inv -> inv != null)
+                        .findFirst()
+                        .map(BillService::extractSequence)
                         .orElse("UNKNOWN");
 
                 for (Bill bill : batch) {
@@ -288,7 +304,9 @@ public class BillService {
                         continue;
                     }
                     byte[] pdf = r2StorageService.downloadObjectAsBytes(bill.getPdfFilePath());
-                    String entryName = folderName + "/INV_" + bill.getInvoiceNumber() + ".pdf";
+                    String sanitizedInv = bill.getInvoiceNumber() != null
+                            ? bill.getInvoiceNumber().replace("/", "") : "INVOICE";
+                    String entryName = guestName + "/" + sequence + "/INV_" + sanitizedInv + ".pdf";
                     ZipEntry entry = new ZipEntry(entryName);
                     entry.setSize(pdf.length);
                     zip.putNextEntry(entry);
@@ -296,7 +314,42 @@ public class BillService {
                     zip.closeEntry();
                 }
             }
+
+            for (PosTicket ticket : posTickets) {
+                if (ticket.getReceiptUrl() == null || ticket.getReceiptUrl().isBlank()) {
+                    log.warn("POS ticket {} has no receiptUrl, skipping from ZIP", ticket.getId());
+                    continue;
+                }
+                try {
+                    byte[] pdf = r2StorageService.downloadObjectAsBytes(ticket.getReceiptUrl());
+                    String guestName = sanitizeName(
+                            ticket.getGuestName() != null ? ticket.getGuestName() : "Unknown");
+                    String receiptNum = ticket.getInvoiceNumber() != null
+                            ? ticket.getInvoiceNumber() : ticket.getTicketNumber();
+                    String entryName = guestName + "/" + receiptNum + "/REC_" + receiptNum + ".pdf";
+                    ZipEntry entry = new ZipEntry(entryName);
+                    entry.setSize(pdf.length);
+                    zip.putNextEntry(entry);
+                    zip.write(pdf);
+                    zip.closeEntry();
+                } catch (Exception e) {
+                    log.warn("Could not fetch POS receipt for ticket {}, skipping: {}", ticket.getId(), e.getMessage());
+                }
+            }
         }
+    }
+
+    /** "FO/2627/00003/A" → "00003" (the zero-padded sequence segment) */
+    private static String extractSequence(String invoiceNumber) {
+        String[] parts = invoiceNumber.split("/");
+        if (parts.length >= 3) return parts[2];
+        // fallback: strip everything that isn't a digit
+        return invoiceNumber.replaceAll("[^0-9]", "");
+    }
+
+    /** Strip characters that are unsafe in ZIP entry paths */
+    private static String sanitizeName(String name) {
+        return name.replaceAll("[/\\\\:*?\"<>|]", "").trim();
     }
 
     private Bill createAndSaveBill(Folio folio, List<FolioCharge> charges, BillType billType,

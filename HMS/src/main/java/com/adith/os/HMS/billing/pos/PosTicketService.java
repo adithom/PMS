@@ -420,6 +420,44 @@ public class PosTicketService {
 
     // ──────────────── Booking-linked ticket queries ────────────────
 
+    public List<PosTicketHistoryDto> getTicketsByReservationId(UUID reservationId) {
+        return ticketRepository.findClosedByReservationId(reservationId)
+                .stream()
+                .map(ticket -> {
+                    List<PosOrder> orders = orderRepository.findByTicketIdWithItems(ticket.getId());
+                    BigDecimal subtotal    = orders.stream().map(PosOrder::getSubtotal).reduce(BigDecimal.ZERO, BigDecimal::add);
+                    BigDecimal taxAmount   = orders.stream().map(PosOrder::getTaxAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+                    BigDecimal totalAmount = orders.stream().map(PosOrder::getTotalAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+                    List<PosOrderItemDto> items = orders.stream()
+                            .flatMap(o -> o.getItems().stream())
+                            .map(i -> new PosOrderItemDto(
+                                    i.getId(), i.getPosProduct().getId(), i.getItemName(),
+                                    i.getQuantity(), i.getUnitPrice(), i.getSubtotal(),
+                                    i.getTaxRate(), i.getTaxAmount(), i.getTotalAmount(),
+                                    null, null))
+                            .collect(Collectors.toList());
+                    String locName = ticket.getPosLocation() != null ? ticket.getPosLocation().getName() : null;
+                    return new PosTicketHistoryDto(
+                            ticket.getId(),
+                            ticket.getInvoiceNumber(),
+                            locName,
+                            ticket.getGuestName(),
+                            ticket.getRoomNumber(),
+                            ticket.getMealType(),
+                            ticket.isMealPlanCovered(),
+                            ticket.getClosedAt(),
+                            subtotal,
+                            taxAmount,
+                            totalAmount,
+                            ticket.getCreatedBy(),
+                            items,
+                            ticket.getPaymentMethod(),
+                            ticket.getTransactionReference()
+                    );
+                })
+                .collect(Collectors.toList());
+    }
+
     public List<PosTicketHistoryDto> getTicketsByBookingId(UUID bookingId) {
         return ticketRepository.findByBookingIdAndStatus(bookingId, PosTicketStatus.CLOSED)
                 .stream()

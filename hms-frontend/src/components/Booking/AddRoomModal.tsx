@@ -107,19 +107,19 @@ export default function AddRoomModal({ propertyId, reservationId, checkIn, check
   };
 
   const createAndSelectGuest = async () => {
-    if (!newFirstName.trim() || !newLastName.trim()) return;
+    if (!newFirstName.trim()) return;
     setCreatingGuest(true);
     setError(null);
     try {
       const created = await guestApi.create({
         firstName: newFirstName.trim(),
-        lastName: newLastName.trim(),
+        ...(newLastName.trim() && { lastName: newLastName.trim() }),
         ...(newPhone && { phone: newPhone.trim() }),
         ...(newEmail && { email: newEmail.trim() }),
       }) as any;
       const id = String(created.id ?? created.uuid ?? '');
       setSelectedGuestId(id);
-      setSelectedGuestName(`${newFirstName.trim()} ${newLastName.trim()}`);
+      setSelectedGuestName(newLastName.trim() ? `${newFirstName.trim()} ${newLastName.trim()}` : newFirstName.trim());
       setGuestMode('search'); // show the confirmed chip via search mode
     } catch (e: any) {
       setError(e?.message || 'Failed to create guest');
@@ -281,7 +281,7 @@ export default function AddRoomModal({ propertyId, reservationId, checkIn, check
                   <input className={inputCls} value={newFirstName} onChange={e => setNewFirstName(e.target.value)} placeholder="First" autoFocus />
                 </div>
                 <div>
-                  <label className={labelCls}>Last Name *</label>
+                  <label className={labelCls}>Last Name</label>
                   <input className={inputCls} value={newLastName} onChange={e => setNewLastName(e.target.value)} placeholder="Last" />
                 </div>
               </div>
@@ -306,7 +306,7 @@ export default function AddRoomModal({ propertyId, reservationId, checkIn, check
                 <button
                   type="button"
                   onClick={createAndSelectGuest}
-                  disabled={!newFirstName.trim() || !newLastName.trim() || creatingGuest}
+                  disabled={!newFirstName.trim() || creatingGuest}
                   className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {creatingGuest ? 'Saving…' : 'Save Guest'}

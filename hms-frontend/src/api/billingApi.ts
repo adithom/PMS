@@ -213,7 +213,7 @@ const billingApi = {
   },
 
   // Bulk ZIP download — fetches PDFs server-side and streams as a ZIP
-  downloadLedgerZip: async (billIds: string[]): Promise<void> => {
+  downloadLedgerZip: async (billIds: string[], reservationIds: string[] = []): Promise<void> => {
     const token = localStorage.getItem('accessToken');
     const base = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
     const res = await fetch(`${base}/bills/ledger/download-zip`, {
@@ -222,7 +222,7 @@ const billingApi = {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
-      body: JSON.stringify(billIds),
+      body: JSON.stringify({ billIds, reservationIds }),
     });
     if (!res.ok) throw new Error(`ZIP download failed: HTTP ${res.status}`);
     const blob = await res.blob();

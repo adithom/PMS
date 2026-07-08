@@ -2,11 +2,11 @@ package com.adith.os.HMS.billing.bills;
 
 import com.adith.os.HMS.billing.bills.dto.BillBatchPageDto;
 import com.adith.os.HMS.billing.bills.dto.BillDto;
+import com.adith.os.HMS.billing.bills.dto.DownloadZipRequestDto;
 import com.adith.os.HMS.billing.bills.dto.MultiBillDto;
 import com.adith.os.HMS.security.UserPrincipal;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.ConstraintViolationException;
-import jakarta.validation.constraints.Size;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -82,12 +82,12 @@ public class BillController {
     @PostMapping("/ledger/download-zip")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public void downloadLedgerZip(
-            @RequestBody @Size(max = 150, message = "Maximum 150 bills per ZIP request") List<UUID> billIds,
+            @RequestBody @jakarta.validation.Valid DownloadZipRequestDto request,
             HttpServletResponse response) throws IOException {
         String fileName = "bills-export-" + LocalDate.now(ZoneId.of("Asia/Kolkata")) + ".zip";
         response.setContentType("application/zip");
         response.setHeader("Content-Disposition", "attachment; filename=\"" + fileName + "\"");
-        billService.downloadBillsAsZip(billIds, response.getOutputStream());
+        billService.downloadBillsAsZip(request.billIds(), request.reservationIds(), response.getOutputStream());
     }
 
     @ExceptionHandler(ConstraintViolationException.class)

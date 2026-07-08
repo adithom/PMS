@@ -412,7 +412,7 @@ export default function BookingForm({
     try {
       const payload: Parameters<typeof guestApi.create>[0] = {
         firstName: newGuestFirstName,
-        lastName: newGuestLastName,
+        ...(newGuestLastName && { lastName: newGuestLastName }),
         ...(newGuestEmail && { email: newGuestEmail }),
         ...(newGuestPhone && { phone: newGuestPhone }),
         ...(newGuestIdNumber && { idNumber: newGuestIdNumber }),
@@ -424,7 +424,7 @@ export default function BookingForm({
       
       setSelectedGuestId(idStr);
       // Update the visual search input to show the new guest's name
-      setGuestQuery(`${newGuestFirstName} ${newGuestLastName}`);
+      setGuestQuery(newGuestLastName ? `${newGuestFirstName} ${newGuestLastName}` : newGuestFirstName);
       // Clear results so the dropdown doesn't pop open
       setGuestResults([]); 
       setCreatingGuest(false);
@@ -440,7 +440,7 @@ export default function BookingForm({
     try {
       const payload: Parameters<typeof guestApi.create>[0] = {
         firstName: newAddGuestFirstName,
-        lastName: newAddGuestLastName,
+        ...(newAddGuestLastName && { lastName: newAddGuestLastName }),
         ...(newAddGuestEmail && { email: newAddGuestEmail }),
         ...(newAddGuestPhone && { phone: newAddGuestPhone }),
         ...(newAddGuestIdNumber && { idNumber: newAddGuestIdNumber }),
@@ -655,7 +655,7 @@ export default function BookingForm({
           <div className="space-y-4 rounded-lg border border-emerald-100 bg-emerald-50/30 p-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <label><span className={labelCls}>First Name *</span><input className={inputCls} value={newGuestFirstName} onChange={e => setNewGuestFirstName(e.target.value)} /></label>
-              <label><span className={labelCls}>Last Name *</span><input className={inputCls} value={newGuestLastName} onChange={e => setNewGuestLastName(e.target.value)} /></label>
+              <label><span className={labelCls}>Last Name</span><input className={inputCls} value={newGuestLastName} onChange={e => setNewGuestLastName(e.target.value)} /></label>
             </div>
             <label><span className={labelCls}>Email</span><input className={inputCls} value={newGuestEmail} onChange={e => setNewGuestEmail(e.target.value)} /></label>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -682,7 +682,7 @@ export default function BookingForm({
               <button 
                 type="button" 
                 onClick={createGuestThenSelect} 
-                disabled={loading || !newGuestFirstName || !newGuestLastName} 
+                disabled={loading || !newGuestFirstName}
                 className={btnPrimary}
               >
                 {loading ? 'Saving...' : 'Save Guest'}
@@ -1070,7 +1070,7 @@ export default function BookingForm({
                     <div className="space-y-3">
                       <div className="grid gap-3 sm:grid-cols-2">
                         <label><span className={labelCls}>First Name *</span><input className={inputCls} value={newAddGuestFirstName} onChange={e => setNewAddGuestFirstName(e.target.value)} /></label>
-                        <label><span className={labelCls}>Last Name *</span><input className={inputCls} value={newAddGuestLastName} onChange={e => setNewAddGuestLastName(e.target.value)} /></label>
+                        <label><span className={labelCls}>Last Name</span><input className={inputCls} value={newAddGuestLastName} onChange={e => setNewAddGuestLastName(e.target.value)} /></label>
                       </div>
                       <label><span className={labelCls}>Email</span><input className={inputCls} value={newAddGuestEmail} onChange={e => setNewAddGuestEmail(e.target.value)} /></label>
                       <div className="grid gap-3 sm:grid-cols-2">
@@ -1088,7 +1088,7 @@ export default function BookingForm({
                         <input type="date" className={inputCls} value={newAddGuestDateOfBirth} onChange={e => setNewAddGuestDateOfBirth(e.target.value)} /></label>
                       <div className="flex justify-end gap-2">
                         <button type="button" onClick={() => setCreatingAdditional(false)} className={btnSecondary}>Back</button>
-                        <button type="button" onClick={createAndAddGuest} disabled={loading || !newAddGuestFirstName || !newAddGuestLastName} className={btnPrimary}>
+                        <button type="button" onClick={createAndAddGuest} disabled={loading || !newAddGuestFirstName} className={btnPrimary}>
                           {loading ? 'Saving...' : 'Save & Add'}
                         </button>
                       </div>
