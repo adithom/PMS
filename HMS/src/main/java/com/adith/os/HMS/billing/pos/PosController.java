@@ -58,13 +58,13 @@ public class PosController {
     }
 
     @PostMapping("/categories")
-    @PreAuthorize("hasRole('MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<PosItemCategoryDto> createCategory(@Valid @RequestBody PosItemCategoryCreationDto dto) {
         return ResponseEntity.ok(posService.createCategory(dto));
     }
 
     @PutMapping("/categories/{id}")
-    @PreAuthorize("hasRole('MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<PosItemCategoryDto> updateCategory(
             @PathVariable UUID id,
             @RequestBody PosItemCategoryUpdateDto dto) {
@@ -72,7 +72,7 @@ public class PosController {
     }
 
     @DeleteMapping("/categories/{id}")
-    @PreAuthorize("hasRole('MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<Void> deleteCategory(@PathVariable UUID id) {
         posService.deleteCategory(id);
         return ResponseEntity.noContent().build();
@@ -87,13 +87,13 @@ public class PosController {
     }
 
     @PostMapping("/products")
-    @PreAuthorize("hasRole('MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<PosProductDto> createProduct(@Valid @RequestBody PosProductCreationDto dto) {
         return ResponseEntity.ok(posService.createProduct(dto));
     }
 
     @PutMapping("/products/{id}")
-    @PreAuthorize("hasRole('MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<PosProductDto> updateProduct(
             @PathVariable UUID id,
             @RequestBody PosProductUpdateDto dto) {
@@ -101,7 +101,7 @@ public class PosController {
     }
 
     @DeleteMapping("/products/{id}")
-    @PreAuthorize("hasRole('MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<Void> deleteProduct(@PathVariable UUID id) {
         posService.deleteProduct(id);
         return ResponseEntity.noContent().build();

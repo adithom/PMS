@@ -3,7 +3,7 @@ set -euo pipefail
 
 BASE_URL="http://localhost:8080/api"
 PROPERTY_CODE="STR"
-LOCATION_NAME="Spicetree"
+LOCATION_NAME="Restaurant"
 TOKEN_FILE="$HOME/.hms_token"
 
 if [ ! -f "$TOKEN_FILE" ]; then
