@@ -83,9 +83,6 @@ public class BookingService {
     private static final List<RoomAssignmentStatus> ACTIVE_ASSIGNMENT_STATUSES =
             List.of(RoomAssignmentStatus.SCHEDULED, RoomAssignmentStatus.ACTIVE);
 
-    // Booking statuses that consume unit capacity before a room is assigned
-    private static final List<BookingStatus> CAPACITY_HOLD_BOOKING_STATUSES =
-            List.of(BookingStatus.CONFIRMED, BookingStatus.CHECKED_IN);
 
     public BookingService(PropertyRepository propertyRepository, RoomRepository roomRepository,
                           GuestRepository guestRepository, UnitRepository unitRepository,
@@ -287,6 +284,7 @@ public class BookingService {
                 booking.setMealPlanType(bookingCreationDto.mealPlanType());
             }
 
+            booking.setExpectedNightlyRate(bookingCreationDto.nightlyRate());
             Booking savedBooking = bookingRepository.save(booking);
 
             // Auto-create the booking's folio
@@ -306,18 +304,22 @@ public class BookingService {
                         : PaymentMethod.CASH;
                 PaymentCreationDto paymentDto = new PaymentCreationDto(
                         advance, method,
-                        null, null, null,
-                        null, null, null,
-                        null,
-                        "Advance payment at booking creation",
+                        bookingCreationDto.advanceTransactionId(),
+                        bookingCreationDto.advanceCardLastFour(),
+                        bookingCreationDto.advanceCardType(),
+                        bookingCreationDto.advanceBankName(),
+                        bookingCreationDto.advanceAccountNumber(),
+                        bookingCreationDto.advanceReferenceNumber(),
+                        bookingCreationDto.advanceUpiId(),
+                        bookingCreationDto.advanceNotes() != null ? bookingCreationDto.advanceNotes() : "Advance payment at booking creation",
                         "SYSTEM",
                         null
                 );
                 paymentService.recordPayment(propertyId, createdFolio.id(), paymentDto, "SYSTEM");
             }
 
-            // Create initial room assignment if room is assigned
-            roomAssignmentService.createInitialAssignment(savedBooking, bookingCreationDto.nightlyRate(), bookingCreationDto.nightlyRateExTax());
+            // Apply the staged nightly rate to the room assignment (creates it if room is assigned)
+            roomAssignmentService.applyExpectedNightlyRate(savedBooking, bookingCreationDto.nightlyRateExTax());
 
             return bookingMapper.toDto(savedBooking);
         } catch (ResponseStatusException e) {
@@ -363,27 +365,6 @@ public class BookingService {
         } catch (Exception e) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
                     "Failed to fetch bookings for property: " + e.getMessage());
-        }
-    }
-
-    public List<BookingDto> getBookingsByPropertyAndStatus(UUID propertyId, String status) {
-        if (propertyId == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Property ID is required");
-        }
-        if (status == null || status.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Status is required");
-        }
-
-        if (!propertyRepository.existsById(propertyId)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Property not found: " + propertyId);
-        }
-
-        try {
-            List<Booking> bookings = bookingRepository.findByPropertyIdAndStatus(propertyId, status.trim());
-            return bookingMapper.toDtoList(bookings);
-        } catch (Exception e) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
-                    "Failed to fetch bookings by status: " + e.getMessage());
         }
     }
 
@@ -513,12 +494,7 @@ public class BookingService {
             if (includeAllStatuses) {
                 bookings = bookingRepository.findByPropertyIdAndDate(propertyId, date);
             } else {
-                // Only get confirmed and checked-in bookings (active bookings)
-                bookings = bookingRepository.findByPropertyIdAndDateAndStatuses(
-                        propertyId,
-                        date,
-                        List.of(BookingStatus.CONFIRMED, BookingStatus.CHECKED_IN)
-                );
+                bookings = bookingRepository.findActiveByPropertyIdAndDate(propertyId, date);
             }
 
             return bookingMapper.toDtoList(bookings);
@@ -558,9 +534,6 @@ public class BookingService {
         }
         if (dto.unitId() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unit ID is required for full update");
-        }
-        if (dto.status() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Status is required for full update");
         }
         if (dto.checkIn() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Check-in date is required for full update");
@@ -635,7 +608,6 @@ public class BookingService {
             booking.setGuest(guest);
             booking.setUnit(unit);
             booking.setRoom(room);
-            booking.setStatus(dto.status());
             booking.setCheckIn(dto.checkIn());
             booking.setCheckOut(dto.checkOut());
             booking.setAdults(dto.adults() != null ? dto.adults() : 1);
@@ -666,12 +638,13 @@ public class BookingService {
             // Sync dates before saving
             roomAssignmentService.syncDatesForBookingUpdate(bookingId, dto.checkIn(), dto.checkOut());
 
-            // Propagate nightly rate changes to active RoomAssignment
+            // Stage and apply nightly rate changes (creates the assignment if none exists yet)
             if (dto.nightlyRate() != null) {
-                roomAssignmentService.updateNightlyRates(bookingId, dto.nightlyRate(), dto.nightlyRateExTax());
+                booking.setExpectedNightlyRate(dto.nightlyRate());
             }
 
             Booking savedBooking = bookingRepository.save(booking);
+            roomAssignmentService.applyExpectedNightlyRate(savedBooking, dto.nightlyRateExTax());
             return bookingMapper.toDto(savedBooking);
         } catch (Exception e) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
@@ -801,11 +774,6 @@ public class BookingService {
                 booking.setCheckOut(dto.checkOut());
             }
 
-            // Update other fields
-            if (dto.status() != null) {
-                booking.setStatus(dto.status());
-            }
-
             if (dto.adults() != null) {
                 booking.setAdults(dto.adults());
             }
@@ -918,10 +886,11 @@ public class BookingService {
             }
 
             if (dto.nightlyRate() != null) {
-                roomAssignmentService.updateNightlyRates(bookingId, dto.nightlyRate(), dto.nightlyRateExTax());
+                booking.setExpectedNightlyRate(dto.nightlyRate());
             }
 
             Booking savedBooking = bookingRepository.save(booking);
+            roomAssignmentService.applyExpectedNightlyRate(savedBooking, dto.nightlyRateExTax());
             return bookingMapper.toDto(savedBooking);
 
         } catch (ResponseStatusException e) {
@@ -933,21 +902,9 @@ public class BookingService {
     }
 
     @Transactional
-    public BookingDto updateBookingStatus(UUID propertyId, UUID bookingId, BookingStatus status) {
-        return updateBookingStatus(propertyId, bookingId, status, null);
-    }
-
-    @Transactional
-    public BookingDto updateBookingStatus(UUID propertyId, UUID bookingId, BookingStatus status, String reason) {
-        if (propertyId == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Property ID is required");
-        }
-        if (bookingId == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Booking ID is required");
-        }
-        if (status == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Status is required");
-        }
+    public BookingDto cancelBooking(UUID propertyId, UUID bookingId, String reason) {
+        if (propertyId == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Property ID is required");
+        if (bookingId == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Booking ID is required");
 
         if (!propertyRepository.existsById(propertyId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Property not found: " + propertyId);
@@ -961,22 +918,25 @@ public class BookingService {
                     "Booking does not belong to the specified property");
         }
 
-        try {
-            booking.setStatus(status);
-            if (status == BookingStatus.CANCELLED && reason != null && !reason.isBlank()) {
-                booking.setCancellationReason(reason.trim());
-            }
-
-            if (status == BookingStatus.CANCELLED || status == BookingStatus.NO_SHOW) {
-                roomAssignmentService.cancelAssignmentsForBooking(bookingId);
-            }
-
-            Booking savedBooking = bookingRepository.save(booking);
-            return bookingMapper.toDto(savedBooking);
-        } catch (Exception e) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
-                    "Failed to update booking status: " + e.getMessage());
+        booking.setCancelled(true);
+        if (reason != null && !reason.isBlank()) {
+            booking.setCancellationReason(reason.trim());
         }
+        roomAssignmentService.cancelAssignmentsForBooking(bookingId);
+
+        Booking savedBooking = bookingRepository.save(booking);
+
+        // If all bookings in the reservation are now cancelled, cancel the reservation too
+        Reservation reservation = booking.getReservation();
+        if (reservation != null) {
+            List<Booking> siblings = bookingRepository.findByReservationId(reservation.getId());
+            if (siblings.stream().allMatch(Booking::isCancelled)) {
+                reservation.setStatus(ReservationStatus.CANCELLED);
+                reservationRepository.save(reservation);
+            }
+        }
+
+        return bookingMapper.toDto(savedBooking);
     }
 
     @Transactional
@@ -1072,18 +1032,10 @@ public class BookingService {
 
         // Assign room
         booking.setRoom(room);
-        BigDecimal expectedNightlyRate = booking.getExpectedNightlyRate();
-        booking.setExpectedNightlyRate(null);
         Booking savedBooking = bookingRepository.save(booking);
 
-        // Create room assignment if none exists, applying any rate set before assignment.
-        // expectedNightlyRate is the GST-inclusive tariff; compute the ex-tax base for billing.
-        // Only compute ex-tax when a real rate is present — passing null avoids persisting ZERO
-        // (which the night audit would then treat as a valid 0-rate charge).
-        BigDecimal exTaxRate = (expectedNightlyRate != null && expectedNightlyRate.compareTo(BigDecimal.ZERO) > 0)
-                ? ChargeCode.computeExTaxFromInclusive(expectedNightlyRate)
-                : null;
-        roomAssignmentService.createInitialAssignment(savedBooking, expectedNightlyRate, exTaxRate);
+        // Apply any rate staged before assignment (falls back to the room's base rate if none was staged)
+        roomAssignmentService.applyExpectedNightlyRate(savedBooking);
 
         return bookingMapper.toDto(savedBooking);
     }
@@ -1249,13 +1201,17 @@ public class BookingService {
             }
         }
 
-        // Change status to CHECKED_IN
-        booking.setStatus(BookingStatus.CHECKED_IN);
-
         Booking savedBooking = bookingRepository.save(booking);
 
         // Force-activate all SCHEDULED assignments — staff is physically checking in the guest
         roomAssignmentService.forceActivateAssignments(savedBooking.getId());
+
+        // Flip reservation status to CHECKED_IN
+        Reservation reservation = savedBooking.getReservation();
+        if (reservation != null && reservation.getStatus() != ReservationStatus.CHECKED_IN) {
+            reservation.setStatus(ReservationStatus.CHECKED_IN);
+            reservationRepository.save(reservation);
+        }
 
         return bookingMapper.toDto(savedBooking);
     }
@@ -1275,7 +1231,6 @@ public class BookingService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Cannot check out: Folio has an outstanding balance of " + masterFolio.getBalanceDue());
         }
 
-        booking.setStatus(BookingStatus.CHECKED_OUT);
         Booking savedBooking = bookingRepository.save(booking);
 
         // Close all open folios on this booking
@@ -1286,6 +1241,13 @@ public class BookingService {
         // Complete all room assignments
         roomAssignmentService.completeAssignments(savedBooking.getId());
 
+        // Flip reservation to CHECKED_OUT
+        Reservation reservation = savedBooking.getReservation();
+        if (reservation != null) {
+            reservation.setStatus(ReservationStatus.CHECKED_OUT);
+            reservationRepository.save(reservation);
+        }
+
         return bookingMapper.toDto(savedBooking);
     }
 
@@ -1294,7 +1256,6 @@ public class BookingService {
         // 1. Update Booking Inventory
         Booking booking = bookingRepository.findById(bookingId).orElseThrow();
         booking.setCheckOut(newCheckOutDate);
-        booking.setStatus(BookingStatus.CHECKED_OUT);
 
         // 2. Fetch the Master Folio
         Folio folio = booking.getFolio();
@@ -1425,22 +1386,17 @@ public class BookingService {
                 unitId, checkIn, checkOut, ACTIVE_ASSIGNMENT_STATUSES);
         
         long unassignedBookings = bookingRepository.countUnassignedOverlappingUnitBookings(
-                unitId, checkIn, checkOut, CAPACITY_HOLD_BOOKING_STATUSES);
+                unitId, checkIn, checkOut);
 
         return occupiedRooms + unassignedBookings;
     }
 
-    /**
-     * Calculates the consumed capacity for a unit, combining two sources (excluding a given booking):
-     * 1. Occupied rooms mapped in RoomAssignment (excluding given bookingId)
-     * 2. Overlapping unassigned bookings holding capacity for this unit (excluding given bookingId)
-     */
     private long getConsumedUnitCapacityExcludingBooking(UUID unitId, LocalDate checkIn, LocalDate checkOut, UUID excludedBookingId) {
         long occupiedRooms = roomAssignmentRepository.countDistinctOccupiedRoomsForUnitExcludingBooking(
                 unitId, checkIn, checkOut, excludedBookingId, ACTIVE_ASSIGNMENT_STATUSES);
 
         long unassignedBookings = bookingRepository.countUnassignedOverlappingUnitBookingsExcludingCurrent(
-                unitId, checkIn, checkOut, excludedBookingId, CAPACITY_HOLD_BOOKING_STATUSES);
+                unitId, checkIn, checkOut, excludedBookingId);
 
         return occupiedRooms + unassignedBookings;
     }

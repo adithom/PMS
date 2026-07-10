@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
-import { Calendar, List, Users } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Calendar, List, Plus } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import propertyApi from '../api/propertyApi';
 import type { Property } from '../types';
@@ -7,10 +8,8 @@ import ReservationsList from '../components/Reservation/ReservationsList';
 import ReservationCalendar from '../components/Reservation/ReservationCalendar';
 import MobileReservationsView from '../components/Reservation/MobileReservationsView';
 import ReservationDetailModal from '../components/Reservation/ReservationDetailModal';
-import GroupBookingModal from '../components/Booking/GroupBookingModal';
 import AssignRoomModal from '../components/Booking/AssignRoomModal';
-import BookingForm from '../components/Booking/BookingForm';
-import ModalShell from '../components/ModalShell';
+import QuickHoldForm from '../components/Reservation/QuickHoldForm';
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 639px)').matches);
@@ -28,7 +27,6 @@ function cn(...classes: Array<string | false | null | undefined>) {
 }
 
 const btnPrimary = 'inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700';
-const btnSecondary = 'inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50';
 
 type Mode = 'calendar' | 'list';
 
@@ -37,11 +35,12 @@ export default function Reservations() {
   const { user, selectedPropId, setSelectedPropId } = useAuth();
   const [properties, setProperties] = useState<Property[]>([]);
   const [mode, setMode] = useState<Mode>('calendar');
-  const [openReservationId, setOpenReservationId] = useState<string | null>(null);
-  const [showGroupModal, setShowGroupModal] = useState(false);
-  const [showForm, setShowForm] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [openReservationId, setOpenReservationId] = useState<string | null>(() => searchParams.get('reservationId'));
+  const [showQuickHold, setShowQuickHold] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [assignRoomCtx, setAssignRoomCtx] = useState<{ id: string; unitId: string; checkIn: string; checkOut: string } | null>(null);
+  const quickHoldBtnRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     (async () => {
@@ -85,13 +84,27 @@ export default function Reservations() {
                   {properties.map(p => <option key={p.id} value={p.id}>{p.name} ({p.code})</option>)}
                 </select>
               </div>
-              <button type="button" className={btnSecondary} onClick={() => setShowGroupModal(true)}>
-                <Users className="h-4 w-4 text-indigo-500" />
-                New Group Booking
-              </button>
-              <button type="button" className={btnPrimary} onClick={() => setShowForm(true)}>
-                + New Booking
-              </button>
+              <div ref={quickHoldBtnRef} className="relative">
+                <button
+                  type="button"
+                  className={btnPrimary}
+                  onClick={() => setShowQuickHold(v => !v)}
+                >
+                  <Plus className="h-4 w-4" />
+                  Quick Hold
+                </button>
+                {showQuickHold && selectedPropId && (
+                  <QuickHoldForm
+                    propertyId={selectedPropId}
+                    onClose={() => setShowQuickHold(false)}
+                    onSuccess={id => {
+                      setShowQuickHold(false);
+                      setRefreshKey(k => k + 1);
+                      setOpenReservationId(id);
+                    }}
+                  />
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -109,7 +122,6 @@ export default function Reservations() {
               key={`mobile-${selectedPropId}-${refreshKey}`}
               propertyId={selectedPropId}
               onOpen={id => setOpenReservationId(id)}
-              onNewBooking={() => setShowForm(true)}
             />
           )}
 
@@ -154,25 +166,16 @@ export default function Reservations() {
         <ReservationDetailModal
           propertyId={selectedPropId}
           reservationId={openReservationId}
-          onClose={() => setOpenReservationId(null)}
+          onClose={() => {
+            setOpenReservationId(null);
+            if (searchParams.has('reservationId')) {
+              const next = new URLSearchParams(searchParams);
+              next.delete('reservationId');
+              setSearchParams(next, { replace: true });
+            }
+          }}
           onUpdated={() => setRefreshKey(k => k + 1)}
         />
-      )}
-      {showGroupModal && selectedPropId && (
-        <GroupBookingModal
-          propertyId={selectedPropId}
-          onClose={() => setShowGroupModal(false)}
-          onSuccess={() => { setShowGroupModal(false); setRefreshKey(k => k + 1); }}
-        />
-      )}
-      {showForm && selectedPropId && (
-        <ModalShell title="Create Booking" size="wide" onClose={() => setShowForm(false)}>
-          <BookingForm
-            propertyId={selectedPropId}
-            onSuccess={() => { setShowForm(false); setRefreshKey(k => k + 1); }}
-            onCancel={() => setShowForm(false)}
-          />
-        </ModalShell>
       )}
       {assignRoomCtx && selectedPropId && (
         <AssignRoomModal

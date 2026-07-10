@@ -99,7 +99,8 @@ export interface GuestBookingSummary {
   unitName?: string;
   checkIn: string;
   checkOut: string;
-  status: BookingStatus;
+  reservationStatus: ReservationStatus;
+  bookingCancelled: boolean;
   mealPlanType?: string;
   role: 'PRIMARY' | 'ADDITIONAL';
 }
@@ -127,7 +128,8 @@ export interface Booking {
   guestName: string;
   unitId: string;
   unitName: string;
-  status: BookingStatus;
+  cancelled: boolean;
+  reservationStatus: ReservationStatus;
   checkIn: string;
   checkOut: string;
   stayDuration?: number;
@@ -196,7 +198,8 @@ export interface GhostAssignmentDto {
   unitName: string;
   reservationId?: string;
   groupReference?: string;
-  bookingStatus: BookingStatus;
+  reservationStatus: ReservationStatus;
+  bookingCancelled: boolean;
   startDate: string;
   endDate: string;
   status: 'SCHEDULED' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
@@ -238,13 +241,12 @@ export interface TravelAgent {
   contactPersons?: ContactPerson[];
 }
 
-export type BookingStatus =
+export type ReservationStatus =
   | 'PENDING'
   | 'CONFIRMED'
   | 'CHECKED_IN'
   | 'CHECKED_OUT'
-  | 'CANCELLED'
-  | 'NO_SHOW';
+  | 'CANCELLED';
 
 export interface ApiError {
   message: string;

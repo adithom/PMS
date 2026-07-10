@@ -7,7 +7,7 @@ import com.adith.os.HMS.billing.folio.FolioService;
 import com.adith.os.HMS.billing.folio.dto.ChargeCreationDto;
 import com.adith.os.HMS.booking.Booking;
 import com.adith.os.HMS.booking.BookingRepository;
-import com.adith.os.HMS.booking.BookingStatus;
+import com.adith.os.HMS.reservation.ReservationStatus;
 import com.adith.os.HMS.property.mealplan.MealPlanType;
 import com.adith.os.HMS.property.mealplan.PropertyMealPlanRepository;
 import com.adith.os.HMS.room.Room;
@@ -366,7 +366,7 @@ public class NightAuditService {
         for (RoomAssignment assignment : startingAssignments) {
             Booking booking = assignment.getBooking();
 
-            if (booking.getStatus() != BookingStatus.CHECKED_IN) {
+            if (booking.isCancelled() || booking.getReservationStatus() != ReservationStatus.CHECKED_IN) {
                 continue;
             }
 

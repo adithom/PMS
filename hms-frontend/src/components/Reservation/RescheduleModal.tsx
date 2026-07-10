@@ -23,7 +23,7 @@ export default function RescheduleModal({ reservation, propertyId, onClose, onRe
   const datesValid = newCheckIn >= today && newCheckOut > newCheckIn && newNights > 0;
 
   const estimatedTotal = reservation.bookings.reduce((sum: number, b: BookingSummaryDto) => {
-    const roomRate = b.unitBaseRate ?? 0;
+    const roomRate = b.nightlyRate ?? b.unitBaseRate ?? 0;
     const mealRate = b.mealPlanPricePerNight ?? 0;
     return sum + (roomRate + mealRate) * newNights;
   }, 0);
@@ -125,7 +125,7 @@ export default function RescheduleModal({ reservation, propertyId, onClose, onRe
                 </thead>
                 <tbody>
                   {reservation.bookings.map((b: BookingSummaryDto) => {
-                    const roomRate = b.unitBaseRate ?? 0;
+                    const roomRate = b.nightlyRate ?? b.unitBaseRate ?? 0;
                     const mealRate = b.mealPlanPricePerNight ?? 0;
                     const ratePerNight = roomRate + mealRate;
                     const total = ratePerNight * newNights;

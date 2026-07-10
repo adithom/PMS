@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, Search, Users } from 'lucide-react';
 import type { GroupBookingSummaryDto, BookingSummaryDto } from '../../api/reservationApi';
 import { fmtDate, toDS } from '../../utils/dateHelpers';
-import type { BookingStatus } from '../../types';
+import type { ReservationStatus } from '../../types';
 
 function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(' ');
@@ -14,7 +14,6 @@ const STATUS_BADGE: Record<string, string> = {
   CHECKED_IN:  'bg-emerald-100 text-emerald-800 border-emerald-200',
   CHECKED_OUT: 'bg-indigo-100 text-indigo-800 border-indigo-200',
   CANCELLED:   'bg-rose-100 text-rose-800 border-rose-200',
-  NO_SHOW:     'bg-red-100 text-red-800 border-red-200',
 };
 
 type Tab = 'inHouse' | 'scheduled' | 'stayed' | 'rescheduled' | 'cancelled';
@@ -39,10 +38,10 @@ export default function MobileListView({ reservations, loading, onOpen }: Props)
     const rescheduled: GroupBookingSummaryDto[] = [];
     const cancelled: GroupBookingSummaryDto[] = [];
     for (const r of reservations) {
-      const s = r.overallStatus as BookingStatus;
+      const s = r.overallStatus as ReservationStatus;
       if (s === 'CHECKED_IN') inHouse.push(r);
       else if (s === 'CHECKED_OUT') stayed.push(r);
-      else if (s === 'CANCELLED' || s === 'NO_SHOW') cancelled.push(r);
+      else if (s === 'CANCELLED') cancelled.push(r);
       else scheduled.push(r);
     }
     return { inHouse, scheduled, stayed, rescheduled, cancelled };
@@ -186,8 +185,8 @@ export default function MobileListView({ reservations, loading, onOpen }: Props)
                         <div className="font-bold text-slate-900 truncate">{b.guestName}</div>
                         <div className="text-slate-500">{b.unitName} · Room {b.roomNumber || <span className="italic">unassigned</span>}</div>
                       </div>
-                      <span className={cn('shrink-0 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold', STATUS_BADGE[b.status] || STATUS_BADGE.PENDING)}>
-                        {b.status.replace('_', ' ')}
+                      <span className={cn('shrink-0 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold', b.cancelled ? STATUS_BADGE.CANCELLED : (STATUS_BADGE[r.overallStatus] || STATUS_BADGE.PENDING))}>
+                        {b.cancelled ? 'CANCELLED' : r.overallStatus.replace('_', ' ')}
                       </span>
                     </li>
                   ))}

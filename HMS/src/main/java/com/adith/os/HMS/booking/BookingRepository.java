@@ -13,8 +13,6 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
     @Query("SELECT b FROM Booking b WHERE b.property.id = :propertyId ORDER BY b.checkIn DESC")
     List<Booking> findByPropertyIdOrderByCheckInDesc(UUID propertyId);
 
-    List<Booking> findByPropertyIdAndStatus(UUID propertyId, String status);
-
     @Query("SELECT b FROM Booking b WHERE b.property.id = :propertyId " +
             "AND b.checkIn >= :checkInFrom AND b.checkIn <= :checkInTo " +
             "ORDER BY b.checkIn ASC")
@@ -33,9 +31,11 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
     @Query("SELECT b FROM Booking b WHERE b.unit.id = :unitId ORDER BY b.checkIn DESC")
     List<Booking> findByUnitIdOrderByCheckInDesc(UUID unitId);
 
+    // Active booking = not cancelled and reservation not checked-out/cancelled
     @Query("SELECT CASE WHEN COUNT(b) > 0 THEN true ELSE false END FROM Booking b " +
             "WHERE b.room.id = :roomId " +
-            "AND b.status NOT IN ('CANCELLED', 'CHECKED_OUT', 'NO_SHOW') " +
+            "AND b.cancelled = false " +
+            "AND b.reservation.status NOT IN ('CHECKED_OUT', 'CANCELLED') " +
             "AND b.checkIn < :checkOut AND b.checkOut > :checkIn")
     boolean existsOverlappingBooking(
             @Param("roomId") UUID roomId,
@@ -45,7 +45,8 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
     @Query("SELECT CASE WHEN COUNT(b) > 0 THEN true ELSE false END FROM Booking b " +
             "WHERE b.room.id = :roomId " +
             "AND b.id != :currentBookingId " +
-            "AND b.status NOT IN ('CANCELLED', 'CHECKED_OUT', 'NO_SHOW') " +
+            "AND b.cancelled = false " +
+            "AND b.reservation.status NOT IN ('CHECKED_OUT', 'CANCELLED') " +
             "AND b.checkIn < :checkOut AND b.checkOut > :checkIn")
     boolean existsOverlappingBookingExcludingCurrent(
             @Param("roomId") UUID roomId,
@@ -56,19 +57,20 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
     @Query("SELECT COUNT(b) FROM Booking b " +
             "WHERE b.unit.id = :unitId " +
             "AND b.room IS NULL " +
-            "AND b.status NOT IN ('CANCELLED', 'CHECKED_OUT', 'NO_SHOW') " +
+            "AND b.cancelled = false " +
+            "AND b.reservation.status NOT IN ('CHECKED_OUT', 'CANCELLED') " +
             "AND b.checkIn < :checkOut AND b.checkOut > :checkIn")
     long countOverlappingUnitBookings(
             @Param("unitId") UUID unitId,
             @Param("checkIn") LocalDate checkIn,
             @Param("checkOut") LocalDate checkOut);
 
-    // Count overlapping bookings excluding current booking
     @Query("SELECT COUNT(b) FROM Booking b " +
             "WHERE b.unit.id = :unitId " +
             "AND b.room IS NULL " +
             "AND b.id != :currentBookingId " +
-            "AND b.status NOT IN ('CANCELLED', 'CHECKED_OUT', 'NO_SHOW') " +
+            "AND b.cancelled = false " +
+            "AND b.reservation.status NOT IN ('CHECKED_OUT', 'CANCELLED') " +
             "AND b.checkIn < :checkOut AND b.checkOut > :checkIn")
     long countOverlappingUnitBookingsExcludingCurrent(
             @Param("unitId") UUID unitId,
@@ -79,19 +81,20 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
     @Query("SELECT COUNT(b) FROM Booking b " +
             "WHERE b.unit.id = :unitId " +
             "AND b.room IS NOT NULL " +
-            "AND b.status NOT IN ('CANCELLED', 'CHECKED_OUT', 'NO_SHOW') " +
+            "AND b.cancelled = false " +
+            "AND b.reservation.status NOT IN ('CHECKED_OUT', 'CANCELLED') " +
             "AND b.checkIn < :checkOut AND b.checkOut > :checkIn")
     long countOverlappingRoomBookingsInUnit(
             @Param("unitId") UUID unitId,
             @Param("checkIn") LocalDate checkIn,
             @Param("checkOut") LocalDate checkOut);
 
-    // Count overlapping room bookings excluding current
     @Query("SELECT COUNT(b) FROM Booking b " +
             "WHERE b.unit.id = :unitId " +
             "AND b.room IS NOT NULL " +
             "AND b.id != :currentBookingId " +
-            "AND b.status NOT IN ('CANCELLED', 'CHECKED_OUT', 'NO_SHOW') " +
+            "AND b.cancelled = false " +
+            "AND b.reservation.status NOT IN ('CHECKED_OUT', 'CANCELLED') " +
             "AND b.checkIn < :checkOut AND b.checkOut > :checkIn")
     long countOverlappingRoomBookingsInUnitExcludingCurrent(
             @Param("unitId") UUID unitId,
@@ -99,119 +102,81 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
             @Param("checkOut") LocalDate checkOut,
             @Param("currentBookingId") UUID currentBookingId);
 
-    // Count total rooms in a unit
     @Query("SELECT COUNT(r) FROM Room r WHERE r.unit.id = :unitId")
     long countRoomsInUnit(@Param("unitId") UUID unitId);
 
-    /**
-     * Count unassigned bookings for a unit that overlap with a date range.
-     * These bookings consume unit capacity even though they have no room mapped yet.
-     */
     @Query("SELECT COUNT(b) FROM Booking b " +
             "WHERE b.unit.id = :unitId " +
             "AND b.room IS NULL " +
-            "AND b.checkIn < :checkOut " +
-            "AND b.checkOut > :checkIn " +
-            "AND b.status IN :statuses")
+            "AND b.cancelled = false " +
+            "AND b.reservation.status NOT IN ('CHECKED_OUT', 'CANCELLED') " +
+            "AND b.checkIn < :checkOut AND b.checkOut > :checkIn")
     long countUnassignedOverlappingUnitBookings(
             @Param("unitId") UUID unitId,
             @Param("checkIn") LocalDate checkIn,
-            @Param("checkOut") LocalDate checkOut,
-            @Param("statuses") List<BookingStatus> statuses);
+            @Param("checkOut") LocalDate checkOut);
 
-    /**
-     * Count unassigned bookings for a unit that overlap, excluding a specific booking.
-     */
     @Query("SELECT COUNT(b) FROM Booking b " +
             "WHERE b.unit.id = :unitId " +
             "AND b.room IS NULL " +
             "AND b.id != :bookingId " +
-            "AND b.checkIn < :checkOut " +
-            "AND b.checkOut > :checkIn " +
-            "AND b.status IN :statuses")
+            "AND b.cancelled = false " +
+            "AND b.reservation.status NOT IN ('CHECKED_OUT', 'CANCELLED') " +
+            "AND b.checkIn < :checkOut AND b.checkOut > :checkIn")
     long countUnassignedOverlappingUnitBookingsExcludingCurrent(
             @Param("unitId") UUID unitId,
             @Param("checkIn") LocalDate checkIn,
             @Param("checkOut") LocalDate checkOut,
-            @Param("bookingId") UUID bookingId,
-            @Param("statuses") List<BookingStatus> statuses);
+            @Param("bookingId") UUID bookingId);
 
-    /**
-     * Count unassigned bookings for a property that overlap with a date range.
-     * These bookings consume capacity even though they have no room mapped yet.
-     */
     @Query("SELECT COUNT(b) FROM Booking b " +
             "WHERE b.property.id = :propertyId " +
             "AND b.room IS NULL " +
-            "AND b.checkIn < :checkOut " +
-            "AND b.checkOut > :checkIn " +
-            "AND b.status IN :statuses")
+            "AND b.cancelled = false " +
+            "AND b.reservation.status NOT IN ('CHECKED_OUT', 'CANCELLED') " +
+            "AND b.checkIn < :checkOut AND b.checkOut > :checkIn")
     long countUnassignedOverlappingPropertyBookings(
             @Param("propertyId") UUID propertyId,
             @Param("checkIn") LocalDate checkIn,
-            @Param("checkOut") LocalDate checkOut,
-            @Param("statuses") List<BookingStatus> statuses);
+            @Param("checkOut") LocalDate checkOut);
 
-    /**
-     * Find all bookings for a property that conflict with the given date range
-     */
     @Query("SELECT b FROM Booking b " +
             "WHERE b.property.id = :propertyId " +
             "AND b.checkIn < :checkOut " +
             "AND b.checkOut > :checkIn " +
-            "AND b.status IN :statuses")
+            "AND b.cancelled = false " +
+            "AND b.reservation.status NOT IN ('CHECKED_OUT', 'CANCELLED')")
     List<Booking> findConflictingBookings(
             @Param("propertyId") UUID propertyId,
             @Param("checkIn") LocalDate checkIn,
-            @Param("checkOut") LocalDate checkOut,
-            @Param("statuses") List<BookingStatus> statuses
-    );
+            @Param("checkOut") LocalDate checkOut);
 
-    /**
-     * Find all bookings for a specific room that conflict with the given date range
-     */
     @Query("SELECT b FROM Booking b " +
             "WHERE b.room.id = :roomId " +
             "AND b.checkIn < :checkOut " +
             "AND b.checkOut > :checkIn " +
-            "AND b.status IN :statuses")
+            "AND b.cancelled = false " +
+            "AND b.reservation.status NOT IN ('CHECKED_OUT', 'CANCELLED')")
     List<Booking> findConflictingBookingsForRoom(
             @Param("roomId") UUID roomId,
             @Param("checkIn") LocalDate checkIn,
-            @Param("checkOut") LocalDate checkOut,
-            @Param("statuses") List<BookingStatus> statuses
-    );
+            @Param("checkOut") LocalDate checkOut);
 
-    /**
-     * Find all bookings for a specific unit that conflict with the given date range
-     */
     @Query("SELECT b FROM Booking b " +
             "WHERE b.unit.id = :unitId " +
             "AND b.checkIn < :checkOut " +
             "AND b.checkOut > :checkIn " +
-            "AND b.status IN :statuses")
+            "AND b.cancelled = false " +
+            "AND b.reservation.status IN ('CONFIRMED', 'CHECKED_IN')")
     List<Booking> findConflictingBookingsForUnit(
             @Param("unitId") UUID unitId,
             @Param("checkIn") LocalDate checkIn,
-            @Param("checkOut") LocalDate checkOut,
-            @Param("statuses") List<BookingStatus> statuses
-    );
+            @Param("checkOut") LocalDate checkOut);
 
-    /**
-     * Find bookings by property
-     */
     @Query("SELECT b FROM Booking b WHERE b.property.id = :propertyId")
     List<Booking> findByPropertyId(@Param("propertyId") UUID propertyId);
 
-    /**
-     * Find bookings by room
-     */
     List<Booking> findByRoomId(UUID roomId);
-
-    /**
-     * Find bookings by status
-     */
-    List<Booking> findByStatus(BookingStatus status);
 
     @Query("SELECT b FROM Booking b WHERE " +
             "LOWER(CONCAT(b.guest.firstName, ' ', b.guest.lastName)) LIKE LOWER(CONCAT('%', :guestName, '%')) " +
@@ -219,10 +184,6 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
             "OR LOWER(b.guest.lastName) LIKE LOWER(CONCAT('%', :guestName, '%'))")
     List<Booking> findByGuestNameContainingIgnoreCase(@Param("guestName") String guestName);
 
-    /**
-     * Find all bookings for a property that are active on a specific date
-     * A booking is active on a date if: checkIn <= date < checkOut
-     */
     @Query("SELECT b FROM Booking b " +
             "WHERE b.property.id = :propertyId " +
             "AND b.checkIn <= :date " +
@@ -230,60 +191,55 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
             "ORDER BY b.checkIn ASC")
     List<Booking> findByPropertyIdAndDate(
             @Param("propertyId") UUID propertyId,
-            @Param("date") LocalDate date
-    );
+            @Param("date") LocalDate date);
 
     @Query("""
-        SELECT b FROM Booking b 
-        WHERE b.property.id = :propertyId 
-        AND b.checkIn <= :to 
-        AND b.checkOut >= :from 
-        AND b.status NOT IN ('CANCELLED') 
+        SELECT b FROM Booking b
+        WHERE b.property.id = :propertyId
+        AND b.checkIn <= :to
+        AND b.checkOut >= :from
+        AND b.cancelled = false
+        AND b.reservation.status != 'CANCELLED'
         ORDER BY b.checkIn ASC
     """)
     List<Booking> findOverlappingBookings(
             @Param("propertyId") UUID propertyId,
             @Param("from") LocalDate from,
-            @Param("to") LocalDate to
-    );
+            @Param("to") LocalDate to);
 
-    /**
-     * Find all bookings for a property that are active on a specific date with specific statuses
-     */
+    // Active in-house bookings on a date (CONFIRMED or CHECKED_IN, not cancelled)
     @Query("SELECT b FROM Booking b " +
             "WHERE b.property.id = :propertyId " +
             "AND b.checkIn <= :date " +
             "AND b.checkOut >= :date " +
-            "AND b.status IN :statuses " +
+            "AND b.cancelled = false " +
+            "AND b.reservation.status IN ('CONFIRMED', 'CHECKED_IN') " +
             "ORDER BY b.checkIn ASC")
-    List<Booking> findByPropertyIdAndDateAndStatuses(
+    List<Booking> findActiveByPropertyIdAndDate(
             @Param("propertyId") UUID propertyId,
-            @Param("date") LocalDate date,
-            @Param("statuses") List<BookingStatus> statuses
-    );
+            @Param("date") LocalDate date);
 
-    // Reservation queries
-
-    @Query("SELECT b FROM Booking b WHERE b.property.id = :propertyId AND b.room IS NULL AND b.status IN :statuses AND b.checkIn BETWEEN :startDate AND :endDate ORDER BY b.checkIn ASC")
+    // Unassigned upcoming bookings (not yet checked in, not cancelled)
+    @Query("SELECT b FROM Booking b WHERE b.property.id = :propertyId " +
+            "AND b.room IS NULL " +
+            "AND b.cancelled = false " +
+            "AND b.reservation.status NOT IN ('CHECKED_OUT', 'CANCELLED', 'CHECKED_IN') " +
+            "AND b.checkIn BETWEEN :startDate AND :endDate ORDER BY b.checkIn ASC")
     List<Booking> findUnassignedUpcomingBookings(
             @Param("propertyId") UUID propertyId,
-            @Param("statuses") List<BookingStatus> statuses,
-            @Param("startDate") java.time.LocalDate startDate,
-            @Param("endDate") java.time.LocalDate endDate
-    );
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate);
 
-    // Unassigned bookings whose [checkIn, checkOut) overlaps the [from, to) window.
-    // Used by the tape-chart ghost-fill.
+    // Unassigned bookings overlapping a window — used for tape-chart ghost fill
     @Query("SELECT b FROM Booking b WHERE b.property.id = :propertyId AND b.room IS NULL " +
-            "AND b.status IN :statuses " +
+            "AND b.cancelled = false " +
+            "AND b.reservation.status NOT IN ('CHECKED_OUT', 'CANCELLED') " +
             "AND b.checkIn < :to AND b.checkOut > :from " +
             "ORDER BY b.checkIn ASC, b.id ASC")
     List<Booking> findUnassignedOverlapping(
             @Param("propertyId") UUID propertyId,
-            @Param("statuses") List<BookingStatus> statuses,
-            @Param("from") java.time.LocalDate from,
-            @Param("to") java.time.LocalDate to
-    );
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to);
 
     @Query("SELECT COUNT(b) FROM Booking b WHERE b.reservation.id = :reservationId")
     long countByReservationId(@Param("reservationId") UUID reservationId);

@@ -302,7 +302,7 @@ public class GuestService {
             UUID reservationId = b.getReservation() != null ? b.getReservation().getId() : null;
             bookingHistory.add(new GuestBookingSummaryDto(
                     b.getId(), reservationId, groupRef, propertyName, roomNumber, unitName,
-                    b.getCheckIn(), b.getCheckOut(), b.getStatus(), b.getMealPlanType(), role
+                    b.getCheckIn(), b.getCheckOut(), b.getReservationStatus(), b.isCancelled(), b.getMealPlanType(), role
             ));
         }
 

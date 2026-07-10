@@ -2,7 +2,6 @@ package com.adith.os.HMS.booking.dto;
 
 import com.adith.os.HMS.billing.folio.ChargeCode;
 import com.adith.os.HMS.billing.payment.PaymentMethod;
-import com.adith.os.HMS.booking.BookingStatus;
 import com.adith.os.HMS.property.mealplan.MealPlanType;
 import com.adith.os.HMS.travelagent.dto.TravelAgentCreationDto;
 import jakarta.validation.Valid;
@@ -13,8 +12,6 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
-import static com.adith.os.HMS.booking.BookingStatus.PENDING;
-
 public record BookingCreationDto(
         UUID roomId,  // Optional
 
@@ -22,8 +19,6 @@ public record BookingCreationDto(
         UUID guestId,
 
         UUID unitId,
-
-        BookingStatus status,
 
         @NotNull(message = "Check-in date is required")
         @FutureOrPresent(message = "Check-in date cannot be in the past")
@@ -70,10 +65,10 @@ public record BookingCreationDto(
         MealPlanType mealPlanType,   // Optional — select a meal plan for this booking
 
         @PositiveOrZero(message = "Meal plan price cannot be negative")
-        BigDecimal mealPlanPricePerNight,  // Optional — overrides property default adult price per person
+        BigDecimal mealPlanPricePerNight,
 
         @PositiveOrZero(message = "Children meal plan price cannot be negative")
-        BigDecimal mealPlanChildrenPricePerNight,  // Optional — overrides property default children price per person
+        BigDecimal mealPlanChildrenPricePerNight,
 
         @PositiveOrZero(message = "Extra beds cannot be negative")
         Integer extraBeds,
@@ -81,35 +76,31 @@ public record BookingCreationDto(
         @PositiveOrZero(message = "Extra bed rate cannot be negative")
         BigDecimal extraBedRatePerNight,
 
-        ChargeCode extraBedChargeCode,  // ROOM_RENT or MISC; null defaults to MISC in night audit
+        ChargeCode extraBedChargeCode,
 
-        PaymentMethod advancePaymentMethod,  // Optional — payment method for the advance payment; defaults to CASH if paidAmount > 0
+        PaymentMethod advancePaymentMethod,
 
-        String bookingSource,  // Optional — source of the booking (e.g. "Direct / Walk-In", "MakeMyTrip")
+        String advanceTransactionId,
+        String advanceCardLastFour,
+        String advanceCardType,
+        String advanceBankName,
+        String advanceAccountNumber,
+        String advanceReferenceNumber,
+        String advanceUpiId,
+        String advanceNotes,
+
+        String bookingSource,
 
         @Size(max = 3, message = "Maximum 3 additional guests allowed")
-        List<UUID> additionalGuestIds  // Optional — up to 3 co-guests linked to existing Guest profiles
+        List<UUID> additionalGuestIds
 
 ) {
     public BookingCreationDto {
-        if (adults == null) {
-            adults = 1;
-        }
-        if (children == null) {
-            children = 0;
-        }
-        if (currency == null || currency.isBlank()) {
-            currency = "INR";
-        }
-        if (status == null) {
-            status = PENDING;
-        }
-        if (nightlyRate == null) {
-            nightlyRate = BigDecimal.ZERO;
-        }
-        if (paidAmount == null) {
-            paidAmount = BigDecimal.ZERO;
-        }
+        if (adults == null) adults = 1;
+        if (children == null) children = 0;
+        if (currency == null || currency.isBlank()) currency = "INR";
+        if (nightlyRate == null) nightlyRate = BigDecimal.ZERO;
+        if (paidAmount == null) paidAmount = BigDecimal.ZERO;
         if (travelAgentId != null && newTravelAgent != null) {
             throw new IllegalArgumentException("Provide either travelAgentId OR newTravelAgent, not both");
         }

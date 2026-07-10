@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import availabilityApi from '../../api/availabilityApi';
 import bookingApi from '../../api/bookingApi';
-import type { TapeChartDto, BookingStatus } from '../../types';
+import type { TapeChartDto, ReservationStatus } from '../../types';
 import { addDays, dayLabel, dateStr, diffDays, shortDate, toDS, todayIST } from '../../utils/dateHelpers';
 import { STATUS_COLORS } from '../Booking/TapeChartConstants';
 
@@ -18,7 +18,8 @@ const MIN_CELL_W = 80;
 type Bar = {
   bookingId: string;
   guestName: string;
-  status: BookingStatus;
+  reservationStatus: ReservationStatus;
+  cancelled: boolean;
   startDate: string;
   endDate: string;
   isGhost: boolean;
@@ -98,13 +99,13 @@ export default function MobileCalendarView({ propertyId, onOpenReservation }: Pr
     for (const ra of data.realAssignments) {
       if (ra.status === 'CANCELLED') continue;
       (m[ra.roomNumber] ??= []).push({
-        bookingId: ra.bookingId, guestName: '', status: 'CONFIRMED',
+        bookingId: ra.bookingId, guestName: '', reservationStatus: 'CONFIRMED', cancelled: false,
         startDate: ra.startDate, endDate: ra.endDate, isGhost: false,
       });
     }
     for (const g of data.ghostAssignments) {
       (m[g.roomNumber] ??= []).push({
-        bookingId: g.bookingId, guestName: g.guestName, status: g.bookingStatus,
+        bookingId: g.bookingId, guestName: g.guestName, reservationStatus: g.reservationStatus, cancelled: g.bookingCancelled,
         startDate: g.startDate, endDate: g.endDate, isGhost: true,
         reservationId: g.reservationId, groupReference: g.groupReference,
       });
@@ -112,7 +113,7 @@ export default function MobileCalendarView({ propertyId, onOpenReservation }: Pr
     return m;
   }, [data]);
 
-  const [bookingMeta, setBookingMeta] = useState<Map<string, { guestName: string; status: BookingStatus; reservationId?: string }>>(new Map());
+  const [bookingMeta, setBookingMeta] = useState<Map<string, { guestName: string; reservationStatus: ReservationStatus; cancelled: boolean; reservationId?: string }>>(new Map());
   useEffect(() => {
     if (!data) return;
     const ids = data.realAssignments.map(ra => ra.bookingId).filter(Boolean);
@@ -123,7 +124,7 @@ export default function MobileCalendarView({ propertyId, onOpenReservation }: Pr
         const map = new Map<string, any>();
         for (const b of bks) {
           if (!b.id) continue;
-          map.set(b.id, { guestName: b.guestName, status: b.status, reservationId: b.reservationId });
+          map.set(b.id, { guestName: b.guestName, reservationStatus: b.reservationStatus, cancelled: b.cancelled, reservationId: b.reservationId });
         }
         setBookingMeta(map);
       } catch (e) { console.error(e); }
@@ -136,7 +137,7 @@ export default function MobileCalendarView({ propertyId, onOpenReservation }: Pr
       m[rn] = bars.map(b => {
         if (b.isGhost) return b;
         const meta = bookingMeta.get(b.bookingId);
-        return meta ? { ...b, guestName: meta.guestName, status: meta.status, reservationId: meta.reservationId } : b;
+        return meta ? { ...b, guestName: meta.guestName, reservationStatus: meta.reservationStatus, cancelled: meta.cancelled, reservationId: meta.reservationId } : b;
       });
     }
     return m;
@@ -233,7 +234,7 @@ export default function MobileCalendarView({ propertyId, onOpenReservation }: Pr
                       if (widthPx <= 0) return null;
                       const bleedsLeft  = unClampedStart < 0;
                       const bleedsRight = unClampedEnd > NUM_DAYS;
-                      const sc   = STATUS_COLORS[bar.status] || STATUS_COLORS.PENDING;
+                      const sc   = STATUS_COLORS[bar.cancelled ? 'CANCELLED_BOOKING' : bar.reservationStatus] || STATUS_COLORS.PENDING;
                       const tint = tintForReservation(bar.reservationId);
                       return (
                         <div
@@ -250,7 +251,7 @@ export default function MobileCalendarView({ propertyId, onOpenReservation }: Pr
                             sc.bar, sc.text,
                           )}
                           style={{ left: leftPx, width: widthPx, height: CELL_H - 6, top: 3, zIndex: 5 }}
-                          title={`${bar.guestName || 'Guest'} · ${bar.status.replace('_', ' ')} · ${ci} → ${co}`}
+                          title={`${bar.guestName || 'Guest'} · ${bar.cancelled ? 'ROOM CANCELLED' : bar.reservationStatus.replace('_', ' ')} · ${ci} → ${co}`}
                         >
                           <span className="text-[10px] font-bold truncate">{bar.guestName || 'Guest'}</span>
                         </div>

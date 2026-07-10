@@ -1,6 +1,6 @@
 // src/api/bookingApi.ts
 import api from './fetchClient';
-import type { Booking, BookingStatus, RoomAssignmentDto } from '../types';
+import type { Booking, RoomAssignmentDto } from '../types';
 export type { RoomAssignmentDto } from '../types';
 
 export interface NewTravelAgentDto {
@@ -15,7 +15,6 @@ export interface BookingCreationDto {
   roomId?: string;
   guestId: string;
   unitId: string;
-  status?: BookingStatus;
   checkIn: string;
   checkOut: string;
   adults?: number;
@@ -91,10 +90,6 @@ const bookingApi = {
   getByUnit: (propertyId: string, unitId: string) =>
     api.get<Booking[]>(`/properties/${propertyId}/bookings/unit/${unitId}`),
 
-  // Get bookings by status
-  getByStatus: (propertyId: string, status: BookingStatus) =>
-    api.get<Booking[]>(`/properties/${propertyId}/bookings`, { status }),
-
   // Get bookings by check-in date range
   getByCheckInRange: (propertyId: string, checkInFrom: string, checkInTo: string) =>
     api.get<Booking[]>(`/properties/${propertyId}/bookings`, { checkInFrom, checkInTo }),
@@ -111,12 +106,12 @@ const bookingApi = {
   partialUpdate: (propertyId: string, bookingId: string, data: Partial<BookingUpdatePayload>) =>
     api.patch<Booking>(`/properties/${propertyId}/bookings/${bookingId}`, data),
 
-  // Update booking status; optional `reason` is captured on the booking when status=CANCELLED.
-  // PATCH /api/properties/{propertyId}/bookings/{id}/status/{status}?reason=...
-  updateStatus: (propertyId: string, bookingId: string, status: BookingStatus, reason?: string) => {
+  // Cancel a single booking (sets booking.cancelled = true)
+  // PATCH /api/properties/{propertyId}/bookings/{id}/cancel?reason=...
+  cancelBooking: (propertyId: string, bookingId: string, reason?: string) => {
     const query = reason && reason.trim() ? `?reason=${encodeURIComponent(reason.trim())}` : '';
     return api.patch<Booking>(
-      `/properties/${propertyId}/bookings/${bookingId}/status/${status}${query}`,
+      `/properties/${propertyId}/bookings/${bookingId}/cancel${query}`,
       undefined
     );
   },

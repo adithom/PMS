@@ -46,7 +46,7 @@ const getStatusColor = (status: string) => {
     case 'CHECKED_OUT': return 'bg-indigo-100 text-indigo-800 border-indigo-200';
     case 'CANCELLED': return 'bg-rose-100 text-rose-800 border-rose-200';
     case 'PENDING': return 'bg-amber-100 text-amber-800 border-amber-200';
-    case 'NO_SHOW': return 'bg-red-100 text-red-800 border-red-200';
+    // NO_SHOW removed (folded into cancelled)
     default: return 'bg-slate-100 text-slate-600 border-slate-200';
   }
 };
@@ -123,8 +123,8 @@ export default function Guests() {
         })
       );
       
-      const totalStays = allBookings.filter(b => 
-        b.status === 'CONFIRMED' || b.status === 'CHECKED_IN' || b.status === 'CHECKED_OUT'
+      const totalStays = allBookings.filter(b =>
+        !b.cancelled && (b.reservationStatus === 'CONFIRMED' || b.reservationStatus === 'CHECKED_IN' || b.reservationStatus === 'CHECKED_OUT')
       ).length;
       
       // 3. Update the modal with the loaded data
@@ -316,8 +316,8 @@ export default function Guests() {
                         <h4 className="text-sm font-bold text-slate-900">{booking.propertyName}</h4>
                         <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-0.5">{booking.propertyCode}</p>
                       </div>
-                      <span className={cn('rounded-md border px-2 py-1 text-[10px] font-bold uppercase tracking-wider', getStatusColor(booking.status))}>
-                        {booking.status.replace('_', ' ')}
+                      <span className={cn('rounded-md border px-2 py-1 text-[10px] font-bold uppercase tracking-wider', booking.cancelled ? 'bg-rose-100 text-rose-800 border-rose-200' : getStatusColor(booking.reservationStatus))}>
+                        {booking.cancelled ? 'CANCELLED' : booking.reservationStatus.replace('_', ' ')}
                       </span>
                     </div>
 

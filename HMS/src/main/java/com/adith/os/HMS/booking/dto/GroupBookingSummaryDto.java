@@ -1,6 +1,7 @@
 package com.adith.os.HMS.booking.dto;
 
-import com.adith.os.HMS.booking.BookingStatus;
+import com.adith.os.HMS.property.mealplan.MealPlanType;
+import com.adith.os.HMS.reservation.ReservationStatus;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -24,14 +25,24 @@ public record GroupBookingSummaryDto(
         LocalDate checkIn,
         LocalDate checkOut,
         String specialRequests,
-        BookingStatus overallStatus,    // Derived: worst-case status across bookings
+        ReservationStatus overallStatus,    // Reservation lifecycle status
         int totalRooms,
-        BigDecimal totalGroupPrice,     // Sum of all member booking totalPrices
+        BigDecimal totalGroupPrice,         // Sum of all member booking totalPrices
         String currency,
         OffsetDateTime createdAt,
 
         // --- Billing ---
-        String billingMode,             // "SEPARATE" or "CONSOLIDATED" — derived from reservation.defaultRouteToMaster
+        String billingMode,                 // "SEPARATE" or "CONSOLIDATED"
+
+        // --- Travel agent (reservation-level) ---
+        UUID travelAgentId,
+        String travelAgentName,
+
+        // --- Booking source (from first active booking, uniform across all) ---
+        String bookingSource,
+
+        // --- Reservation-level (master) payments — not tied to any single booking's folio ---
+        BigDecimal reservationLevelPaidAmount,
 
         // --- Member bookings ---
         List<BookingSummaryDto> bookings
@@ -46,8 +57,8 @@ public record GroupBookingSummaryDto(
             String guestName,
             UUID unitId,
             String unitName,
-            String roomNumber,          // null if not yet assigned
-            BookingStatus status,
+            String roomNumber,              // null if not yet assigned
+            boolean cancelled,             // true if this individual room was cancelled
             Integer adults,
             Integer children,
             BigDecimal totalPrice,
@@ -57,6 +68,9 @@ public record GroupBookingSummaryDto(
             String specialRequests,
             Boolean isTwinBed,
             BigDecimal unitBaseRate,            // baseRate of first active room in unit — for estimate
-            BigDecimal mealPlanPricePerNight    // from booking.mealPlanPricePerNight
+            BigDecimal mealPlanPricePerNight,   // from booking.mealPlanPricePerNight
+            MealPlanType mealPlanType,          // from booking.mealPlanType
+            Integer extraBeds,                  // from booking.extraBeds
+            BigDecimal nightlyRate              // expectedNightlyRate — kept in sync with assignment rate
     ) {}
 }

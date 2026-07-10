@@ -11,7 +11,6 @@ const STATUS_BADGE: Record<string, string> = {
   CHECKED_IN: 'bg-emerald-100 text-emerald-800 border-emerald-200',
   CHECKED_OUT: 'bg-indigo-100 text-indigo-800 border-indigo-200',
   CANCELLED: 'bg-rose-100 text-rose-800 border-rose-200',
-  NO_SHOW: 'bg-red-100 text-red-800 border-red-200',
 };
 
 interface Props {
@@ -157,8 +156,8 @@ function StayHistory({ bookings }: { bookings: GuestBookingSummary[] }) {
                 <p className="mt-0.5 text-[11px] text-slate-400">{b.mealPlanType}</p>
               )}
             </div>
-            <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${STATUS_BADGE[b.status] ?? 'bg-slate-100 text-slate-600'}`}>
-              {b.status.replace('_', ' ')}
+            <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${b.bookingCancelled ? STATUS_BADGE.CANCELLED : (STATUS_BADGE[b.reservationStatus] ?? 'bg-slate-100 text-slate-600')}`}>
+              {b.bookingCancelled ? 'CANCELLED' : b.reservationStatus.replace('_', ' ')}
             </span>
           </div>
         </div>

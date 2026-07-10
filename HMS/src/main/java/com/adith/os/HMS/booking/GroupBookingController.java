@@ -2,6 +2,7 @@ package com.adith.os.HMS.booking;
 
 import com.adith.os.HMS.booking.dto.GroupBookingCreationDto;
 import com.adith.os.HMS.booking.dto.GroupBookingSummaryDto;
+import com.adith.os.HMS.booking.dto.QuickHoldDto;
 import com.adith.os.HMS.booking.dto.RescheduleReservationDto;
 import com.adith.os.HMS.booking.dto.ReservationUpdateDto;
 import jakarta.validation.Valid;
@@ -39,6 +40,15 @@ public class GroupBookingController {
             @PathVariable UUID propertyId,
             @Valid @RequestBody GroupBookingCreationDto dto) {
         GroupBookingSummaryDto summary = groupBookingService.createGroupBooking(propertyId, dto);
+        return new ResponseEntity<>(summary, HttpStatus.CREATED);
+    }
+
+    @PostMapping("/quick-hold")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'FRONTDESK')")
+    public ResponseEntity<GroupBookingSummaryDto> createQuickHold(
+            @PathVariable UUID propertyId,
+            @Valid @RequestBody QuickHoldDto dto) {
+        GroupBookingSummaryDto summary = groupBookingService.createQuickHold(propertyId, dto);
         return new ResponseEntity<>(summary, HttpStatus.CREATED);
     }
 
@@ -147,5 +157,15 @@ public class GroupBookingController {
             @PathVariable UUID propertyId,
             @PathVariable UUID reservationId) {
         return ResponseEntity.ok(groupBookingService.cancelReservation(propertyId, reservationId));
+    }
+
+    @PostMapping("/{reservationId}/bookings/{bookingId}/cancel")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<GroupBookingSummaryDto> cancelBooking(
+            @PathVariable UUID propertyId,
+            @PathVariable UUID reservationId,
+            @PathVariable UUID bookingId,
+            @RequestParam(required = false) String reason) {
+        return ResponseEntity.ok(groupBookingService.cancelBooking(propertyId, reservationId, bookingId, reason));
     }
 }

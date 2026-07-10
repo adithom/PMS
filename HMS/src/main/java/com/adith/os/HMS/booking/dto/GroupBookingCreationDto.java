@@ -56,12 +56,22 @@ public record GroupBookingCreationDto(
         @PositiveOrZero
         BigDecimal advancePaymentAmount,
 
-        PaymentMethod advancePaymentMethod
+        PaymentMethod advancePaymentMethod,
+
+        // Optional advance payment transaction details
+        String advanceTransactionId,
+        String advanceCardLastFour,
+        String advanceCardType,
+        String advanceBankName,
+        String advanceAccountNumber,
+        String advanceReferenceNumber,
+        String advanceUpiId,
+        String advanceNotes
 
 ) {
     public GroupBookingCreationDto {
         if (currency == null || currency.isBlank()) currency = "INR";
-        if (billingMode == null) billingMode = GroupBillingMode.SEPARATE;
+        if (billingMode == null) billingMode = GroupBillingMode.CONSOLIDATED;
         if (advancePaymentMethod == null && advancePaymentAmount != null
                 && advancePaymentAmount.compareTo(BigDecimal.ZERO) > 0) {
             advancePaymentMethod = PaymentMethod.CASH;

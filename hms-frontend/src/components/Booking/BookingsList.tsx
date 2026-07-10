@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
 import { fmtDate } from '../../utils/dateHelpers';
 import bookingApi from '../../api/bookingApi';
-import BookingForm from './BookingForm';
 import EarlyCheckoutModal from './EarlyCheckoutModal';
 import ModalShell from '../ModalShell';
 import ConfirmModal from '../ConfirmModal';
-import type { Booking, BookingStatus } from '../../types';
+import type { Booking, ReservationStatus } from '../../types';
 
 /* ────────────────────────────────────────────────────────────── */
 /* Types & Tokens                                               */
@@ -31,14 +30,14 @@ const btnDanger = 'inline-flex w-full sm:w-auto items-center justify-center gap-
 const btnSuccess = 'inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 disabled:cursor-not-allowed disabled:opacity-50';
 const btnAction = 'inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:cursor-not-allowed disabled:opacity-50';
 
-const getStatusColor = (status: BookingStatus) => {
+const getStatusColor = (status: ReservationStatus, cancelled: boolean) => {
+  if (cancelled) return 'bg-rose-100 text-rose-800 border-rose-200';
   switch (status) {
     case 'CONFIRMED': return 'bg-blue-100 text-blue-800 border-blue-200';
     case 'CHECKED_IN': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
     case 'CHECKED_OUT': return 'bg-indigo-100 text-indigo-800 border-indigo-200';
     case 'CANCELLED': return 'bg-rose-100 text-rose-800 border-rose-200';
     case 'PENDING': return 'bg-amber-100 text-amber-800 border-amber-200';
-    case 'NO_SHOW': return 'bg-red-100 text-red-800 border-red-200';
     default: return 'bg-slate-100 text-slate-600 border-slate-200';
   }
 };
@@ -54,7 +53,6 @@ const getTodayStr = () =>
 export default function BookingsList({ bookings, propertyId, listType, onClose, onUpdate, onViewBooking }: BookingsListProps) {
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const [showEditForm, setShowEditForm] = useState(false);
   const [earlyCheckoutBooking, setEarlyCheckoutBooking] = useState<Booking | null>(null);
   
   const [confirmAction, setConfirmAction] = useState<'checkin' | 'checkout' | 'cancel' | null>(null);
@@ -122,7 +120,7 @@ export default function BookingsList({ bookings, propertyId, listType, onClose, 
       setLoading(true); setError(null);
       try {
         if (!selectedBooking.id) throw new Error('Booking ID is missing.');
-        await bookingApi.updateStatus(propertyId, selectedBooking.id, 'CANCELLED');
+        await bookingApi.cancelBooking(propertyId, selectedBooking.id);
         await onUpdate();
         setShowConfirmDialog(false);
         setSelectedBooking(null);
@@ -164,8 +162,8 @@ export default function BookingsList({ bookings, propertyId, listType, onClose, 
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
                     <h3 className="text-lg font-bold text-slate-900">{(booking as any).guestName || 'Guest'}</h3>
-                    <span className={cn('rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider', getStatusColor(booking.status))}>
-                      {booking.status.replace('_', ' ')}
+                    <span className={cn('rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider', getStatusColor(booking.reservationStatus, booking.cancelled))}>
+                      {booking.cancelled ? 'ROOM CANCELLED' : booking.reservationStatus.replace('_', ' ')}
                     </span>
                   </div>
 
@@ -198,17 +196,14 @@ export default function BookingsList({ bookings, propertyId, listType, onClose, 
 
                 {/* Action Buttons Section */}
                 <div className="flex shrink-0 flex-col gap-2 sm:w-32 border-t border-slate-100 pt-4 sm:border-t-0 sm:border-l sm:pl-4 sm:pt-0">
-                  {booking.status === 'CONFIRMED' && (
+                  {!booking.cancelled && (booking.reservationStatus === 'CONFIRMED' || booking.reservationStatus === 'PENDING') && (
                     <button onClick={() => triggerConfirm(booking, 'checkin')} className={btnSuccess}>Check In</button>
                   )}
-                  {booking.status === 'CHECKED_IN' && (
+                  {!booking.cancelled && booking.reservationStatus === 'CHECKED_IN' && (
                     <button onClick={() => triggerConfirm(booking, 'checkout')} className={btnAction}>Check Out</button>
                   )}
-                  {(booking.status === 'PENDING' || booking.status === 'CONFIRMED') && (
+                  {!booking.cancelled && (booking.reservationStatus === 'PENDING' || booking.reservationStatus === 'CONFIRMED') && (
                     <button onClick={() => triggerConfirm(booking, 'cancel')} className={btnDanger}>Cancel</button>
-                  )}
-                  {booking.status !== 'CANCELLED' && booking.status !== 'CHECKED_OUT' && (
-                    <button onClick={() => { setSelectedBooking(booking); setShowEditForm(true); }} className={btnSecondary}>Edit</button>
                   )}
                   {onViewBooking && (
                     <button onClick={() => { onClose(); onViewBooking(booking); }} className={btnSecondary}>View</button>
@@ -221,19 +216,7 @@ export default function BookingsList({ bookings, propertyId, listType, onClose, 
         </div>
       </ModalShell>
 
-      {/* 2. Edit Booking Form Modal */}
-      {showEditForm && selectedBooking && (
-        <ModalShell title={`Edit Booking — ${(selectedBooking as any).guestName}`} size="wide" onClose={() => { setShowEditForm(false); setSelectedBooking(null); }}>
-          <BookingForm
-            propertyId={propertyId}
-            booking={selectedBooking}
-            onSuccess={() => { setShowEditForm(false); setSelectedBooking(null); onUpdate(); }}
-            onCancel={() => { setShowEditForm(false); setSelectedBooking(null); }}
-          />
-        </ModalShell>
-      )}
-
-      {/* 3. Confirm Dialog Modal */}
+      {/* 2. Confirm Dialog Modal */}
       {showConfirmDialog && selectedBooking && (
         <ConfirmModal
           title={confirmAction === 'checkin' ? 'Confirm Check-in' : confirmAction === 'checkout' ? 'Confirm Check-out' : 'Cancel Booking'}

@@ -1,7 +1,7 @@
 package com.adith.os.HMS.guest.dto;
 
-import com.adith.os.HMS.booking.BookingStatus;
 import com.adith.os.HMS.property.mealplan.MealPlanType;
+import com.adith.os.HMS.reservation.ReservationStatus;
 
 import java.time.LocalDate;
 import java.util.UUID;
@@ -15,7 +15,8 @@ public record GuestBookingSummaryDto(
         String unitName,
         LocalDate checkIn,
         LocalDate checkOut,
-        BookingStatus status,
+        ReservationStatus reservationStatus,
+        boolean bookingCancelled,
         MealPlanType mealPlanType,
         String role  // "PRIMARY" or "ADDITIONAL"
 ) {}

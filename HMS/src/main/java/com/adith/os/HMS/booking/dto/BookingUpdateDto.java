@@ -1,7 +1,6 @@
 package com.adith.os.HMS.booking.dto;
 
 import com.adith.os.HMS.billing.folio.ChargeCode;
-import com.adith.os.HMS.booking.BookingStatus;
 import com.adith.os.HMS.property.mealplan.MealPlanType;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
@@ -40,8 +39,6 @@ public record BookingUpdateDto(
         BigDecimal nightlyRateExTax,
 
         BigDecimal paidAmount,
-
-        BookingStatus status,
 
         String specialRequests,
 

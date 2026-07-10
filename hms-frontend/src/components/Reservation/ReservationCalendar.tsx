@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import availabilityApi from '../../api/availabilityApi';
 import bookingApi from '../../api/bookingApi';
-import type { TapeChartDto, BookingStatus } from '../../types';
+import type { TapeChartDto, ReservationStatus } from '../../types';
 import { addDays, dayLabel, dateStr, diffDays, shortDate, toDS, todayIST } from '../../utils/dateHelpers';
 import {
   CELL_W, CELL_H, LABEL_W, MIN_CHART_ROWS, STATUS_COLORS, tintForReservation,
@@ -18,7 +18,8 @@ type Bar = {
   // bookingId is the natural key — used for highlight + actions.
   bookingId: string;
   guestName: string;
-  status: BookingStatus;
+  reservationStatus: ReservationStatus;
+  cancelled: boolean;
   startDate: string;
   endDate: string;
   isGhost: boolean;
@@ -103,7 +104,8 @@ export default function ReservationCalendar({ propertyId, onOpenReservation, onA
       (m[ra.roomNumber] ??= []).push({
         bookingId: ra.bookingId,
         guestName: '',
-        status: 'CONFIRMED', // populated below from bookings lookup
+        reservationStatus: 'CONFIRMED', // populated below from bookings lookup
+        cancelled: false,
         startDate: ra.startDate,
         endDate: ra.endDate,
         isGhost: false,
@@ -113,7 +115,8 @@ export default function ReservationCalendar({ propertyId, onOpenReservation, onA
       (m[g.roomNumber] ??= []).push({
         bookingId: g.bookingId,
         guestName: g.guestName,
-        status: g.bookingStatus,
+        reservationStatus: g.reservationStatus,
+        cancelled: g.bookingCancelled,
         startDate: g.startDate,
         endDate: g.endDate,
         isGhost: true,
@@ -126,7 +129,7 @@ export default function ReservationCalendar({ propertyId, onOpenReservation, onA
 
   // Real-assignment bars are missing booking info (we need guestName + status + reservationId).
   // Fetch lazily via a side cache. Keep it simple: refetch the booking range to enrich.
-  const [bookingMeta, setBookingMeta] = useState<Map<string, { guestName: string; status: BookingStatus; reservationId?: string; unitId: string; checkIn: string; checkOut: string }>>(new Map());
+  const [bookingMeta, setBookingMeta] = useState<Map<string, { guestName: string; reservationStatus: ReservationStatus; cancelled: boolean; reservationId?: string; unitId: string; checkIn: string; checkOut: string }>>(new Map());
   useEffect(() => {
     if (!data) return;
     const ids = data.realAssignments.map(ra => ra.bookingId).filter(Boolean);
@@ -139,7 +142,8 @@ export default function ReservationCalendar({ propertyId, onOpenReservation, onA
           if (!b.id) continue;
           map.set(b.id, {
             guestName: b.guestName,
-            status: b.status,
+            reservationStatus: b.reservationStatus,
+            cancelled: b.cancelled,
             reservationId: b.reservationId,
             unitId: b.unitId,
             checkIn: b.checkIn,
@@ -159,7 +163,7 @@ export default function ReservationCalendar({ propertyId, onOpenReservation, onA
         if (b.isGhost) return b;
         const meta = bookingMeta.get(b.bookingId);
         return meta
-          ? { ...b, guestName: meta.guestName, status: meta.status, reservationId: meta.reservationId }
+          ? { ...b, guestName: meta.guestName, reservationStatus: meta.reservationStatus, cancelled: meta.cancelled, reservationId: meta.reservationId }
           : b;
       });
     }
@@ -257,7 +261,7 @@ export default function ReservationCalendar({ propertyId, onOpenReservation, onA
                       if (widthPx <= 0) return null;
                       const bleedsLeft = unClampedStartOff < 0;
                       const bleedsRight = unClampedEndOff > numDays;
-                      const sc = STATUS_COLORS[bar.status] || STATUS_COLORS.PENDING;
+                      const sc = STATUS_COLORS[bar.cancelled ? 'CANCELLED_BOOKING' : bar.reservationStatus] || STATUS_COLORS.PENDING;
                       const tint = tintForReservation(bar.reservationId);
                       const isHighlighted = hoverGroup && bar.reservationId === hoverGroup;
                       return (
@@ -284,7 +288,7 @@ export default function ReservationCalendar({ propertyId, onOpenReservation, onA
                             sc.bar, sc.text,
                           )}
                           style={{ left: leftPx, width: widthPx, height: CELL_H - 8, top: 4, zIndex: 5 }}
-                          title={`${bar.guestName || 'Guest'} • ${bar.status.replace('_', ' ')} • ${ci} → ${co}${bar.isGhost ? ' (unassigned — click to view, right-click to pin)' : ''}${bar.groupReference ? ` • Group: ${bar.groupReference}` : ''}`}
+                          title={`${bar.guestName || 'Guest'} • ${bar.cancelled ? 'ROOM CANCELLED' : bar.reservationStatus.replace('_', ' ')} • ${ci} → ${co}${bar.isGhost ? ' (unassigned — click to view, right-click to pin)' : ''}${bar.groupReference ? ` • Group: ${bar.groupReference}` : ''}`}
                         >
                           <span className="text-[11px] font-bold truncate">{bar.guestName || 'Guest'}</span>
                           {bar.groupReference && <span className="ml-2 shrink-0 text-[9px] opacity-70">⚑ {bar.groupReference}</span>}

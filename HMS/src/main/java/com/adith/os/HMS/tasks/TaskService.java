@@ -2,7 +2,6 @@ package com.adith.os.HMS.tasks;
 
 import com.adith.os.HMS.booking.Booking;
 import com.adith.os.HMS.booking.BookingRepository;
-import com.adith.os.HMS.booking.BookingStatus;
 import com.adith.os.HMS.booking.dto.BookingDto;
 import com.adith.os.HMS.booking.BookingMapper;
 import com.adith.os.HMS.guest.Guest;
@@ -61,7 +60,6 @@ public class TaskService {
         LocalDate nextWeek = today.plusDays(7);
         List<Booking> bookings = bookingRepository.findUnassignedUpcomingBookings(
                 propertyId,
-                List.of(BookingStatus.CONFIRMED, BookingStatus.PENDING),
                 today,
                 nextWeek
         );

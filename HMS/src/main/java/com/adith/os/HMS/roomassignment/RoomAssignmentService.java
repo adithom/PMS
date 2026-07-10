@@ -6,7 +6,7 @@ import com.adith.os.HMS.billing.folio.FolioCharge;
 import com.adith.os.HMS.billing.folio.FolioService;
 import com.adith.os.HMS.booking.Booking;
 import com.adith.os.HMS.booking.BookingRepository;
-import com.adith.os.HMS.booking.BookingStatus;
+import com.adith.os.HMS.reservation.ReservationStatus;
 import com.adith.os.HMS.room.Room;
 import com.adith.os.HMS.room.RoomRepository;
 import com.adith.os.HMS.room.RoomStatus;
@@ -98,13 +98,52 @@ public class RoomAssignmentService {
 
     @Transactional
     public void updateNightlyRates(UUID bookingId, BigDecimal nightlyRate, BigDecimal nightlyRateExTax) {
+        BigDecimal effectiveExTax = (nightlyRateExTax != null && nightlyRateExTax.compareTo(BigDecimal.ZERO) > 0)
+                ? nightlyRateExTax
+                : ChargeCode.computeExTaxFromInclusive(nightlyRate);
         List<RoomAssignment> assignments = roomAssignmentRepository.findByBookingId(bookingId);
         for (RoomAssignment a : assignments) {
             if (a.getStatus() == RoomAssignmentStatus.SCHEDULED || a.getStatus() == RoomAssignmentStatus.ACTIVE) {
                 a.setNightlyRate(nightlyRate);
-                a.setNightlyRateExTax(nightlyRateExTax);
+                a.setNightlyRateExTax(effectiveExTax);
                 roomAssignmentRepository.save(a);
             }
+        }
+    }
+
+    /**
+     * Single entry point for applying a booking's staged nightly rate to its room
+     * assignment(s). Booking.expectedNightlyRate is the staging field every rate-setting
+     * code path writes to first; this method consumes it — creating the initial
+     * assignment if none exists yet (falling back to the room's base rate when no rate
+     * was staged), or patching active/scheduled assignments — and clears the staging
+     * field once applied. If no room is assigned yet, this is a no-op; the rate stays
+     * staged until a room is assigned (see assignRoomToBooking).
+     */
+    @Transactional
+    public void applyExpectedNightlyRate(Booking booking) {
+        applyExpectedNightlyRate(booking, null);
+    }
+
+    @Transactional
+    public void applyExpectedNightlyRate(Booking booking, BigDecimal explicitExTax) {
+        if (booking.getRoom() == null) {
+            return;
+        }
+        BigDecimal rate = booking.getExpectedNightlyRate();
+
+        List<RoomAssignment> existing = roomAssignmentRepository.findByBookingId(booking.getId());
+        if (existing.isEmpty()) {
+            createInitialAssignment(booking, rate, explicitExTax);
+        } else if (rate != null) {
+            BigDecimal exTax = (explicitExTax != null && explicitExTax.compareTo(BigDecimal.ZERO) > 0)
+                    ? explicitExTax
+                    : (rate.compareTo(BigDecimal.ZERO) > 0 ? ChargeCode.computeExTaxFromInclusive(rate) : null);
+            updateNightlyRates(booking.getId(), rate, exTax);
+        }
+        if (rate != null) {
+            booking.setExpectedNightlyRate(null);
+            bookingRepository.save(booking);
         }
     }
 
@@ -127,7 +166,7 @@ public class RoomAssignmentService {
                     "Booking does not belong to the specified property");
         }
 
-        if (booking.getStatus() != BookingStatus.CHECKED_IN) {
+        if (booking.getReservationStatus() != ReservationStatus.CHECKED_IN) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Room shift is only allowed for checked-in bookings");
         }

@@ -3,6 +3,7 @@ package com.adith.os.HMS.booking;
 import com.adith.os.HMS.booking.dto.BookingCreationDto;
 import com.adith.os.HMS.booking.dto.BookingDto;
 import com.adith.os.HMS.booking.dto.GuestSummaryDto;
+import com.adith.os.HMS.reservation.ReservationStatus;
 import com.adith.os.HMS.guest.Guest;
 import com.adith.os.HMS.property.Property;
 import com.adith.os.HMS.property.mealplan.PropertyMealPlan;
@@ -57,7 +58,6 @@ public class BookingMapper {
                 bookingCreationDto.currency(),
                 computedTotalPrice,
                 bookingCreationDto.specialRequests(),
-                bookingCreationDto.status(),
                 bookingCreationDto.paidAmount(),
                 bookingCreationDto.isTwinBed()
         );
@@ -83,7 +83,8 @@ public class BookingMapper {
                 booking.getGuest().getFullName(),
                 booking.getUnit() != null ? booking.getUnit().getId() : null,
                 booking.getUnit() != null ? booking.getUnit().getName() : null,
-                booking.getStatus(),          // CHANGED: Returns BookingStatus enum directly
+                booking.isCancelled(),
+                booking.getReservationStatus(),
                 booking.getCheckIn(),
                 booking.getCheckOut(),
                 booking.getStayDuration(),
@@ -134,7 +135,8 @@ public class BookingMapper {
 
     private BigDecimal resolveNightlyRate(Booking booking) {
         RoomAssignment a = resolveActiveAssignment(booking);
-        return a != null ? a.getNightlyRate() : null;
+        if (a != null) return a.getNightlyRate();
+        return booking.getExpectedNightlyRate();
     }
 
     private BigDecimal resolveNightlyRateExTax(Booking booking) {

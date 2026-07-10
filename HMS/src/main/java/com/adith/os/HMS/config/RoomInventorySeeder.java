@@ -50,7 +50,7 @@ public class RoomInventorySeeder {
         // SpiceTree Rajakumari (STR)
         seedUnit("STR", "SpiceTree Rajakumari",
                 "Garden Villa", 16500, 1,
-                List.of("101","102","103","104","105","106","201","202","203"));
+                List.of("102","103","104","105","106","201","202","203","204"));
 
         // SpiceTree Chinnar (STC)
         seedUnit("STC", "SpiceTree Chinnar",

@@ -1,8 +1,8 @@
 package com.adith.os.HMS.booking.dto;
 
 import com.adith.os.HMS.billing.folio.ChargeCode;
-import com.adith.os.HMS.booking.BookingStatus;
 import com.adith.os.HMS.property.mealplan.MealPlanType;
+import com.adith.os.HMS.reservation.ReservationStatus;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -32,8 +32,9 @@ public record BookingDto(
 
         String unitName,
 
-        @NotNull
-        BookingStatus status,  // CHANGED: Now using BookingStatus enum instead of String
+        boolean cancelled,
+
+        ReservationStatus reservationStatus,
 
         @JsonFormat(pattern = "yyyy-MM-dd")
         @NotNull

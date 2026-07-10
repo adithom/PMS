@@ -133,8 +133,16 @@ export default function BookingForm({
   const [nightlyRateInputStr, setNightlyRateInputStr] = useState<string>('');
   const [paidAmount, setPaidAmount] = useState<number>(booking?.paidAmount ?? 0);
   const [advancePaymentMethod, setAdvancePaymentMethod] = useState<string>('CASH');
+  const [advanceTransactionId, setAdvanceTransactionId] = useState<string>('');
+  const [advanceCardLastFour, setAdvanceCardLastFour] = useState<string>('');
+  const [advanceCardType, setAdvanceCardType] = useState<string>('');
+  const [advanceBankName, setAdvanceBankName] = useState<string>('');
+  const [advanceAccountNumber, setAdvanceAccountNumber] = useState<string>('');
+  const [advanceReferenceNumber, setAdvanceReferenceNumber] = useState<string>('');
+  const [advanceUpiId, setAdvanceUpiId] = useState<string>('');
+  const [advanceNotes, setAdvanceNotes] = useState<string>('');
   const [specialRequests, setSpecialRequests] = useState<string>(booking?.specialRequests ?? '');
-  const [status, setStatus] = useState<string>(booking?.status ?? 'PENDING');
+  // Status is now on reservation; no per-booking status field needed
   
   // ---> NEW STATE FOR TWIN BED <---
   const [isTwinBed, setIsTwinBed] = useState<boolean>(booking?.isTwinBed ?? false);
@@ -546,14 +554,23 @@ export default function BookingForm({
         roomId: getRoomId(room) ?? undefined,
         guestId: finalGuestId,
         unitId: selectedUnitId,
-        status: status as any,
         checkIn, checkOut, adults, children, currency, paidAmount, specialRequests,
         isTwinBed,
         referenceNumber: referenceNumber || undefined,
         bookingSource: bookingSource || undefined,
         additionalGuestIds: additionalGuests.length > 0 ? additionalGuests.map(g => g.id) : undefined,
         ...(!isEditMode && reservationId ? { reservationId } : {}),
-        ...(!isEditMode && paidAmount > 0 ? { advancePaymentMethod } : {}),
+        ...(!isEditMode && paidAmount > 0 ? {
+          advancePaymentMethod,
+          ...(advanceTransactionId ? { advanceTransactionId } : {}),
+          ...(advanceCardLastFour ? { advanceCardLastFour } : {}),
+          ...(advanceCardType ? { advanceCardType } : {}),
+          ...(advanceBankName ? { advanceBankName } : {}),
+          ...(advanceAccountNumber ? { advanceAccountNumber } : {}),
+          ...(advanceReferenceNumber ? { advanceReferenceNumber } : {}),
+          ...(advanceUpiId ? { advanceUpiId } : {}),
+          ...(advanceNotes ? { advanceNotes } : {}),
+        } : {}),
         ...(isEditMode
           ? { totalPrice: computedTotalPrice, nightlyRate: effectiveNightlyRate, nightlyRateExTax }
           : { nightlyRate: effectiveNightlyRate, nightlyRateExTax }),
@@ -611,13 +628,13 @@ export default function BookingForm({
           <div>
             <label>
               <span className={labelCls}>Room (Optional)</span>
-              <select className={inputCls} value={getRoomId(room) ?? ''} disabled={!selectedUnitId || (isEditMode && booking?.status === 'CHECKED_IN')}
+              <select className={inputCls} value={getRoomId(room) ?? ''} disabled={!selectedUnitId || (isEditMode && booking?.reservationStatus === 'CHECKED_IN')}
                 onChange={e => setRoom(availableRooms.find(r => getRoomId(r) === e.target.value) ?? null)}>
                 <option value="">No room / Floating inventory</option>
                 {availableRooms.map(r => <option key={getRoomId(r)} value={getRoomId(r)!}>{r.number} {r.type ? `- ${r.type}` : ''}</option>)}
               </select>
             </label>
-            {isEditMode && booking?.status === 'CHECKED_IN' && (
+            {isEditMode && booking?.reservationStatus === 'CHECKED_IN' && (
               <p className="mt-2 text-xs font-semibold px-2 py-1 rounded-md inline-block bg-amber-100 text-amber-800">
                 Use "Shift Room" from the chart menu to change rooms for a checked-in guest.
               </p>
@@ -878,16 +895,6 @@ export default function BookingForm({
         <div className="grid gap-4 sm:grid-cols-4">
           <label><span className={labelCls}>Adults</span><input type="number" className={inputCls} value={adults || ''} onChange={e => setAdults(e.target.value === '' ? 0 : Number(e.target.value))} /></label>
           <label><span className={labelCls}>Children</span><input type="number" className={inputCls} value={children || ''} onChange={e => setChildren(e.target.value === '' ? 0 : Number(e.target.value))} /></label>
-          <label className="sm:col-span-2">
-            <span className={labelCls}>Status</span>
-            <select className={inputCls} value={status} onChange={e => setStatus(e.target.value)}>
-              <option value="PENDING">Pending</option>
-              <option value="CONFIRMED">Confirmed</option>
-              <option value="CHECKED_IN">Checked In</option>
-              <option value="CHECKED_OUT">Checked Out</option>
-              <option value="CANCELLED">Cancelled</option>
-            </select>
-          </label>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-3">
@@ -987,18 +994,77 @@ export default function BookingForm({
           </div>
           <label><span className={labelCls}>Amount Paid</span><input type="number" className={inputCls} value={paidAmount || ''} onChange={e => setPaidAmount(e.target.value === '' ? 0 : Number(e.target.value))} /></label>
           {!isEditMode && paidAmount > 0 && (
-            <label>
-              <span className={labelCls}>Advance Payment Method</span>
-              <select className={inputCls} value={advancePaymentMethod} onChange={e => setAdvancePaymentMethod(e.target.value)}>
-                <option value="CASH">Cash</option>
-                <option value="CREDIT_CARD">Credit Card</option>
-                <option value="DEBIT_CARD">Debit Card</option>
-                <option value="UPI">UPI</option>
-                <option value="BANK_TRANSFER">Bank Transfer</option>
-                <option value="CHEQUE">Cheque</option>
-                <option value="DIGITAL_WALLET">Digital Wallet</option>
-              </select>
-            </label>
+            <div className="space-y-3">
+              <label>
+                <span className={labelCls}>Payment Method</span>
+                <select className={inputCls} value={advancePaymentMethod} onChange={e => setAdvancePaymentMethod(e.target.value)}>
+                  <option value="CASH">Cash</option>
+                  <option value="CREDIT_CARD">Credit Card</option>
+                  <option value="DEBIT_CARD">Debit Card</option>
+                  <option value="UPI">UPI</option>
+                  <option value="BANK_TRANSFER">Bank Transfer</option>
+                  <option value="CHEQUE">Cheque</option>
+                  <option value="DIGITAL_WALLET">Digital Wallet</option>
+                </select>
+              </label>
+
+              {/* UPI */}
+              {advancePaymentMethod === 'UPI' && (
+                <label>
+                  <span className={labelCls}>UPI Reference ID <span className="font-normal text-slate-400">(optional)</span></span>
+                  <input type="text" className={inputCls} placeholder="e.g. 9876543210@upi" value={advanceUpiId} onChange={e => setAdvanceUpiId(e.target.value)} />
+                </label>
+              )}
+
+              {/* Card */}
+              {(advancePaymentMethod === 'CREDIT_CARD' || advancePaymentMethod === 'DEBIT_CARD') && (
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <label>
+                    <span className={labelCls}>Transaction ID <span className="font-normal text-slate-400">(optional)</span></span>
+                    <input type="text" className={inputCls} placeholder="Auth / txn ID" value={advanceTransactionId} onChange={e => setAdvanceTransactionId(e.target.value)} />
+                  </label>
+                  <label>
+                    <span className={labelCls}>Last 4 Digits <span className="font-normal text-slate-400">(optional)</span></span>
+                    <input type="text" className={inputCls} maxLength={4} placeholder="e.g. 4242" value={advanceCardLastFour} onChange={e => setAdvanceCardLastFour(e.target.value.replace(/\D/g, '').slice(0, 4))} />
+                  </label>
+                  <label>
+                    <span className={labelCls}>Card Type <span className="font-normal text-slate-400">(optional)</span></span>
+                    <input type="text" className={inputCls} placeholder="Visa / Mastercard" value={advanceCardType} onChange={e => setAdvanceCardType(e.target.value)} />
+                  </label>
+                </div>
+              )}
+
+              {/* Bank Transfer / Cheque */}
+              {(advancePaymentMethod === 'BANK_TRANSFER' || advancePaymentMethod === 'CHEQUE') && (
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <label>
+                    <span className={labelCls}>Bank Name <span className="font-normal text-slate-400">(optional)</span></span>
+                    <input type="text" className={inputCls} placeholder="e.g. HDFC" value={advanceBankName} onChange={e => setAdvanceBankName(e.target.value)} />
+                  </label>
+                  <label>
+                    <span className={labelCls}>Account / Cheque No. <span className="font-normal text-slate-400">(optional)</span></span>
+                    <input type="text" className={inputCls} value={advanceAccountNumber} onChange={e => setAdvanceAccountNumber(e.target.value)} />
+                  </label>
+                  <label>
+                    <span className={labelCls}>Reference No. <span className="font-normal text-slate-400">(optional)</span></span>
+                    <input type="text" className={inputCls} value={advanceReferenceNumber} onChange={e => setAdvanceReferenceNumber(e.target.value)} />
+                  </label>
+                </div>
+              )}
+
+              {/* Digital Wallet */}
+              {advancePaymentMethod === 'DIGITAL_WALLET' && (
+                <label>
+                  <span className={labelCls}>Transaction ID <span className="font-normal text-slate-400">(optional)</span></span>
+                  <input type="text" className={inputCls} placeholder="Wallet txn ID" value={advanceTransactionId} onChange={e => setAdvanceTransactionId(e.target.value)} />
+                </label>
+              )}
+
+              <label>
+                <span className={labelCls}>Payment Notes <span className="font-normal text-slate-400">(optional)</span></span>
+                <input type="text" className={inputCls} placeholder="e.g. Collected at front desk" value={advanceNotes} onChange={e => setAdvanceNotes(e.target.value)} />
+              </label>
+            </div>
           )}
         </div>
 

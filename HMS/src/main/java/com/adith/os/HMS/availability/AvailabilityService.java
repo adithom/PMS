@@ -2,7 +2,6 @@ package com.adith.os.HMS.availability;
 
 import com.adith.os.HMS.booking.Booking;
 import com.adith.os.HMS.booking.BookingRepository;
-import com.adith.os.HMS.booking.BookingStatus;
 import com.adith.os.HMS.property.Property;
 import com.adith.os.HMS.property.PropertyRepository;
 import com.adith.os.HMS.room.Room;
@@ -34,10 +33,6 @@ public class AvailabilityService {
         // Active statuses for room assignments (occupying a room)
         private static final List<RoomAssignmentStatus> ACTIVE_ASSIGNMENT_STATUSES =
                 List.of(RoomAssignmentStatus.SCHEDULED, RoomAssignmentStatus.ACTIVE);
-
-        // Booking statuses that consume unit capacity before a room is assigned
-        private static final List<BookingStatus> CAPACITY_HOLD_BOOKING_STATUSES =
-                List.of(BookingStatus.PENDING, BookingStatus.CONFIRMED, BookingStatus.CHECKED_IN);
 
         public AvailabilityService(
                         PropertyRepository propertyRepository,
@@ -175,7 +170,7 @@ public class AvailabilityService {
                                         .count();
 
                         long unassignedBookings = bookingRepository.countUnassignedOverlappingPropertyBookings(
-                                propertyId, finalCurrentDate, finalCurrentDate.plusDays(1), CAPACITY_HOLD_BOOKING_STATUSES);
+                                propertyId, finalCurrentDate, finalCurrentDate.plusDays(1));
 
                         int totalBookedCapacity = bookedRooms + (int) unassignedBookings;
                         int availableRoomsNumber = Math.max(0, totalActiveRooms - totalBookedCapacity);
@@ -251,7 +246,7 @@ public class AvailabilityService {
                                 .count();
 
                 long unassignedBookings = bookingRepository.countUnassignedOverlappingPropertyBookings(
-                                propertyId, date, nextDay, CAPACITY_HOLD_BOOKING_STATUSES);
+                                propertyId, date, nextDay);
 
                 int totalBookedCapacity = bookedCount + (int) unassignedBookings;
 
@@ -347,9 +342,9 @@ public class AvailabilityService {
 
                 long unassignedHolds = (excludeBookingId != null)
                                 ? bookingRepository.countUnassignedOverlappingUnitBookingsExcludingCurrent(
-                                                unitId, checkIn, checkOut, excludeBookingId, CAPACITY_HOLD_BOOKING_STATUSES)
+                                                unitId, checkIn, checkOut, excludeBookingId)
                                 : bookingRepository.countUnassignedOverlappingUnitBookings(
-                                                unitId, checkIn, checkOut, CAPACITY_HOLD_BOOKING_STATUSES);
+                                                unitId, checkIn, checkOut);
 
                 int roomsToActuallyReturn = (excludeBookingId != null)
                                 ? physicallyEmptyRooms.size()
@@ -389,7 +384,7 @@ public class AvailabilityService {
                                 .count();
 
                 long unassignedBookings = bookingRepository.countUnassignedOverlappingUnitBookings(
-                                unitId, date, nextDay, CAPACITY_HOLD_BOOKING_STATUSES);
+                                unitId, date, nextDay);
 
                 int totalBookedCapacity = bookedCount + (int) unassignedBookings;
 
@@ -442,7 +437,7 @@ public class AvailabilityService {
                                 booking.getGuest().getFullName(),
                                 booking.getCheckIn(),
                                 booking.getCheckOut(),
-                                booking.getStatus().toString());
+                                booking.getReservationStatus() != null ? booking.getReservationStatus().toString() : "UNKNOWN");
         }
 
         // ---------------------------------------------------------------------
@@ -506,7 +501,7 @@ public class AvailabilityService {
                         LocalDate to,
                         List<RoomAssignment> realAssignments) {
                 List<Booking> unassigned = bookingRepository.findUnassignedOverlapping(
-                                propertyId, CAPACITY_HOLD_BOOKING_STATUSES, from, to);
+                                propertyId, from, to);
                 if (unassigned.isEmpty()) return List.of();
 
                 // Pre-bucket real assignments by room id for cheap overlap checks.
@@ -546,7 +541,8 @@ public class AvailabilityService {
                                         unit.getName(),
                                         booking.getReservation() != null ? booking.getReservation().getId() : null,
                                         booking.getReservation() != null ? booking.getReservation().getGroupReference() : null,
-                                        booking.getStatus(),
+                                        booking.getReservationStatus(),
+                                        booking.isCancelled(),
                                         bStart,
                                         bEnd,
                                         RoomAssignmentStatus.SCHEDULED);

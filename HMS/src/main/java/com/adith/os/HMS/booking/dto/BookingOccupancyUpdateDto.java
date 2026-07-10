@@ -1,5 +1,6 @@
 package com.adith.os.HMS.booking.dto;
 
+import com.adith.os.HMS.property.mealplan.MealPlanType;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 
@@ -17,5 +18,21 @@ public record BookingOccupancyUpdateDto(
         Integer children,
 
         @PositiveOrZero(message = "Nightly rate cannot be negative")
-        BigDecimal nightlyRate
+        BigDecimal nightlyRate,
+
+        Boolean isTwinBed,
+
+        MealPlanType mealPlanType,
+
+        @PositiveOrZero
+        BigDecimal mealPlanPricePerNight,
+
+        @PositiveOrZero
+        BigDecimal mealPlanChildrenPricePerNight,
+
+        @PositiveOrZero(message = "Extra beds cannot be negative")
+        Integer extraBeds,
+
+        @PositiveOrZero
+        BigDecimal extraBedRatePerNight
 ) {}

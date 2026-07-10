@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import bookingApi from '../../api/bookingApi';
 import type { Booking } from '../../types';
-import { STATUS_COLORS, cn } from './TapeChartConstants';
+import { STATUS_COLORS, bookingStatusKey, cn } from './TapeChartConstants';
 import { toDS, dateStr, fmtDate } from '../../utils/dateHelpers';
 import ConfirmModal from '../ConfirmModal';
 
@@ -44,7 +44,8 @@ export default function TapeChartCtxMenu({
 
   if (!state) return null;
   const { x, y, booking } = state;
-  const sc = STATUS_COLORS[booking.status] ?? STATUS_COLORS.PENDING;
+  const sk = bookingStatusKey(booking.reservationStatus, booking.cancelled);
+  const sc = STATUS_COLORS[sk] ?? STATUS_COLORS.PENDING;
   const guestName = booking.guestName || 'Guest';
 
   type Act = {
@@ -55,59 +56,33 @@ export default function TapeChartCtxMenu({
   };
   const acts: Act[] = [];
 
-  if (booking.id) {
-    switch (booking.status) {
+  if (booking.id && !booking.cancelled) {
+    switch (booking.reservationStatus) {
       case 'PENDING':
-        acts.push({
-          label: '✓ Confirm Booking',
-          doFn: async () => {
-            await bookingApi.updateStatus(propertyId, booking.id!, 'CONFIRMED');
-            onAction();
-          },
-          confirm: {
-            title: 'Confirm Booking',
-            message: `Are you sure you want to confirm the booking for ${guestName}?`,
-            confirmLabel: 'Confirm Booking',
-          },
-        });
-        acts.push({
-          label: '✕ Cancel Booking',
-          doFn: async () => {
-            await bookingApi.updateStatus(propertyId, booking.id!, 'CANCELLED');
-            onAction();
-          },
-          danger: true,
-          confirm: {
-            title: 'Cancel Booking',
-            message: `Are you sure you want to cancel the booking for ${guestName}? This action cannot be undone.`,
-            confirmLabel: 'Cancel Booking',
-          },
-        });
-        break;
       case 'CONFIRMED':
         acts.push({
-          label: '✓ Check-in Guest',
+          label: '✓ Check-in All Rooms',
           doFn: async () => {
             await bookingApi.checkIn(propertyId, booking.id!);
             onAction();
           },
           confirm: {
             title: 'Confirm Check-in',
-            message: `Are you sure you want to check in ${guestName}?`,
+            message: `Check in all guests in this reservation (${guestName})?`,
             confirmLabel: 'Check In',
           },
         });
         acts.push({
-          label: '⊘ Mark No Show',
+          label: '✕ Cancel This Room',
           doFn: async () => {
-            await bookingApi.updateStatus(propertyId, booking.id!, 'NO_SHOW');
+            await bookingApi.cancelBooking(propertyId, booking.id!);
             onAction();
           },
           danger: true,
           confirm: {
-            title: 'Mark as No Show',
-            message: `Are you sure you want to mark ${guestName} as a no-show?`,
-            confirmLabel: 'Mark No Show',
+            title: 'Cancel Room',
+            message: `Are you sure you want to cancel the room for ${guestName}? This cannot be undone.`,
+            confirmLabel: 'Cancel Room',
           },
         });
         break;
@@ -125,14 +100,14 @@ export default function TapeChartCtxMenu({
           });
         } else {
           acts.push({
-            label: '⏎ Check-out Guest',
+            label: '⏎ Check-out All Rooms',
             doFn: async () => {
               await bookingApi.checkOut(propertyId, booking.id!);
               onAction();
             },
             confirm: {
               title: 'Confirm Check-out',
-              message: `Are you sure you want to check out ${guestName}?`,
+              message: `Check out all guests in this reservation (${guestName})?`,
               confirmLabel: 'Check Out',
             },
           });
@@ -162,7 +137,7 @@ export default function TapeChartCtxMenu({
               sc.text,
             )}
           >
-            {booking.status.replace('_', ' ')}
+            {booking.cancelled ? 'ROOM CANCELLED' : booking.reservationStatus.replace('_', ' ')}
           </span>
           <span className="text-[11px] text-slate-400">Room {booking.roomNumber || '—'}</span>
         </div>
