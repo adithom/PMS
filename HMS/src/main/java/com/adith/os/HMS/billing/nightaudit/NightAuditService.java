@@ -8,8 +8,6 @@ import com.adith.os.HMS.billing.folio.dto.ChargeCreationDto;
 import com.adith.os.HMS.booking.Booking;
 import com.adith.os.HMS.booking.BookingRepository;
 import com.adith.os.HMS.reservation.ReservationStatus;
-import com.adith.os.HMS.property.mealplan.MealPlanType;
-import com.adith.os.HMS.property.mealplan.PropertyMealPlanRepository;
 import com.adith.os.HMS.room.Room;
 import com.adith.os.HMS.roomassignment.RoomAssignment;
 import com.adith.os.HMS.roomassignment.RoomAssignmentRepository;
@@ -45,7 +43,6 @@ public class NightAuditService {
     private final FolioChargeRepository folioChargeRepository;
     private final BookingRepository bookingRepository;
     private final NightAuditLogRepository nightAuditLogRepository;
-    private final PropertyMealPlanRepository mealPlanRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final AtomicBoolean isRunning = new AtomicBoolean(false);
 
@@ -54,14 +51,12 @@ public class NightAuditService {
                              FolioChargeRepository folioChargeRepository,
                              BookingRepository bookingRepository,
                              NightAuditLogRepository nightAuditLogRepository,
-                             PropertyMealPlanRepository mealPlanRepository,
                              ApplicationEventPublisher eventPublisher) {
         this.roomAssignmentRepository = roomAssignmentRepository;
         this.folioService = folioService;
         this.folioChargeRepository = folioChargeRepository;
         this.bookingRepository = bookingRepository;
         this.nightAuditLogRepository = nightAuditLogRepository;
-        this.mealPlanRepository = mealPlanRepository;
         this.eventPublisher = eventPublisher;
     }
 
@@ -125,8 +120,6 @@ public class NightAuditService {
         int skippedFolioNotOpen = 0;
         int skippedAlreadyPosted = 0;
         int errors = 0;
-        int mealPlanChargesPosted = 0;
-        int mealPlanChargesSkipped = 0;
         int extraBedChargesPosted = 0;
         int extraBedChargesSkipped = 0;
 
@@ -164,15 +157,24 @@ public class NightAuditService {
                         ? assignment.getNightlyRate()
                         : room.getBaseRate();
 
-                // Use stored ex-tax rate as the charge base; for assignments missing it or storing 0
-                // (legacy data where computeExTaxFromInclusive(null) was persisted as ZERO),
-                // back-calculate from the inclusive rate rather than charging tax-on-tax.
-                BigDecimal exTaxRate = (assignment.getNightlyRateExTax() != null
-                        && assignment.getNightlyRateExTax().compareTo(BigDecimal.ZERO) > 0)
-                        ? assignment.getNightlyRateExTax()
-                        : ChargeCode.computeExTaxFromInclusive(nightlyRate);
-
-                BigDecimal roomRentTaxRate = ChargeCode.computeRoomRentTaxRate(exTaxRate);
+                // Use the stored ex-tax rate and tax rate as the charge base — they were computed
+                // together from the same GST-slab decision when the assignment was created/updated,
+                // so they can't disagree about which slab applies. For assignments missing either
+                // (legacy data, or nightlyRateExTax was persisted as ZERO), recompute both together
+                // from the inclusive rate rather than re-deriving the tax rate from the ex-tax
+                // amount alone — that can pick the wrong slab for inclusive rates near ₹7500.
+                BigDecimal exTaxRate;
+                BigDecimal roomRentTaxRate;
+                if (assignment.getNightlyRateExTax() != null
+                        && assignment.getNightlyRateExTax().compareTo(BigDecimal.ZERO) > 0
+                        && assignment.getTaxRate() != null) {
+                    exTaxRate = assignment.getNightlyRateExTax();
+                    roomRentTaxRate = assignment.getTaxRate();
+                } else {
+                    ChargeCode.RoomRentBreakdown breakdown = ChargeCode.computeRoomRentBreakdown(nightlyRate);
+                    exTaxRate = breakdown.exTaxAmount();
+                    roomRentTaxRate = breakdown.taxRate();
+                }
 
                 ChargeCreationDto chargeDto = new ChargeCreationDto(
                         chargeDate,
@@ -198,57 +200,6 @@ public class NightAuditService {
                 chargesPosted++;
                 log.info("Night Audit{}: Posted room rent charge for booking {} room {} on {}",
                         manualRun ? " (Manual)" : "", booking.getId(), room.getNumber(), chargeDate);
-
-                // Post meal plan charge if the booking has one
-                MealPlanType mealPlanType = booking.getMealPlanType();
-                if (mealPlanType != null) {
-                    boolean mealPlanChargeExists = folioChargeRepository
-                            .existsByFolioIdAndChargeCodeAndChargeDateAndIsVoidedFalse(
-                                    masterFolio.getId(), ChargeCode.MEAL_PLAN, chargeDate);
-
-                    if (!mealPlanChargeExists) {
-                        var planOpt = mealPlanRepository
-                                .findByPropertyIdAndMealPlanType(booking.getProperty().getId(), mealPlanType);
-                        if (planOpt.isPresent() && planOpt.get().isActive()) {
-                            var plan = planOpt.get();
-                            var effectivePrice = booking.getMealPlanPricePerNight() != null
-                                    ? booking.getMealPlanPricePerNight()
-                                    : plan.getPricePerNight();
-                            if (effectivePrice == null || effectivePrice.compareTo(BigDecimal.ZERO) <= 0) {
-                                log.debug("Night Audit: Meal plan {} price is zero for booking {}. Skipping charge.",
-                                        mealPlanType, booking.getId());
-                                mealPlanChargesSkipped++;
-                                continue;
-                            }
-                            ChargeCreationDto mealPlanCharge = new ChargeCreationDto(
-                                    chargeDate,
-                                    ChargeCode.MEAL_PLAN,
-                                    mealPlanType.name() + " - " + mealPlanType.getDisplayName(),
-                                    effectivePrice,
-                                    BigDecimal.ONE,
-                                    null,
-                                    BigDecimal.ZERO,
-                                    "BOOKING",
-                                    booking.getId(),
-                                    manualRun ? "Night Audit - Manual run for " + chargeDate : "Night Audit - Auto-posted",
-                                    "NIGHT_AUDIT",
-                                    null
-                            );
-                            folioService.addCharge(booking.getProperty().getId(), masterFolio.getId(), mealPlanCharge);
-                            mealPlanChargesPosted++;
-                            log.info("Night Audit{}: Posted meal plan charge ({}) for booking {} on {}",
-                                    manualRun ? " (Manual)" : "", mealPlanType, booking.getId(), chargeDate);
-                        } else {
-                            log.warn("Night Audit: Meal plan {} has no active config for property {}. Skipping meal plan charge for booking {}.",
-                                    mealPlanType, booking.getProperty().getId(), booking.getId());
-                            mealPlanChargesSkipped++;
-                            firstError.compareAndSet(null, "Meal plan " + mealPlanType
-                                    + " has no active config for property " + booking.getProperty().getId());
-                        }
-                    } else {
-                        mealPlanChargesSkipped++;
-                    }
-                }
 
                 // Post extra bed charge if applicable
                 Integer extraBeds = booking.getExtraBeds();
@@ -308,8 +259,7 @@ public class NightAuditService {
 
         return new NightAuditResultDto(chargeDate, assignments.size(), chargesPosted,
                 skippedAlreadyPosted, skippedFolioNotOpen, skippedNoFolio,
-                errors, mealPlanChargesPosted, mealPlanChargesSkipped,
-                extraBedChargesPosted, extraBedChargesSkipped);
+                errors, extraBedChargesPosted, extraBedChargesSkipped);
     }
 
     @Scheduled(cron = "${hms.night-audit.catchup-cron:0 0 3 * * *}", zone = "Asia/Kolkata")
@@ -391,8 +341,6 @@ public class NightAuditService {
             int skippedFolioNotOpen,
             int skippedNoFolio,
             int errors,
-            int mealPlanChargesPosted,
-            int mealPlanChargesSkipped,
             int extraBedChargesPosted,
             int extraBedChargesSkipped
     ) {}

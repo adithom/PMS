@@ -68,7 +68,6 @@ public record GroupBookingSummaryDto(
             String specialRequests,
             Boolean isTwinBed,
             BigDecimal unitBaseRate,            // baseRate of first active room in unit — for estimate
-            BigDecimal mealPlanPricePerNight,   // from booking.mealPlanPricePerNight
             MealPlanType mealPlanType,          // from booking.mealPlanType
             Integer extraBeds,                  // from booking.extraBeds
             BigDecimal nightlyRate              // expectedNightlyRate — kept in sync with assignment rate

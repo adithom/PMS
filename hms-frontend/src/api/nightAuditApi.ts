@@ -8,8 +8,6 @@ export interface NightAuditResult {
   skippedFolioNotOpen: number;
   skippedNoFolio: number;
   errors: number;
-  mealPlanChargesPosted: number;
-  mealPlanChargesSkipped: number;
 }
 
 export function runNightAudit(date: string): Promise<NightAuditResult> {

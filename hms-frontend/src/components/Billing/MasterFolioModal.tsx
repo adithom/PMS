@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { X, Printer } from 'lucide-react';
 import billingApi from '../../api/billingApi';
-import type { GroupBillDto, GroupBill } from '../../api/billingApi';
+import type { GroupBillDto, GroupBill, BillDto } from '../../api/billingApi';
 import paymentApi from '../../api/paymentApi';
 import type { PaymentDto } from '../../api/paymentApi';
+import posApi from '../../api/posApi';
+import type { PosTicketHistory } from '../../types/pos';
 import { fmtDate, fmtDateTime } from '../../utils/dateHelpers';
 import { triggerPresignedDownload } from '../../utils/downloadUtils';
 import LoadingSpinner from '../LoadingSpinner';
@@ -35,8 +37,11 @@ export default function MasterFolioModal({ propertyId, reservationId, onClose }:
   const [isGeneratingBill, setIsGeneratingBill] = useState(false);
   const [manageFolioId, setManageFolioId] = useState<string | null>(null);
   const [groupBills, setGroupBills] = useState<GroupBill[]>([]);
+  const [individualBills, setIndividualBills] = useState<BillDto[]>([]);
+  const [posTickets, setPosTickets] = useState<PosTicketHistory[]>([]);
   const [downloadingBillId, setDownloadingBillId] = useState<string | null>(null);
   const [voidingBillId, setVoidingBillId] = useState<string | null>(null);
+  const [downloadingReceiptId, setDownloadingReceiptId] = useState<string | null>(null);
 
   // Payments
   const [payments, setPayments] = useState<PaymentDto[]>([]);
@@ -75,12 +80,60 @@ export default function MasterFolioModal({ propertyId, reservationId, onClose }:
     }
   }, [propertyId, reservationId]);
 
-  useEffect(() => { load(); loadGroupBills(); loadPayments(); }, [load, loadGroupBills, loadPayments]);
+  const loadIndividualBills = useCallback(async () => {
+    try {
+      const bills = await billingApi.getBillsForReservation(reservationId);
+      setIndividualBills((bills || []).filter(b => !b.isVoided));
+    } catch {
+      // Non-critical — bills section just stays empty (e.g. role lacks permission)
+    }
+  }, [reservationId]);
+
+  const loadPosTickets = useCallback(async () => {
+    try {
+      const tickets = await posApi.getTicketsByReservationId(reservationId);
+      setPosTickets(tickets || []);
+    } catch {
+      // non-critical
+    }
+  }, [reservationId]);
+
+  const handleDownloadReceipt = async (ticketId: string) => {
+    setDownloadingReceiptId(ticketId);
+    try {
+      const url = await posApi.getReceiptUrl(ticketId);
+      triggerPresignedDownload(url);
+    } catch (err: any) {
+      alert(err.message || 'Failed to get receipt link.');
+    } finally {
+      setDownloadingReceiptId(null);
+    }
+  };
+
+  const handleDownloadIndividualBill = async (bill: BillDto) => {
+    setDownloadingBillId(bill.id);
+    try {
+      const url = await billingApi.getDownloadUrl(bill.id);
+      triggerPresignedDownload(url);
+    } catch (err: any) {
+      alert(err.message || 'Failed to get download link.');
+    } finally {
+      setDownloadingBillId(null);
+    }
+  };
+
+  useEffect(() => {
+    load(); loadGroupBills(); loadPayments(); loadIndividualBills(); loadPosTickets();
+  }, [load, loadGroupBills, loadPayments, loadIndividualBills, loadPosTickets]);
 
   const handleGenerateGroupBill = async () => {
     setIsGeneratingBill(true);
     try {
-      const result = await billingApi.generateGroupBills(propertyId, reservationId);
+      // SEPARATE-billing reservations route nothing to the master folio, so there's nothing
+      // for the group-bill mechanism to consolidate — generate one bill per room's folio instead.
+      const result = data?.billingMode === 'SEPARATE'
+        ? await billingApi.generateBillsForAllFolios(propertyId, reservationId)
+        : await billingApi.generateGroupBills(propertyId, reservationId);
       const withUrl = (result.bills || []).filter((b: any) => b.pdfDownloadUrl);
       if (withUrl.length === 0) {
         alert('Bill generated but PDF upload unavailable. Contact admin.');
@@ -91,8 +144,9 @@ export default function MasterFolioModal({ propertyId, reservationId, onClose }:
       }
       await load();
       await loadGroupBills();
+      await loadIndividualBills();
     } catch (err: any) {
-      alert(err.message || 'Failed to generate group bill.');
+      alert(err.message || 'Failed to generate bill.');
     } finally {
       setIsGeneratingBill(false);
     }
@@ -209,7 +263,7 @@ export default function MasterFolioModal({ propertyId, reservationId, onClose }:
       <FolioDetailModal
         propertyId={propertyId}
         folioId={manageFolioId}
-        onClose={() => { setManageFolioId(null); load(); }}
+        onClose={() => { setManageFolioId(null); load(); loadIndividualBills(); loadPosTickets(); }}
       />
     );
   }
@@ -494,20 +548,20 @@ export default function MasterFolioModal({ propertyId, reservationId, onClose }:
                 className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-all hover:bg-slate-50 disabled:opacity-50"
               >
                 <Printer className="h-4 w-4 text-slate-400" />
-                {isGeneratingBill ? 'Generating...' : 'Generate Group Bill'}
+                {isGeneratingBill ? 'Generating...' : data.billingMode === 'SEPARATE' ? 'Generate Bills' : 'Generate Group Bill'}
               </button>
             </div>
 
-            {groupBills.filter(b => !b.voided).length > 0 && (
+            {(groupBills.some(b => !b.voided) || individualBills.length > 0 || posTickets.length > 0) && (
               <div className="mt-8">
-                <h3 className="mb-3 text-sm font-bold uppercase tracking-widest text-slate-400">Generated Group Bills</h3>
+                <h3 className="mb-3 text-sm font-bold uppercase tracking-widest text-slate-400">Generated Bills</h3>
                 <div className="space-y-2">
                   {groupBills.filter(b => !b.voided).map(bill => (
                     <div key={bill.id} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2.5">
                       <div>
                         <p className="text-xs font-bold text-slate-800">{bill.invoiceNumber}</p>
                         <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
-                          {bill.billType === 'ROOM_RENT' ? 'Main' : bill.billType === 'ANCILLARY' ? 'Ancillary' : (bill.billType ?? 'Bill')}
+                          Group · {bill.billType === 'ROOM_RENT' ? 'Main' : bill.billType === 'ANCILLARY' ? 'Ancillary' : (bill.billType ?? 'Bill')}
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
@@ -526,6 +580,42 @@ export default function MasterFolioModal({ propertyId, reservationId, onClose }:
                           {voidingBillId === bill.id ? 'Voiding...' : 'Void'}
                         </button>
                       </div>
+                    </div>
+                  ))}
+
+                  {individualBills.map(bill => (
+                    <div key={bill.id} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2.5">
+                      <div>
+                        <p className="text-xs font-bold text-slate-800">{bill.invoiceNumber}</p>
+                        <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
+                          Room {bill.roomNumber || '—'} · {bill.category === 'ROOM_RENT' ? 'Main' : bill.category === 'ANCILLARY' ? 'Ancillary' : (bill.category ?? 'Bill')}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleDownloadIndividualBill(bill)}
+                        disabled={downloadingBillId === bill.id}
+                        className="rounded-md bg-indigo-50 px-2.5 py-1.5 text-[11px] font-bold text-indigo-700 transition-colors hover:bg-indigo-100 disabled:opacity-50"
+                      >
+                        {downloadingBillId === bill.id ? '...' : 'Download'}
+                      </button>
+                    </div>
+                  ))}
+
+                  {posTickets.map(ticket => (
+                    <div key={ticket.id} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2.5">
+                      <div>
+                        <p className="text-xs font-bold text-slate-800">{ticket.invoiceNumber || `Receipt #${ticket.id.slice(0, 8)}`}</p>
+                        <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
+                          POS · {ticket.locationName || 'Restaurant'}{ticket.roomNumber ? ` · Room ${ticket.roomNumber}` : ''}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleDownloadReceipt(ticket.id)}
+                        disabled={downloadingReceiptId === ticket.id}
+                        className="rounded-md bg-indigo-50 px-2.5 py-1.5 text-[11px] font-bold text-indigo-700 transition-colors hover:bg-indigo-100 disabled:opacity-50"
+                      >
+                        {downloadingReceiptId === ticket.id ? '...' : 'Download'}
+                      </button>
                     </div>
                   ))}
                 </div>

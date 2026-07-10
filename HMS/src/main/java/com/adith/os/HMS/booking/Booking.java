@@ -132,12 +132,6 @@ public class Booking {
     @Column(name = "meal_plan_type")
     private MealPlanType mealPlanType;
 
-    @Column(name = "meal_plan_price_per_night", precision = 10, scale = 2)
-    private BigDecimal mealPlanPricePerNight;
-
-    @Column(name = "meal_plan_children_price_per_night", precision = 10, scale = 2)
-    private BigDecimal mealPlanChildrenPricePerNight;
-
     @Column(name = "extra_beds", nullable = false, columnDefinition = "integer default 0")
     private Integer extraBeds = 0;
 
@@ -359,11 +353,6 @@ public class Booking {
 
     public MealPlanType getMealPlanType() { return mealPlanType; }
     public void setMealPlanType(MealPlanType mealPlanType) { this.mealPlanType = mealPlanType; }
-    public BigDecimal getMealPlanPricePerNight() { return mealPlanPricePerNight; }
-    public void setMealPlanPricePerNight(BigDecimal mealPlanPricePerNight) { this.mealPlanPricePerNight = mealPlanPricePerNight; }
-
-    public BigDecimal getMealPlanChildrenPricePerNight() { return mealPlanChildrenPricePerNight; }
-    public void setMealPlanChildrenPricePerNight(BigDecimal mealPlanChildrenPricePerNight) { this.mealPlanChildrenPricePerNight = mealPlanChildrenPricePerNight; }
 
     public Integer getExtraBeds() { return extraBeds; }
     public void setExtraBeds(Integer extraBeds) { this.extraBeds = extraBeds; }

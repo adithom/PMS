@@ -63,6 +63,12 @@ public class BillController {
         return ResponseEntity.ok(billService.getBillsForFolio(folioId));
     }
 
+    @GetMapping("/reservation/{reservationId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<List<BillDto>> getBillsForReservation(@PathVariable UUID reservationId) {
+        return ResponseEntity.ok(billService.getBillsForReservation(reservationId));
+    }
+
     @GetMapping("/{billId}/download-url")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<String> getBillDownloadUrl(@PathVariable UUID billId) {

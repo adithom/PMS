@@ -40,14 +40,8 @@ public record GroupBookingCreationDto(
 
         UUID travelAgentId,
 
-        // Meal plan applied uniformly to all rooms
+        // Meal plan applied uniformly to all rooms — a non-priced trigger only
         MealPlanType mealPlanType,
-
-        @PositiveOrZero
-        BigDecimal mealPlanPricePerNight,
-
-        @PositiveOrZero
-        BigDecimal mealPlanChildrenPricePerNight,
 
         // Booking source (e.g. "Direct", "MakeMyTrip")
         String bookingSource,
@@ -72,6 +66,7 @@ public record GroupBookingCreationDto(
     public GroupBookingCreationDto {
         if (currency == null || currency.isBlank()) currency = "INR";
         if (billingMode == null) billingMode = GroupBillingMode.CONSOLIDATED;
+        if (mealPlanType == null) mealPlanType = MealPlanType.CP;
         if (advancePaymentMethod == null && advancePaymentAmount != null
                 && advancePaymentAmount.compareTo(BigDecimal.ZERO) > 0) {
             advancePaymentMethod = PaymentMethod.CASH;

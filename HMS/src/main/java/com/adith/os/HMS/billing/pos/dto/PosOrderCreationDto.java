@@ -13,6 +13,7 @@ public record PosOrderCreationDto(
     public record PosOrderItemCreationDto(
             @NotNull UUID posProductId,
             @NotNull Integer quantity,
-            BigDecimal priceOverride) {
+            BigDecimal priceOverride,
+            String itemName) {
     }
 }

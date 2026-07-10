@@ -78,9 +78,12 @@ public class RoomAssignmentService {
         // If the passed-in ex-tax is null or zero, recompute from effectiveRate.
         // A zero ex-tax with a non-zero inclusive rate means the caller had no rate at submission
         // time and we fell back to the room base rate above — the ex-tax must match effectiveRate.
+        // The tax rate is always derived from effectiveRate (never caller-supplied) so it's
+        // guaranteed to agree with whichever GST slab produced the ex-tax amount.
+        ChargeCode.RoomRentBreakdown breakdown = ChargeCode.computeRoomRentBreakdown(effectiveRate);
         BigDecimal effectiveExTax = (nightlyRateExTax != null && nightlyRateExTax.compareTo(BigDecimal.ZERO) > 0)
                 ? nightlyRateExTax
-                : ChargeCode.computeExTaxFromInclusive(effectiveRate);
+                : breakdown.exTaxAmount();
 
         RoomAssignment assignment = new RoomAssignment(
                 booking,
@@ -92,20 +95,23 @@ public class RoomAssignmentService {
                 effectiveRate
         );
         assignment.setNightlyRateExTax(effectiveExTax);
+        assignment.setTaxRate(breakdown.taxRate());
 
         return roomAssignmentRepository.save(assignment);
     }
 
     @Transactional
     public void updateNightlyRates(UUID bookingId, BigDecimal nightlyRate, BigDecimal nightlyRateExTax) {
+        ChargeCode.RoomRentBreakdown breakdown = ChargeCode.computeRoomRentBreakdown(nightlyRate);
         BigDecimal effectiveExTax = (nightlyRateExTax != null && nightlyRateExTax.compareTo(BigDecimal.ZERO) > 0)
                 ? nightlyRateExTax
-                : ChargeCode.computeExTaxFromInclusive(nightlyRate);
+                : breakdown.exTaxAmount();
         List<RoomAssignment> assignments = roomAssignmentRepository.findByBookingId(bookingId);
         for (RoomAssignment a : assignments) {
             if (a.getStatus() == RoomAssignmentStatus.SCHEDULED || a.getStatus() == RoomAssignmentStatus.ACTIVE) {
                 a.setNightlyRate(nightlyRate);
                 a.setNightlyRateExTax(effectiveExTax);
+                a.setTaxRate(breakdown.taxRate());
                 roomAssignmentRepository.save(a);
             }
         }
@@ -284,7 +290,9 @@ public class RoomAssignmentService {
                 dto.notes() != null ? dto.notes() : "Room shift from " + oldRoom.getNumber() + " to " + newRoom.getNumber(),
                 effectiveNewRate
         );
-        newAssignment.setNightlyRateExTax(ChargeCode.computeExTaxFromInclusive(effectiveNewRate));
+        ChargeCode.RoomRentBreakdown shiftBreakdown = ChargeCode.computeRoomRentBreakdown(effectiveNewRate);
+        newAssignment.setNightlyRateExTax(shiftBreakdown.exTaxAmount());
+        newAssignment.setTaxRate(shiftBreakdown.taxRate());
         roomAssignmentRepository.save(newAssignment);
 
         // 7. Handle folio rate adjustments for already-posted future charges

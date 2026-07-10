@@ -29,8 +29,6 @@ export interface BookingCreationDto {
   newTravelAgent?: NewTravelAgentDto;
   contactPersonId?: string;
   mealPlanType?: string;
-  mealPlanPricePerNight?: number;
-  mealPlanChildrenPricePerNight?: number;
   extraBeds?: number;
   extraBedRatePerNight?: number;
   extraBedChargeCode?: 'ROOM_RENT' | 'MISC';

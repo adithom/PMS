@@ -43,8 +43,6 @@ import com.adith.os.HMS.roomassignment.RoomAssignment;
 import com.adith.os.HMS.roomassignment.RoomAssignmentRepository;
 import com.adith.os.HMS.roomassignment.RoomAssignmentService;
 import com.adith.os.HMS.roomassignment.RoomAssignmentStatus;
-import com.adith.os.HMS.property.mealplan.PropertyMealPlan;
-import com.adith.os.HMS.property.mealplan.PropertyMealPlanRepository;
 import com.adith.os.HMS.travelagent.ContactPerson;
 import com.adith.os.HMS.travelagent.ContactPersonRepository;
 import com.adith.os.HMS.travelagent.TravelAgent;
@@ -75,7 +73,6 @@ public class BookingService {
     private final RoomAssignmentRepository roomAssignmentRepository;
     private final TravelAgentService travelAgentService;
     private final ContactPersonRepository contactPersonRepository;
-    private final PropertyMealPlanRepository mealPlanRepository;
     private final ReservationRepository reservationRepository;
     private final ReservationSequenceRepository reservationSequenceRepository;
 
@@ -92,7 +89,6 @@ public class BookingService {
                           RoomAssignmentRepository roomAssignmentRepository,
                           TravelAgentService travelAgentService,
                           ContactPersonRepository contactPersonRepository,
-                          PropertyMealPlanRepository mealPlanRepository,
                           ReservationRepository reservationRepository,
                           ReservationSequenceRepository reservationSequenceRepository) {
         this.propertyRepository = propertyRepository;
@@ -107,7 +103,6 @@ public class BookingService {
         this.roomAssignmentRepository = roomAssignmentRepository;
         this.travelAgentService = travelAgentService;
         this.contactPersonRepository = contactPersonRepository;
-        this.mealPlanRepository = mealPlanRepository;
         this.reservationRepository = reservationRepository;
         this.reservationSequenceRepository = reservationSequenceRepository;
     }
@@ -273,14 +268,6 @@ public class BookingService {
             booking.setReservation(savedReservation);
 
             if (bookingCreationDto.mealPlanType() != null) {
-                PropertyMealPlan plan = mealPlanRepository
-                        .findByPropertyIdAndMealPlanType(propertyId, bookingCreationDto.mealPlanType())
-                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                                "Meal plan " + bookingCreationDto.mealPlanType() + " is not configured for this property"));
-                if (!plan.isActive()) {
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                            "Meal plan " + bookingCreationDto.mealPlanType() + " is not active");
-                }
                 booking.setMealPlanType(bookingCreationDto.mealPlanType());
             }
 
@@ -828,31 +815,8 @@ public class BookingService {
             // Meal plan partial update
             if (Boolean.TRUE.equals(dto.clearMealPlan())) {
                 booking.setMealPlanType(null);
-                booking.setMealPlanPricePerNight(null);
-                booking.setMealPlanChildrenPricePerNight(null);
             } else if (dto.mealPlanType() != null) {
-                PropertyMealPlan plan = mealPlanRepository
-                        .findByPropertyIdAndMealPlanType(propertyId, dto.mealPlanType())
-                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                                "Meal plan " + dto.mealPlanType() + " is not configured for this property"));
-                if (!plan.isActive()) {
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                            "Meal plan " + dto.mealPlanType() + " is not active");
-                }
                 booking.setMealPlanType(dto.mealPlanType());
-                if (dto.mealPlanPricePerNight() != null) {
-                    booking.setMealPlanPricePerNight(dto.mealPlanPricePerNight());
-                }
-                if (dto.mealPlanChildrenPricePerNight() != null) {
-                    booking.setMealPlanChildrenPricePerNight(dto.mealPlanChildrenPricePerNight());
-                }
-            } else {
-                if (dto.mealPlanPricePerNight() != null) {
-                    booking.setMealPlanPricePerNight(dto.mealPlanPricePerNight());
-                }
-                if (dto.mealPlanChildrenPricePerNight() != null) {
-                    booking.setMealPlanChildrenPricePerNight(dto.mealPlanChildrenPricePerNight());
-                }
             }
 
             // Extra bed partial update
@@ -925,6 +889,10 @@ public class BookingService {
         roomAssignmentService.cancelAssignmentsForBooking(bookingId);
 
         Booking savedBooking = bookingRepository.save(booking);
+        // Close any still-open folio so a cancelled booking stops showing up on the
+        // front-desk/admin "open folios" billing worklist. Charges/balance are preserved
+        // for later collection — this only removes it from the active-guest dashboard.
+        folioService.closeOpenFoliosForBooking(bookingId);
 
         // If all bookings in the reservation are now cancelled, cancel the reservation too
         Reservation reservation = booking.getReservation();

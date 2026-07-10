@@ -46,6 +46,7 @@ function SettleNowModal({ isOpen, onClose, cart, location, propertyId: _property
           posProductId: e.product.id,
           quantity: e.quantity,
           ...(e.priceOverride != null ? { priceOverride: e.priceOverride } : {}),
+          ...(e.nameOverride ? { itemName: e.nameOverride } : {}),
         })),
         discountRate: orderDiscountRate > 0 ? orderDiscountRate : undefined,
       });
@@ -489,6 +490,7 @@ export default function PosInterface() {
           posProductId: e.product.id,
           quantity: e.quantity,
           ...(e.priceOverride != null ? { priceOverride: e.priceOverride } : {}),
+          ...(e.nameOverride ? { itemName: e.nameOverride } : {}),
         })),
         discountRate: orderDiscountRate > 0 ? orderDiscountRate : undefined,
       });
@@ -546,13 +548,13 @@ export default function PosInterface() {
     setTimeout(() => setSuccessMessage(null), 4000);
   };
 
-  const addToCart = (product: PosProduct, priceOverride?: number) => {
+  const addToCart = (product: PosProduct, priceOverride?: number, nameOverride?: string) => {
     setCart(prev => {
       const existing = prev.find(e => e.product.id === product.id);
       if (existing && !product.isPriceOverridable) {
         return prev.map(e => e.product.id === product.id ? { ...e, quantity: e.quantity + 1 } : e);
       }
-      return [...prev, { product, quantity: 1, priceOverride }];
+      return [...prev, { product, quantity: 1, priceOverride, nameOverride }];
     });
   };
 
@@ -785,7 +787,17 @@ export default function PosInterface() {
                       return (
                         <div key={`${entry.product.id}-${idx}`} className="flex items-center gap-3 py-3.5">
                           <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium text-gray-800 truncate">{entry.product.name}</div>
+                            {entry.product.isPriceOverridable ? (
+                              <input
+                                type="text"
+                                placeholder={entry.product.name}
+                                value={entry.nameOverride ?? ''}
+                                onChange={e => setCart(prev => prev.map((en, i) => i === idx ? { ...en, nameOverride: e.target.value } : en))}
+                                className="w-full border border-gray-200 rounded px-1.5 py-0.5 text-sm font-medium text-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                            ) : (
+                              <div className="text-sm font-medium text-gray-800 truncate">{entry.product.name}</div>
+                            )}
                             {entry.product.isPriceOverridable ? (
                               <div className="relative mt-0.5 w-24">
                                 <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none">₹</span>
@@ -937,7 +949,17 @@ export default function PosInterface() {
                       return (
                         <div key={`${entry.product.id}-${idx}`} className="flex items-center gap-3 py-3.5">
                           <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium text-gray-800 truncate">{entry.product.name}</div>
+                            {entry.product.isPriceOverridable ? (
+                              <input
+                                type="text"
+                                placeholder={entry.product.name}
+                                value={entry.nameOverride ?? ''}
+                                onChange={e => setCart(prev => prev.map((en, i) => i === idx ? { ...en, nameOverride: e.target.value } : en))}
+                                className="w-full border border-gray-200 rounded px-1.5 py-0.5 text-sm font-medium text-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                            ) : (
+                              <div className="text-sm font-medium text-gray-800 truncate">{entry.product.name}</div>
+                            )}
                             {entry.product.isPriceOverridable ? (
                               <div className="relative mt-0.5 w-24">
                                 <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none">₹</span>

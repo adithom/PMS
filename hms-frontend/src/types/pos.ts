@@ -109,6 +109,7 @@ export interface PosOrderCreationDto {
     posProductId: string;
     quantity: number;
     priceOverride?: number;
+    itemName?: string;
   }[];
   discountRate?: number;
 }
@@ -209,4 +210,5 @@ export interface CartEntry {
   product: PosProduct;
   quantity: number;
   priceOverride?: number;
+  nameOverride?: string;
 }

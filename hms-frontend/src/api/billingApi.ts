@@ -182,6 +182,13 @@ const billingApi = {
     return apiClient.post(`/properties/${propertyId}/reservations/${reservationId}/bills/generate?${params.toString()}`);
   },
 
+  // SEPARATE-billing reservations: generate one bill per folio instead of a single group bill
+  generateBillsForAllFolios: async (propertyId: string, reservationId: string, guestGstNumber?: string): Promise<MultiBillDto> => {
+    const params = new URLSearchParams();
+    if (guestGstNumber) params.append('guestGstNumber', guestGstNumber);
+    return apiClient.post(`/properties/${propertyId}/reservations/${reservationId}/bills/generate-per-folio?${params.toString()}`);
+  },
+
   voidGroupBill: async (propertyId: string, reservationId: string, groupBillId: string, reason: string): Promise<GroupBill> => {
     const params = new URLSearchParams({ reason });
     return apiClient.post(`/properties/${propertyId}/reservations/${reservationId}/bills/${groupBillId}/void?${params.toString()}`);
@@ -195,6 +202,11 @@ const billingApi = {
   // Get all bills (including voided) for a folio
   getBillsForFolio: async (folioId: string): Promise<BillDto[]> => {
     return apiClient.get(`/bills/folio/${folioId}`);
+  },
+
+  // Get all individual (non-group) bills across every folio under a reservation
+  getBillsForReservation: async (reservationId: string): Promise<BillDto[]> => {
+    return apiClient.get(`/bills/reservation/${reservationId}`);
   },
 
   // Get a fresh pre-signed download URL for an existing individual bill

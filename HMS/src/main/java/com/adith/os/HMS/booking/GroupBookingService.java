@@ -165,23 +165,13 @@ public class GroupBookingService {
             booking.setCurrency(dto.currency());
             long nights = ChronoUnit.DAYS.between(dto.checkIn(), dto.checkOut());
 
-            // Meal plan (applied uniformly to all rooms)
-            int adults = vr.request().adults() != null ? vr.request().adults() : 1;
-            int children = vr.request().children() != null ? vr.request().children() : 0;
-            BigDecimal mealNightly = BigDecimal.ZERO;
+            // Meal plan (applied uniformly to all rooms) — a non-priced trigger only
             if (dto.mealPlanType() != null) {
                 booking.setMealPlanType(dto.mealPlanType());
-                BigDecimal adultPrice = dto.mealPlanPricePerNight() != null ? dto.mealPlanPricePerNight() : BigDecimal.ZERO;
-                BigDecimal childPrice = dto.mealPlanChildrenPricePerNight() != null ? dto.mealPlanChildrenPricePerNight() : BigDecimal.ZERO;
-                booking.setMealPlanPricePerNight(adultPrice);
-                booking.setMealPlanChildrenPricePerNight(childPrice);
-                mealNightly = adultPrice.multiply(BigDecimal.valueOf(adults))
-                        .add(childPrice.multiply(BigDecimal.valueOf(children)));
             }
 
             BigDecimal roomNightly = vr.request().nightlyRate() != null ? vr.request().nightlyRate() : BigDecimal.ZERO;
-            BigDecimal totalNightly = roomNightly.add(mealNightly);
-            BigDecimal bookingTotal = nights > 0 ? totalNightly.multiply(BigDecimal.valueOf(nights)) : BigDecimal.ZERO;
+            BigDecimal bookingTotal = nights > 0 ? roomNightly.multiply(BigDecimal.valueOf(nights)) : BigDecimal.ZERO;
             booking.setTotalPrice(bookingTotal);
             booking.setPaidAmount(BigDecimal.ZERO);
 
@@ -274,7 +264,11 @@ public class GroupBookingService {
         reservation.setCurrency("INR");
         reservation.setGroupReference(dto.notes());
         reservation.setStatus(ReservationStatus.PENDING);
-        reservation.setDefaultRouteToMaster(false);
+        // Same rule as createGroupBooking: consolidated billing only makes sense with multiple
+        // rooms — a single-room reservation has no separate "master" to route charges to.
+        // roomRequests is (unitId, count) pairs, so total room count is the sum of counts.
+        int totalRoomCount = dto.roomRequests().stream().mapToInt(QuickHoldRoomRequestDto::count).sum();
+        reservation.setDefaultRouteToMaster(totalRoomCount > 1);
         reservation.setReservationNumber(
                 generateReservationNumber(property, LocalDate.now(ZoneId.of("Asia/Kolkata"))));
         Reservation savedReservation = reservationRepository.save(reservation);
@@ -312,6 +306,7 @@ public class GroupBookingService {
                 booking.setCurrency("INR");
                 booking.setPaidAmount(BigDecimal.ZERO);
                 booking.setTwinBed(false);
+                booking.setMealPlanType(com.adith.os.HMS.property.mealplan.MealPlanType.CP);
                 if (defaultRate != null) {
                     booking.setExpectedNightlyRate(defaultRate);
                     booking.setTotalPrice(defaultRate.multiply(BigDecimal.valueOf(Math.max(nights, 0))));
@@ -464,12 +459,6 @@ public class GroupBookingService {
             for (Booking b : allBookings) {
                 if (hasMealPlanUpdate) {
                     b.setMealPlanType(dto.mealPlanType());
-                    if (dto.mealPlanPricePerNight() != null) {
-                        b.setMealPlanPricePerNight(dto.mealPlanPricePerNight());
-                    }
-                    if (dto.mealPlanChildrenPricePerNight() != null) {
-                        b.setMealPlanChildrenPricePerNight(dto.mealPlanChildrenPricePerNight());
-                    }
                 }
                 if (hasBookingSourceUpdate) {
                     b.setBookingSource(dto.bookingSource());
@@ -501,33 +490,18 @@ public class GroupBookingService {
                 // Per-booking meal plan (legacy path — new UI sends at reservation level)
                 if (bu.mealPlanType() != null) {
                     booking.setMealPlanType(bu.mealPlanType());
-                    if (bu.mealPlanPricePerNight() != null) {
-                        booking.setMealPlanPricePerNight(bu.mealPlanPricePerNight());
-                    }
-                    if (bu.mealPlanChildrenPricePerNight() != null) {
-                        booking.setMealPlanChildrenPricePerNight(bu.mealPlanChildrenPricePerNight());
-                    }
                 }
 
                 if (bu.nightlyRate() != null) {
                     long nights = ChronoUnit.DAYS.between(booking.getCheckIn(), booking.getCheckOut());
-                    int adults = booking.getAdults() != null ? booking.getAdults() : 1;
-                    int children = booking.getChildren() != null ? booking.getChildren() : 0;
                     int extraBeds = booking.getExtraBeds() != null ? booking.getExtraBeds() : 0;
 
-                    BigDecimal mealNightly = BigDecimal.ZERO;
-                    if (booking.getMealPlanType() != null) {
-                        BigDecimal adultRate = booking.getMealPlanPricePerNight() != null ? booking.getMealPlanPricePerNight() : BigDecimal.ZERO;
-                        BigDecimal childRate = booking.getMealPlanChildrenPricePerNight() != null ? booking.getMealPlanChildrenPricePerNight() : BigDecimal.ZERO;
-                        mealNightly = adultRate.multiply(BigDecimal.valueOf(adults))
-                                .add(childRate.multiply(BigDecimal.valueOf(children)));
-                    }
                     BigDecimal extraBedNightly = BigDecimal.ZERO;
                     if (extraBeds > 0 && booking.getExtraBedRatePerNight() != null) {
                         extraBedNightly = booking.getExtraBedRatePerNight().multiply(BigDecimal.valueOf(extraBeds));
                     }
 
-                    BigDecimal totalNightly = bu.nightlyRate().add(mealNightly).add(extraBedNightly);
+                    BigDecimal totalNightly = bu.nightlyRate().add(extraBedNightly);
                     booking.setTotalPrice(totalNightly.multiply(BigDecimal.valueOf(Math.max(nights, 0))));
                     booking.setExpectedNightlyRate(bu.nightlyRate());
                 }
@@ -652,6 +626,9 @@ public class GroupBookingService {
             booking.setCancellationReason(reason.trim());
         }
         bookingRepository.save(booking);
+        // Close any still-open folio so the cancelled room stops showing on the
+        // front-desk/admin "open folios" billing worklist.
+        folioService.closeOpenFoliosForBooking(bookingId);
 
         List<Booking> allBookings = bookingRepository.findByReservationId(reservationId);
         boolean allCancelled = allBookings.stream().allMatch(Booking::isCancelled);
@@ -681,6 +658,7 @@ public class GroupBookingService {
                 booking.setCancelled(true);
                 bookingRepository.save(booking);
             }
+            folioService.closeOpenFoliosForBooking(booking.getId());
         }
 
         reservation.setStatus(ReservationStatus.CANCELLED);
@@ -741,10 +719,6 @@ public class GroupBookingService {
                 if (!activeRooms.isEmpty()) {
                     newTotal = activeRooms.get(0).getBaseRate().multiply(BigDecimal.valueOf(newNights));
                 }
-            }
-            if (booking.getMealPlanPricePerNight() != null) {
-                newTotal = newTotal.add(
-                        booking.getMealPlanPricePerNight().multiply(BigDecimal.valueOf(newNights)));
             }
             booking.setTotalPrice(newTotal);
 
@@ -907,7 +881,6 @@ public class GroupBookingService {
                             b.getSpecialRequests(),
                             b.isTwinBed(),
                             unitBaseRate,
-                            b.getMealPlanPricePerNight(),
                             b.getMealPlanType(),
                             b.getExtraBeds(),
                             displayNightlyRate

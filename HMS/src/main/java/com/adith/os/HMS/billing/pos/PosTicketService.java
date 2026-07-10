@@ -141,7 +141,11 @@ public class PosTicketService {
                     PosOrderItem item = new PosOrderItem();
                     item.setPosOrder(order);
                     item.setPosProduct(product);
-                    item.setItemName(product.getName());
+                    if (product.isPriceOverridable() && itemDto.itemName() != null && !itemDto.itemName().isBlank()) {
+                        item.setItemName(itemDto.itemName());
+                    } else {
+                        item.setItemName(product.getName());
+                    }
                     item.setQuantity(itemDto.quantity());
 
                     BigDecimal unitPrice;

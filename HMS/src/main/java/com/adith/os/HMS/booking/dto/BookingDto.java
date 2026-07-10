@@ -88,8 +88,6 @@ public record BookingDto(
 
         MealPlanType mealPlanType,
         String mealPlanDisplayName,
-        BigDecimal mealPlanPricePerNight,
-        BigDecimal mealPlanChildrenPricePerNight,
 
         Integer extraBeds,
         BigDecimal extraBedRatePerNight,

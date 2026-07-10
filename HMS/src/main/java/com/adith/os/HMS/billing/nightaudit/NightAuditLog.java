@@ -36,12 +36,6 @@ public class NightAuditLog {
     private int errors;
 
     @Column(nullable = false, columnDefinition = "integer not null default 0")
-    private int mealPlanChargesPosted;
-
-    @Column(nullable = false, columnDefinition = "integer not null default 0")
-    private int mealPlanChargesSkipped;
-
-    @Column(nullable = false, columnDefinition = "integer not null default 0")
     private int extraBedChargesPosted;
 
     @Column(nullable = false, columnDefinition = "integer not null default 0")
@@ -62,7 +56,6 @@ public class NightAuditLog {
     public NightAuditLog(LocalDate auditDate, String runType,
                          int totalAssignments, int chargesPosted,
                          int chargesSkipped, int errors,
-                         int mealPlanChargesPosted, int mealPlanChargesSkipped,
                          int extraBedChargesPosted, int extraBedChargesSkipped,
                          String errorSummary) {
         this.auditDate = auditDate;
@@ -71,8 +64,6 @@ public class NightAuditLog {
         this.chargesPosted = chargesPosted;
         this.chargesSkipped = chargesSkipped;
         this.errors = errors;
-        this.mealPlanChargesPosted = mealPlanChargesPosted;
-        this.mealPlanChargesSkipped = mealPlanChargesSkipped;
         this.extraBedChargesPosted = extraBedChargesPosted;
         this.extraBedChargesSkipped = extraBedChargesSkipped;
         this.errorSummary = errorSummary;
@@ -86,8 +77,6 @@ public class NightAuditLog {
     public int getChargesPosted() { return chargesPosted; }
     public int getChargesSkipped() { return chargesSkipped; }
     public int getErrors() { return errors; }
-    public int getMealPlanChargesPosted() { return mealPlanChargesPosted; }
-    public int getMealPlanChargesSkipped() { return mealPlanChargesSkipped; }
     public int getExtraBedChargesPosted() { return extraBedChargesPosted; }
     public int getExtraBedChargesSkipped() { return extraBedChargesSkipped; }
     public String getErrorSummary() { return errorSummary; }

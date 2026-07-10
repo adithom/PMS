@@ -501,15 +501,12 @@ export default function ReservationDetailModal({ propertyId, reservationId, onCl
     groupReference: string;
     specialRequests: string;
     mealPlanType: 'CP' | 'MAP' | 'AP' | '';
-    mealPlanPricePerNight: string;
-    mealPlanChildrenPricePerNight: string;
     bookingSource: string;
     travelAgentId: string;
     travelAgentName: string;
   }
   const [resDetails, setResDetails] = useState<ResDetails>({
-    groupReference: '', specialRequests: '', mealPlanType: '',
-    mealPlanPricePerNight: '', mealPlanChildrenPricePerNight: '',
+    groupReference: '', specialRequests: '', mealPlanType: 'CP',
     bookingSource: '', travelAgentId: '', travelAgentName: '',
   });
   // Per-unit nightly rates (one per unit)
@@ -529,9 +526,7 @@ export default function ReservationDetailModal({ propertyId, reservationId, onCl
     setResDetails({
       groupReference: r.groupReference || '',
       specialRequests: r.specialRequests || '',
-      mealPlanType: (firstActive?.mealPlanType || '') as any,
-      mealPlanPricePerNight: firstActive?.mealPlanPricePerNight != null ? String(firstActive.mealPlanPricePerNight) : '',
-      mealPlanChildrenPricePerNight: '',
+      mealPlanType: (firstActive?.mealPlanType || 'CP') as any,
       bookingSource: r.bookingSource || '',
       travelAgentId: r.travelAgentId || '',
       travelAgentName: r.travelAgentName || '',
@@ -651,12 +646,6 @@ export default function ReservationDetailModal({ propertyId, reservationId, onCl
         groupReference: resDetails.groupReference || undefined,
         specialRequests: resDetails.specialRequests || undefined,
         mealPlanType: (resDetails.mealPlanType as any) || undefined,
-        mealPlanPricePerNight: resDetails.mealPlanType && resDetails.mealPlanPricePerNight
-          ? parseFloat(resDetails.mealPlanPricePerNight)
-          : undefined,
-        mealPlanChildrenPricePerNight: resDetails.mealPlanType && resDetails.mealPlanChildrenPricePerNight
-          ? parseFloat(resDetails.mealPlanChildrenPricePerNight)
-          : undefined,
         bookingSource: resDetails.bookingSource || undefined,
         travelAgentId: resDetails.travelAgentId || undefined,
         bookingUpdates,
@@ -909,46 +898,26 @@ export default function ReservationDetailModal({ propertyId, reservationId, onCl
                   {isEditable && (
                     <div className="rounded-xl border border-slate-200 bg-white p-4">
                       <p className={sectionHeadingCls}>Meal Plan (all rooms)</p>
-                      <div className="space-y-3">
-                        <div>
-                          <label className={labelCls}>Plan</label>
-                          <select
-                            className={inputCls}
-                            value={resDetails.mealPlanType}
-                            onChange={e => setResDetails(d => ({ ...d, mealPlanType: e.target.value as any }))}
-                          >
-                            <option value="">None</option>
-                            <option value="CP">CP — Breakfast only</option>
-                            <option value="MAP">MAP — Breakfast + 1 meal</option>
-                            <option value="AP">AP — All inclusive</option>
-                          </select>
-                        </div>
-                        {resDetails.mealPlanType && (
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <label className={labelCls}>Adult price / night ({reservation.currency})</label>
-                              <input
-                                type="number"
-                                min={0}
-                                step="0.01"
-                                className={inputCls}
-                                value={resDetails.mealPlanPricePerNight}
-                                onChange={e => setResDetails(d => ({ ...d, mealPlanPricePerNight: e.target.value }))}
-                              />
-                            </div>
-                            <div>
-                              <label className={labelCls}>Child price / night ({reservation.currency})</label>
-                              <input
-                                type="number"
-                                min={0}
-                                step="0.01"
-                                className={inputCls}
-                                value={resDetails.mealPlanChildrenPricePerNight}
-                                onChange={e => setResDetails(d => ({ ...d, mealPlanChildrenPricePerNight: e.target.value }))}
-                              />
-                            </div>
-                          </div>
-                        )}
+                      <p className="mb-2 text-xs text-slate-500">
+                        Informational only — fold the meal cost into the nightly rate above.
+                      </p>
+                      <div className="flex flex-wrap gap-4">
+                        {([
+                          { value: '', label: 'None' },
+                          { value: 'CP', label: 'CP — Breakfast only' },
+                          { value: 'MAP', label: 'MAP — Breakfast + 1 meal' },
+                          { value: 'AP', label: 'AP — All inclusive' },
+                        ] as const).map(opt => (
+                          <label key={opt.value} className="flex items-center gap-2 text-sm text-slate-700">
+                            <input
+                              type="checkbox"
+                              checked={resDetails.mealPlanType === opt.value}
+                              onChange={() => setResDetails(d => ({ ...d, mealPlanType: opt.value }))}
+                              className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                            />
+                            {opt.label}
+                          </label>
+                        ))}
                       </div>
                     </div>
                   )}

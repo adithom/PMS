@@ -118,8 +118,6 @@ export default function NightAuditModal({ onClose }: Props) {
             <Stat label="Already posted" value={result.skippedAlreadyPosted} />
             <Stat label="Folio not open" value={result.skippedFolioNotOpen} accent={result.skippedFolioNotOpen > 0 ? 'amber' : undefined} />
             <Stat label="No folio" value={result.skippedNoFolio} accent={result.skippedNoFolio > 0 ? 'amber' : undefined} />
-            <Stat label="Meal plan charges posted" value={result.mealPlanChargesPosted} accent="green" />
-            <Stat label="Meal plan charges skipped" value={result.mealPlanChargesSkipped} />
             <Stat label="Total assignments" value={result.totalAssignments} />
             <Stat label="Errors" value={result.errors} accent={result.errors > 0 ? 'red' : undefined} />
           </div>

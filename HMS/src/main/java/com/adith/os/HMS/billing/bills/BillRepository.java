@@ -53,4 +53,15 @@ public interface BillRepository extends JpaRepository<Bill, UUID> {
 
     @Query("SELECT b FROM Bill b JOIN FETCH b.folio f JOIN FETCH f.guest WHERE b.id IN :ids AND b.isVoided = false")
     List<Bill> findActiveByIds(@Param("ids") List<UUID> ids);
+
+    @Query("""
+            SELECT b FROM Bill b
+            JOIN FETCH b.folio f
+            JOIN FETCH f.property p
+            JOIN FETCH f.guest g
+            JOIN f.booking bk
+            WHERE bk.reservation.id = :reservationId
+            ORDER BY b.generatedAt DESC
+            """)
+    List<Bill> findByReservationId(@Param("reservationId") UUID reservationId);
 }

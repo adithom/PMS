@@ -219,6 +219,16 @@ public class Folio {
         this.guest = guest;
     }
 
+    /**
+     * The guest currently associated with this folio's booking, if any, falling back
+     * to the folio's own guest reference for booking-less (walk-in) folios.
+     * Booking.guest is the source of truth once a real guest is assigned post-creation —
+     * folio.guest is only a snapshot taken at folio-creation time and is never re-synced.
+     */
+    public Guest getEffectiveGuest() {
+        return (booking != null && booking.getGuest() != null) ? booking.getGuest() : guest;
+    }
+
     public Property getProperty() {
         return property;
     }

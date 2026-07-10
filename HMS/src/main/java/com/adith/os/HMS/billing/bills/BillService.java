@@ -194,6 +194,59 @@ public class BillService {
                 .toList();
     }
 
+    /**
+     * SEPARATE-billing reservations don't route charges to a master folio, so the group-bill
+     * mechanism (which only bills routeToMaster charges) has nothing to consolidate. This
+     * generates an individual bill per folio instead — one per room — skipping folios that
+     * have no unbilled charges or already have an active bill, so it's safe to re-run.
+     */
+    @Transactional
+    public MultiBillDto generateBillsForReservation(UUID propertyId, UUID reservationId, String guestGstNumber) {
+        List<Booking> bookings = bookingRepository.findByReservationId(reservationId);
+        if (bookings.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No bookings found for this reservation");
+        }
+        Reservation reservation = bookings.get(0).getReservation();
+        if (reservation == null || !reservation.getProperty().getId().equals(propertyId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Reservation does not belong to this property");
+        }
+
+        List<BillDto> allBills = new ArrayList<>();
+        for (Booking booking : bookings) {
+            Folio folio = booking.getFolio();
+            if (folio == null) continue;
+
+            long activeBills = billRepository.countByFolioIdAndIsVoidedFalse(folio.getId());
+            if (activeBills > 0) continue;
+
+            List<FolioCharge> unbilled = folio.getCharges() == null ? List.of()
+                    : folio.getCharges().stream()
+                            .filter(c -> c.getBill() == null && c.getGroupBill() == null)
+                            .toList();
+            if (unbilled.isEmpty()) continue;
+
+            // "Generate Bills" claims every unbilled charge for its own room, superseding any
+            // pending master-routing — this is the one-click alternative to a master group bill,
+            // not a supplement to it.
+            unbilled.stream().filter(FolioCharge::isRouteToMaster).forEach(c -> c.setRouteToMaster(false));
+            folioChargeRepository.saveAll(unbilled);
+
+            allBills.addAll(generateMultiBill(folio.getId(), guestGstNumber, false).bills());
+        }
+
+        if (allBills.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "No unbilled charges available across any folio in this reservation.");
+        }
+        return new MultiBillDto(allBills);
+    }
+
+    public List<BillDto> getBillsForReservation(UUID reservationId) {
+        return billRepository.findByReservationId(reservationId).stream()
+                .map(billMapper::toLedgerRowDto)
+                .toList();
+    }
+
     public String generateDownloadUrl(UUID billId) {
         Bill bill = billRepository.findById(billId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Bill not found"));
@@ -284,7 +337,7 @@ public class BillService {
         try (ZipOutputStream zip = new ZipOutputStream(new BufferedOutputStream(out))) {
             for (List<Bill> batch : byBatch.values()) {
                 String guestName = batch.stream()
-                        .map(b -> b.getFolio().getGuest())
+                        .map(b -> b.getFolio().getEffectiveGuest())
                         .filter(g -> g != null)
                         .findFirst()
                         .map(g -> sanitizeName(g.getFirstName() + " " + g.getLastName()))

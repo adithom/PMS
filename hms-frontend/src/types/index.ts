@@ -25,16 +25,6 @@ export interface Property {
 
 export type MealPlanType = 'CP' | 'MAP' | 'AP';
 
-export interface MealPlan {
-  id: string;
-  propertyId: string;
-  mealPlanType: MealPlanType;
-  displayName: string;
-  pricePerNight: number;
-  childrenPricePerNight: number;
-  active: boolean;
-}
-
 export interface Room {
   roomId?: string;
   number: string;
@@ -152,8 +142,6 @@ export interface Booking {
   contactPersonName?: string;
   mealPlanType?: MealPlanType;
   mealPlanDisplayName?: string;
-  mealPlanPricePerNight?: number;
-  mealPlanChildrenPricePerNight?: number;
   extraBeds?: number;
   extraBedRatePerNight?: number;
   extraBedChargeCode?: 'ROOM_RENT' | 'MISC';

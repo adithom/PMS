@@ -3,7 +3,7 @@ import type { PosProduct } from '../../types/pos';
 
 interface ProductCardProps {
     product: PosProduct;
-    onAdd: (product: PosProduct, priceOverride?: number) => void;
+    onAdd: (product: PosProduct, priceOverride?: number, nameOverride?: string) => void;
 }
 
 export default function ProductCard({ product, onAdd }: ProductCardProps) {
@@ -12,11 +12,13 @@ export default function ProductCard({ product, onAdd }: ProductCardProps) {
 
     const [enteringPrice, setEnteringPrice] = useState(false);
     const [customPrice, setCustomPrice] = useState('');
+    const [customName, setCustomName] = useState('');
     const inputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         if (enteringPrice) {
             setCustomPrice('');
+            setCustomName('');
             inputRef.current?.focus();
         }
     }, [enteringPrice]);
@@ -33,14 +35,15 @@ export default function ProductCard({ product, onAdd }: ProductCardProps) {
     const handleConfirmPrice = () => {
         const price = parseFloat(customPrice);
         if (!price || price <= 0) return;
-        onAdd(product, price);
+        onAdd(product, price, customName.trim() || undefined);
         setEnteringPrice(false);
         setCustomPrice('');
+        setCustomName('');
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter') handleConfirmPrice();
-        if (e.key === 'Escape') { setEnteringPrice(false); setCustomPrice(''); }
+        if (e.key === 'Escape') { setEnteringPrice(false); setCustomPrice(''); setCustomName(''); }
     };
 
     return (
@@ -78,10 +81,18 @@ export default function ProductCard({ product, onAdd }: ProductCardProps) {
 
             {enteringPrice ? (
                 <div className="px-3 pb-3 sm:px-4 sm:pb-4 space-y-2" onClick={e => e.stopPropagation()}>
+                    <input
+                        ref={inputRef}
+                        type="text"
+                        placeholder={product.name}
+                        value={customName}
+                        onChange={e => setCustomName(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        className="w-full border border-blue-400 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
                     <div className="relative">
                         <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">₹</span>
                         <input
-                            ref={inputRef}
                             type="number"
                             min="0"
                             step="0.01"

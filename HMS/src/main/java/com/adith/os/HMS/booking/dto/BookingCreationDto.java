@@ -62,13 +62,7 @@ public record BookingCreationDto(
 
         UUID contactPersonId,        // Optional — contact person at the travel agent for this booking
 
-        MealPlanType mealPlanType,   // Optional — select a meal plan for this booking
-
-        @PositiveOrZero(message = "Meal plan price cannot be negative")
-        BigDecimal mealPlanPricePerNight,
-
-        @PositiveOrZero(message = "Children meal plan price cannot be negative")
-        BigDecimal mealPlanChildrenPricePerNight,
+        MealPlanType mealPlanType,   // Optional — select a meal plan for this booking (non-priced trigger)
 
         @PositiveOrZero(message = "Extra beds cannot be negative")
         Integer extraBeds,
@@ -101,6 +95,7 @@ public record BookingCreationDto(
         if (currency == null || currency.isBlank()) currency = "INR";
         if (nightlyRate == null) nightlyRate = BigDecimal.ZERO;
         if (paidAmount == null) paidAmount = BigDecimal.ZERO;
+        if (mealPlanType == null) mealPlanType = MealPlanType.CP;
         if (travelAgentId != null && newTravelAgent != null) {
             throw new IllegalArgumentException("Provide either travelAgentId OR newTravelAgent, not both");
         }

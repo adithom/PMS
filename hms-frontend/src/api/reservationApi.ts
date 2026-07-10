@@ -26,10 +26,8 @@ export interface GroupBookingCreationDto {
   currency?: string;
   billingMode?: 'SEPARATE' | 'CONSOLIDATED';
   travelAgentId?: string;
-  // Meal plan applied to all rooms
+  // Meal plan applied to all rooms — a non-priced trigger only
   mealPlanType?: string;
-  mealPlanPricePerNight?: number;
-  mealPlanChildrenPricePerNight?: number;
   // Booking source
   bookingSource?: string;
   // Advance payment on organizer's folio
@@ -55,7 +53,6 @@ export interface BookingSummaryDto {
   specialRequests: string | null;
   isTwinBed: boolean;
   unitBaseRate: number | null;
-  mealPlanPricePerNight: number | null;
   mealPlanType: 'CP' | 'MAP' | 'AP' | null;
   extraBeds: number | null;
   nightlyRate: number | null;
@@ -92,8 +89,6 @@ export interface BookingOccupancyUpdateDto {
   nightlyRate?: number;
   isTwinBed?: boolean;
   mealPlanType?: 'CP' | 'MAP' | 'AP' | null;
-  mealPlanPricePerNight?: number;
-  mealPlanChildrenPricePerNight?: number;
   extraBeds?: number;
   extraBedRatePerNight?: number;
 }
@@ -116,8 +111,6 @@ export interface ReservationUpdateDto {
   specialRequests?: string;
   bookingUpdates?: BookingOccupancyUpdateDto[];
   mealPlanType?: 'CP' | 'MAP' | 'AP' | null;
-  mealPlanPricePerNight?: number;
-  mealPlanChildrenPricePerNight?: number;
   bookingSource?: string;
   travelAgentId?: string;
 }

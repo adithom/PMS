@@ -24,12 +24,6 @@ public record BookingOccupancyUpdateDto(
 
         MealPlanType mealPlanType,
 
-        @PositiveOrZero
-        BigDecimal mealPlanPricePerNight,
-
-        @PositiveOrZero
-        BigDecimal mealPlanChildrenPricePerNight,
-
         @PositiveOrZero(message = "Extra beds cannot be negative")
         Integer extraBeds,
 

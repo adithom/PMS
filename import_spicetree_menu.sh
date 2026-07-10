@@ -2,7 +2,8 @@
 set -euo pipefail
 
 BASE_URL="http://localhost:8080/api"
-LOCATION_ID="06bead74-d72e-4874-a6b4-9b5307575274"
+PROPERTY_CODE="STR"
+LOCATION_NAME="Spicetree"
 TOKEN_FILE="$HOME/.hms_token"
 
 if [ ! -f "$TOKEN_FILE" ]; then
@@ -10,6 +11,25 @@ if [ ! -f "$TOKEN_FILE" ]; then
   exit 1
 fi
 TOKEN=$(cat "$TOKEN_FILE")
+
+PROPERTY_ID=$(http -b GET "$BASE_URL/properties/code/$PROPERTY_CODE" \
+  "Authorization:Bearer $TOKEN" | jq -r '.id')
+
+if [ -z "$PROPERTY_ID" ] || [ "$PROPERTY_ID" = "null" ]; then
+  echo "No property found with code $PROPERTY_CODE"
+  exit 1
+fi
+echo "Property $PROPERTY_CODE → $PROPERTY_ID" >&2
+
+LOCATION_ID=$(http -b GET "$BASE_URL/pos/locations" \
+  "Authorization:Bearer $TOKEN" \
+  propertyId=="$PROPERTY_ID" | jq -r --arg name "$LOCATION_NAME" '.[] | select(.name == $name) | .id')
+
+if [ -z "$LOCATION_ID" ] || [ "$LOCATION_ID" = "null" ]; then
+  echo "No POS location named '$LOCATION_NAME' found under property $PROPERTY_CODE"
+  exit 1
+fi
+echo "Location $LOCATION_NAME → $LOCATION_ID" >&2
 
 post_category() {
   local name="$1"

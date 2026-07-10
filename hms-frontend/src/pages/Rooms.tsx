@@ -4,8 +4,7 @@ import propertyApi from '../api/propertyApi';
 import roomApi from '../api/roomApi';
 import unitApi from '../api/unitApi';
 import availabilityApi from '../api/availabilityApi';
-import mealPlanApi from '../api/mealPlanApi';
-import type { Property, Room, UnitDto, MealPlan, MealPlanType } from '../types';
+import type { Property, Room, UnitDto } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 
 import BookingForm from "../components/Booking/BookingForm";
@@ -177,11 +176,6 @@ export default function Rooms() {
   const [unitsForManage, setUnitsForManage] = useState<UnitDto[]>([]);
   const [loadingUnitsManage, setLoadingUnitsManage] = useState(false);
   const [unitsManageError, setUnitsManageError] = useState<string | null>(null);
-
-  const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
-  const [loadingMealPlans, setLoadingMealPlans] = useState(false);
-  const [editingPlan, setEditingPlan] = useState<{ type: MealPlanType; adultPrice: string; childrenPrice: string } | null>(null);
-  const [savingPlan, setSavingPlan] = useState(false);
 
   const [editingExtraBedRate, setEditingExtraBedRate] = useState<string | null>(null);
   const [savingExtraBedRate, setSavingExtraBedRate] = useState(false);
@@ -369,46 +363,10 @@ export default function Rooms() {
     }
   };
 
-  const loadMealPlans = async (propertyId: string) => {
-    setLoadingMealPlans(true);
-    try {
-      const data = await mealPlanApi.getByProperty(propertyId);
-      setMealPlans(data || []);
-    } catch {
-      setMealPlans([]);
-    } finally {
-      setLoadingMealPlans(false);
-    }
-  };
-
   const handleManageProperty = (property: Property) => {
     setDialog({ type: 'view_property', property });
-    setEditingPlan(null);
     setEditingExtraBedRate(null);
     void loadUnitsForManage(property.id);
-    void loadMealPlans(property.id);
-  };
-
-  const handleSaveMealPlan = async () => {
-    if (!editingPlan || dialog?.type !== 'view_property') return;
-    const adultPrice = parseFloat(editingPlan.adultPrice);
-    if (isNaN(adultPrice) || adultPrice <= 0) return;
-    const childrenPrice = parseFloat(editingPlan.childrenPrice) || 0;
-    setSavingPlan(true);
-    try {
-      const existing = mealPlans.find(p => p.mealPlanType === editingPlan.type);
-      if (existing) {
-        await mealPlanApi.update(dialog.property.id, existing.id, { pricePerNight: adultPrice, childrenPricePerNight: childrenPrice });
-      } else {
-        await mealPlanApi.create(dialog.property.id, { mealPlanType: editingPlan.type, pricePerNight: adultPrice, childrenPricePerNight: childrenPrice });
-      }
-      await loadMealPlans(dialog.property.id);
-      setEditingPlan(null);
-    } catch (err: any) {
-      alert(`Failed to save meal plan: ${err.message}`);
-    } finally {
-      setSavingPlan(false);
-    }
   };
 
   const handleSaveExtraBedRate = async () => {
@@ -810,113 +768,6 @@ export default function Rooms() {
                       </div>
                     </button>
                   ))
-                )}
-              </div>
-            </div>
-
-            {/* Meal Plans Section */}
-            <div>
-              <div className="border-b border-slate-100 pb-2">
-                <h3 className="text-sm font-bold tracking-tight text-slate-900">Meal Plans</h3>
-              </div>
-              <div className="mt-3 space-y-2">
-                {loadingMealPlans ? (
-                  <p className="animate-pulse py-4 text-xs text-slate-400">Loading meal plans...</p>
-                ) : (
-                  (['CP', 'MAP', 'AP'] as MealPlanType[]).map((planType) => {
-                    const plan = mealPlans.find(p => p.mealPlanType === planType);
-                    const isEditing = editingPlan?.type === planType;
-                    const PLAN_LABELS: Record<MealPlanType, string> = {
-                      CP: 'Continental Plan',
-                      MAP: 'Modified American Plan',
-                      AP: 'All Inclusive',
-                    };
-                    return (
-                      <div key={planType} className="flex items-center justify-between rounded-xl border border-slate-100 bg-white px-3 py-2.5">
-                        <div>
-                          <p className="text-sm font-bold text-slate-900">{planType}</p>
-                          <p className="text-[11px] font-medium text-slate-400">{PLAN_LABELS[planType]}</p>
-                        </div>
-                        {isEditing ? (
-                          <div className="flex flex-col gap-2">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-slate-500 w-20 shrink-0">Adult/person</span>
-                              <input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                className="w-24 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 shadow-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
-                                value={editingPlan!.adultPrice}
-                                onChange={e => setEditingPlan({ ...editingPlan!, adultPrice: e.target.value })}
-                                disabled={savingPlan}
-                                autoFocus
-                                onKeyDown={e => { if (e.key === 'Enter') void handleSaveMealPlan(); if (e.key === 'Escape') setEditingPlan(null); }}
-                              />
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-slate-500 w-20 shrink-0">Child/person</span>
-                              <input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                className="w-24 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 shadow-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
-                                value={editingPlan!.childrenPrice}
-                                onChange={e => setEditingPlan({ ...editingPlan!, childrenPrice: e.target.value })}
-                                disabled={savingPlan}
-                                onKeyDown={e => { if (e.key === 'Enter') void handleSaveMealPlan(); if (e.key === 'Escape') setEditingPlan(null); }}
-                              />
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 disabled:opacity-50"
-                                onClick={() => void handleSaveMealPlan()}
-                                disabled={savingPlan}
-                              >
-                                {savingPlan ? 'Saving…' : 'Save'}
-                              </button>
-                              <button
-                                type="button"
-                                className="text-xs font-medium text-slate-400 hover:text-slate-600"
-                                onClick={() => setEditingPlan(null)}
-                                disabled={savingPlan}
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                        ) : plan ? (
-                          <div className="flex items-center gap-3">
-                            <div className="text-right">
-                              <p className="text-sm font-semibold text-slate-900">
-                                ₹{plan.pricePerNight.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                <span className="ml-1 text-[11px] font-medium text-slate-400">adult/night</span>
-                              </p>
-                              <p className="text-xs text-slate-400">
-                                ₹{(plan.childrenPricePerNight ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                <span className="ml-1 text-[11px]">child/night</span>
-                              </p>
-                            </div>
-                            <button
-                              type="button"
-                              className="text-xs font-bold text-emerald-600 hover:text-emerald-700"
-                              onClick={() => setEditingPlan({ type: planType, adultPrice: String(plan.pricePerNight), childrenPrice: String(plan.childrenPricePerNight ?? 0) })}
-                            >
-                              Edit
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            className="text-xs font-bold text-slate-400 hover:text-emerald-600"
-                            onClick={() => setEditingPlan({ type: planType, adultPrice: '', childrenPrice: '' })}
-                          >
-                            Set price
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })
                 )}
               </div>
             </div>
