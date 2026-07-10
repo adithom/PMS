@@ -1,5 +1,6 @@
 package com.adith.os.HMS.config;
 
+import com.adith.os.HMS.billing.pos.PosSeeder;
 import com.adith.os.HMS.security.Role;
 import com.adith.os.HMS.security.User;
 import com.adith.os.HMS.security.UserRepository;
@@ -9,6 +10,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 @Configuration
@@ -26,12 +28,16 @@ public class DatabaseSeeder {
     public CommandLineRunner seedDatabase(
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
-            RoomInventorySeeder roomInventorySeeder
+            JdbcTemplate jdbcTemplate,
+            RoomInventorySeeder roomInventorySeeder,
+            PosSeeder posSeeder
     ) {
         return args -> {
             seedAdminUser(userRepository, passwordEncoder);
+            seedTemporaryGuest(jdbcTemplate);
             roomInventorySeeder.seedAll();
             roomInventorySeeder.syncAllTotalRooms();
+            posSeeder.seedChefsSpecial();
         };
     }
 
@@ -46,6 +52,19 @@ public class DatabaseSeeder {
             log.info("[Seeder] User '{}' created successfully.", myUsername);
         } else {
             log.info("[Seeder] User '{}' already exists. Skipping.", myUsername);
+        }
+    }
+
+    private void seedTemporaryGuest(JdbcTemplate jdbc) {
+        // INSERT ... ON CONFLICT DO NOTHING is idempotent — safe to run on every startup.
+        int rows = jdbc.update(
+                "INSERT INTO guest (id, first_name, last_name, created_at) " +
+                "VALUES (?::uuid, ?, ?, now()) ON CONFLICT (id) DO NOTHING",
+                SystemConstants.TEMP_GUEST_ID.toString(),
+                SystemConstants.TEMP_GUEST_FIRST_NAME,
+                SystemConstants.TEMP_GUEST_LAST_NAME);
+        if (rows > 0) {
+            log.info("[Seeder] Temporary Guest created with ID {}.", SystemConstants.TEMP_GUEST_ID);
         }
     }
 }

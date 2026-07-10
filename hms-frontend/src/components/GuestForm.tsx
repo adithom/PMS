@@ -62,7 +62,6 @@ export default function GuestForm({ guest, onSave, onCancel }: GuestFormProps) {
     const newErrors: Record<string, string> = {};
 
     if (!formData.firstName.trim()) newErrors.firstName = 'First name is required';
-    if (!formData.lastName.trim()) newErrors.lastName = 'Last name is required';
     
     if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = 'Invalid email format';
@@ -81,8 +80,8 @@ export default function GuestForm({ guest, onSave, onCancel }: GuestFormProps) {
       // Only send non-empty optional fields
       const payload: any = {
         firstName: formData.firstName.trim(),
-        lastName: formData.lastName.trim(),
       };
+      if (formData.lastName.trim()) payload.lastName = formData.lastName.trim();
 
       if (formData.email.trim()) payload.email = formData.email.trim();
       if (formData.phone.trim()) payload.phone = formData.phone.trim();
@@ -115,7 +114,7 @@ export default function GuestForm({ guest, onSave, onCancel }: GuestFormProps) {
         </label>
 
         <label>
-          <span className={labelCls}>Last Name *</span>
+          <span className={labelCls}>Last Name</span>
           <input type="text" name="lastName" value={formData.lastName} onChange={handleChange} disabled={submitting} placeholder="e.g. Doe" className={inputCls} />
           {errors.lastName && <p className="mt-1 text-xs text-rose-500">{errors.lastName}</p>}
         </label>

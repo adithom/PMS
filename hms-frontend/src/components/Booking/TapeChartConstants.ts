@@ -1,5 +1,5 @@
 // src/components/Booking/TapeChartConstants.ts
-import type { BookingStatus } from '../../types';
+import type { ReservationStatus } from '../../types';
 
 export const CELL_W = 110;
 export const CELL_H = 40;
@@ -14,14 +14,19 @@ export const SCROLL_EDGE_PX = 80;
 export const SCROLL_COOLDOWN_MS = 600;
 export const SCROLL_STEP_DAYS = 2;
 
-export const STATUS_COLORS: Record<BookingStatus, { bar: string; text: string; legend: string; label: string }> = {
-  CONFIRMED:   { bar: 'bg-blue-200/90',    text: 'text-blue-900',     legend: 'bg-blue-300',    label: 'Confirmed' },
-  CHECKED_IN:  { bar: 'bg-green-200/90',   text: 'text-green-900',    legend: 'bg-green-300',   label: 'Checked In' },
-  PENDING:     { bar: 'bg-amber-200/90',   text: 'text-amber-900',    legend: 'bg-amber-300',   label: 'Pending' },
-  CHECKED_OUT: { bar: 'bg-slate-300/90',   text: 'text-slate-800',    legend: 'bg-slate-300',   label: 'Checked Out' },
-  CANCELLED:   { bar: 'bg-gray-200/50',    text: 'text-gray-500',     legend: 'bg-gray-300',    label: 'Cancelled' },
-  NO_SHOW:     { bar: 'bg-rose-200/90',    text: 'text-rose-900',     legend: 'bg-rose-300',    label: 'No Show / Available' },
+export const STATUS_COLORS: Record<ReservationStatus | 'CANCELLED_BOOKING', { bar: string; text: string; legend: string; label: string }> = {
+  CONFIRMED:         { bar: 'bg-blue-200/90',    text: 'text-blue-900',     legend: 'bg-blue-300',    label: 'Confirmed' },
+  CHECKED_IN:        { bar: 'bg-green-200/90',   text: 'text-green-900',    legend: 'bg-green-300',   label: 'Checked In' },
+  PENDING:           { bar: 'bg-amber-200/90',   text: 'text-amber-900',    legend: 'bg-amber-300',   label: 'Pending' },
+  CHECKED_OUT:       { bar: 'bg-slate-300/90',   text: 'text-slate-800',    legend: 'bg-slate-300',   label: 'Checked Out' },
+  CANCELLED:         { bar: 'bg-gray-200/50',    text: 'text-gray-500',     legend: 'bg-gray-300',    label: 'Cancelled' },
+  CANCELLED_BOOKING: { bar: 'bg-rose-200/50',    text: 'text-rose-500',     legend: 'bg-rose-300',    label: 'Room Cancelled' },
 };
+
+export function bookingStatusKey(reservationStatus: ReservationStatus, cancelled: boolean): ReservationStatus | 'CANCELLED_BOOKING' {
+  if (cancelled) return 'CANCELLED_BOOKING';
+  return reservationStatus;
+}
 
 export const cn = (...c: Array<string | false | null | undefined>) => c.filter(Boolean).join(' ');
 

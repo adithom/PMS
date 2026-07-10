@@ -30,6 +30,8 @@ public class SchemaConstraintInitializer implements ApplicationRunner {
         fixReservationNumberConstraint();
         fixPosTicketStatusConstraint();
         zeroMealPlanPrices();
+        dropStaleBookingStatusColumn();
+        dropStaleGuestLastNameNotNull();
     }
 
     /**
@@ -128,6 +130,36 @@ public class SchemaConstraintInitializer implements ApplicationRunner {
             log.info("pos_ticket status constraint allows OPEN, CLOSED, CANCELLED");
         } catch (Exception e) {
             log.warn("Could not fix pos_ticket status constraint — continuing. Reason: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * booking.status was retired in favor of deriving status from the parent
+     * reservation (Booking.getReservationStatus()). Hibernate ddl-auto=update never
+     * drops columns, so the old NOT NULL "status" column lingers on the table and
+     * fails every insert. Drop it outright.
+     */
+    private void dropStaleBookingStatusColumn() {
+        try {
+            jdbcTemplate.execute("ALTER TABLE booking DROP COLUMN IF EXISTS status");
+            log.info("Dropped stale booking.status column");
+        } catch (Exception e) {
+            log.warn("Could not drop stale booking.status column — continuing. Reason: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * guest.last_name was originally required; Guest.lastName is now optional
+     * (@Column(name = "last_name") with no nullable = false), but Hibernate
+     * ddl-auto=update never relaxes an existing NOT NULL constraint, so inserts
+     * with a blank last name still fail. Drop the constraint to match the entity.
+     */
+    private void dropStaleGuestLastNameNotNull() {
+        try {
+            jdbcTemplate.execute("ALTER TABLE guest ALTER COLUMN last_name DROP NOT NULL");
+            log.info("Dropped stale NOT NULL constraint on guest.last_name");
+        } catch (Exception e) {
+            log.warn("Could not drop guest.last_name NOT NULL constraint — continuing. Reason: {}", e.getMessage());
         }
     }
 

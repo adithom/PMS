@@ -7,6 +7,8 @@ import billingApi from '../../api/billingApi';
 import type { BillDto } from '../../api/billingApi';
 import paymentApi from '../../api/paymentApi';
 import type { PaymentDto } from '../../api/paymentApi';
+import posApi from '../../api/posApi';
+import type { PosTicketHistory } from '../../types/pos';
 import { triggerPresignedDownload } from '../../utils/downloadUtils';
 import LoadingSpinner from '../LoadingSpinner';
 import ModalShell from '../ModalShell';
@@ -40,6 +42,8 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
 
   // Bills
   const [bills, setBills] = useState<BillDto[]>([]);
+  const [posTickets, setPosTickets] = useState<PosTicketHistory[]>([]);
+  const [downloadingReceiptId, setDownloadingReceiptId] = useState<string | null>(null);
   const [downloadingBillId, setDownloadingBillId] = useState<string | null>(null);
   const [isGeneratingBill, setIsGeneratingBill] = useState(false);
   const [showBillOptions, setShowBillOptions] = useState(false);
@@ -109,6 +113,25 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
       setPayments(data || []);
     } catch {
       // Non-critical
+    }
+  };
+
+  useEffect(() => {
+    if (!folio?.bookingId) return;
+    posApi.getTicketsByBookingId(folio.bookingId)
+      .then(setPosTickets)
+      .catch(() => setPosTickets([]));
+  }, [folio?.bookingId]);
+
+  const handleDownloadReceipt = async (ticketId: string) => {
+    setDownloadingReceiptId(ticketId);
+    try {
+      const url = await posApi.getReceiptUrl(ticketId);
+      triggerPresignedDownload(url);
+    } catch (err: any) {
+      alert(err.message || 'Failed to get receipt link.');
+    } finally {
+      setDownloadingReceiptId(null);
     }
   };
 
@@ -873,7 +896,7 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
             )}
 
             {/* Generated Bills */}
-            {bills.length > 0 && (
+            {(bills.length > 0 || posTickets.length > 0) && (
               <div className="mt-8">
                 <h3 className="mb-3 text-sm font-bold uppercase tracking-widest text-slate-400">Generated Bills</h3>
                 <div className="space-y-2">
@@ -897,6 +920,24 @@ export default function FolioDetailModal({ propertyId, folioId, onClose, readOnl
                           {downloadingBillId === bill.id ? '...' : 'Download'}
                         </button>
                       )}
+                    </div>
+                  ))}
+
+                  {posTickets.map(ticket => (
+                    <div key={ticket.id} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2.5">
+                      <div>
+                        <p className="text-xs font-bold text-slate-800">{ticket.invoiceNumber || `Receipt #${ticket.id.slice(0, 8)}`}</p>
+                        <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
+                          POS · {ticket.locationName || 'Restaurant'}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleDownloadReceipt(ticket.id)}
+                        disabled={downloadingReceiptId === ticket.id}
+                        className="rounded-md bg-indigo-50 px-2.5 py-1.5 text-[11px] font-bold text-indigo-700 transition-colors hover:bg-indigo-100 disabled:opacity-50"
+                      >
+                        {downloadingReceiptId === ticket.id ? '...' : 'Download'}
+                      </button>
                     </div>
                   ))}
                 </div>

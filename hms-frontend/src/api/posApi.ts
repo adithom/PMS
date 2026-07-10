@@ -93,6 +93,9 @@ const posApi = {
   getTicketsByBookingId: (bookingId: string) =>
     api.get<PosTicketHistory[]>(`/pos/tickets/booking/${bookingId}`),
 
+  getTicketsByReservationId: (reservationId: string) =>
+    api.get<PosTicketHistory[]>(`/pos/tickets/reservation/${reservationId}`),
+
   getReceiptUrl: (ticketId: string) =>
     api.get<string>(`/pos/tickets/${ticketId}/receipt-url`),
 };

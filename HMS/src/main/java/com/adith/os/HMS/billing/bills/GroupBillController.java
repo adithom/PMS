@@ -2,6 +2,7 @@ package com.adith.os.HMS.billing.bills;
 
 import com.adith.os.HMS.billing.bills.dto.GroupBillDto;
 import com.adith.os.HMS.billing.bills.dto.GroupMultiBillDto;
+import com.adith.os.HMS.billing.bills.dto.MultiBillDto;
 import com.adith.os.HMS.security.UserPrincipal;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -24,10 +25,12 @@ public class GroupBillController {
 
     private final GroupBillGenerationService groupBillGenerationService;
     private final GroupBillService groupBillService;
+    private final BillService billService;
 
-    public GroupBillController(GroupBillGenerationService groupBillGenerationService, GroupBillService groupBillService) {
+    public GroupBillController(GroupBillGenerationService groupBillGenerationService, GroupBillService groupBillService, BillService billService) {
         this.groupBillGenerationService = groupBillGenerationService;
         this.groupBillService = groupBillService;
+        this.billService = billService;
     }
 
     @GetMapping("/view")
@@ -47,6 +50,22 @@ public class GroupBillController {
 
         GroupMultiBillDto result = groupBillGenerationService
                 .generateGroupMultiBill(propertyId, reservationId, guestGstNumber);
+        return ResponseEntity.status(HttpStatus.CREATED).body(result);
+    }
+
+    /**
+     * For SEPARATE-billing reservations (nothing routed to the master folio), the group-bill
+     * mechanism has no charges to consolidate. This generates one bill per room's folio instead —
+     * they still surface together via GET /api/bills/reservation/{reservationId}.
+     */
+    @PostMapping("/generate-per-folio")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    public ResponseEntity<MultiBillDto> generateBillsForAllFolios(
+            @PathVariable UUID propertyId,
+            @PathVariable UUID reservationId,
+            @RequestParam(required = false) String guestGstNumber) {
+
+        MultiBillDto result = billService.generateBillsForReservation(propertyId, reservationId, guestGstNumber);
         return ResponseEntity.status(HttpStatus.CREATED).body(result);
     }
 

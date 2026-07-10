@@ -20,8 +20,7 @@ public class Guest {
     @Column(name = "first_name", nullable = false)
     private String firstName;
 
-    @NotBlank(message = "Last name is required")
-    @Column(name = "last_name", nullable = false)
+    @Column(name = "last_name")
     private String lastName;
 
     @Email(message = "Invalid email format")
@@ -147,7 +146,7 @@ public class Guest {
     }
 
     public String getFullName() {
-        return firstName + " " + lastName;
+        return lastName != null && !lastName.isBlank() ? firstName + " " + lastName : firstName;
     }
 
     public GuestIdType getGuestIdType() {

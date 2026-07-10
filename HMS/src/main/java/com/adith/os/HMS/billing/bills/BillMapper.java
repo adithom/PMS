@@ -82,7 +82,7 @@ public class BillMapper {
         BigDecimal folioDiscount = FolioDiscountCalculator.computeDiscountForBill(
                 folio, bill.getBillType(), totals.total());
 
-        Guest guest = folio.getGuest();
+        Guest guest = folio.getEffectiveGuest();
         Property property = folio.getProperty();
         Booking booking = folio.getBooking();
         TravelAgent agent = (booking != null) ? booking.getTravelAgent() : null;
@@ -218,7 +218,7 @@ public class BillMapper {
                 .orElseThrow();
 
         Folio folio = main.getFolio();
-        Guest guest = folio.getGuest();
+        Guest guest = folio.getEffectiveGuest();
         Property property = folio.getProperty();
 
         LocalDate billDate = main.getBillDate() != null
@@ -259,7 +259,7 @@ public class BillMapper {
      */
     public BillDto toLedgerRowDto(Bill bill) {
         Folio folio = bill.getFolio();
-        Guest guest = folio.getGuest();
+        Guest guest = folio.getEffectiveGuest();
         Property property = folio.getProperty();
         Booking booking = folio.getBooking();
         TravelAgent agent = (booking != null) ? booking.getTravelAgent() : null;

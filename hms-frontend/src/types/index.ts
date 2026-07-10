@@ -25,16 +25,6 @@ export interface Property {
 
 export type MealPlanType = 'CP' | 'MAP' | 'AP';
 
-export interface MealPlan {
-  id: string;
-  propertyId: string;
-  mealPlanType: MealPlanType;
-  displayName: string;
-  pricePerNight: number;
-  childrenPricePerNight: number;
-  active: boolean;
-}
-
 export interface Room {
   roomId?: string;
   number: string;
@@ -72,7 +62,7 @@ export const GUEST_ID_TYPE_LABELS: Record<GuestIdType, string> = {
 export interface Guest {
   id: string;
   firstName: string;
-  lastName: string;
+  lastName?: string;
   fullName: string;
   email?: string;
   phone?: string;
@@ -99,7 +89,8 @@ export interface GuestBookingSummary {
   unitName?: string;
   checkIn: string;
   checkOut: string;
-  status: BookingStatus;
+  reservationStatus: ReservationStatus;
+  bookingCancelled: boolean;
   mealPlanType?: string;
   role: 'PRIMARY' | 'ADDITIONAL';
 }
@@ -127,7 +118,8 @@ export interface Booking {
   guestName: string;
   unitId: string;
   unitName: string;
-  status: BookingStatus;
+  cancelled: boolean;
+  reservationStatus: ReservationStatus;
   checkIn: string;
   checkOut: string;
   stayDuration?: number;
@@ -150,8 +142,6 @@ export interface Booking {
   contactPersonName?: string;
   mealPlanType?: MealPlanType;
   mealPlanDisplayName?: string;
-  mealPlanPricePerNight?: number;
-  mealPlanChildrenPricePerNight?: number;
   extraBeds?: number;
   extraBedRatePerNight?: number;
   extraBedChargeCode?: 'ROOM_RENT' | 'MISC';
@@ -196,7 +186,8 @@ export interface GhostAssignmentDto {
   unitName: string;
   reservationId?: string;
   groupReference?: string;
-  bookingStatus: BookingStatus;
+  reservationStatus: ReservationStatus;
+  bookingCancelled: boolean;
   startDate: string;
   endDate: string;
   status: 'SCHEDULED' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
@@ -238,13 +229,12 @@ export interface TravelAgent {
   contactPersons?: ContactPerson[];
 }
 
-export type BookingStatus =
+export type ReservationStatus =
   | 'PENDING'
   | 'CONFIRMED'
   | 'CHECKED_IN'
   | 'CHECKED_OUT'
-  | 'CANCELLED'
-  | 'NO_SHOW';
+  | 'CANCELLED';
 
 export interface ApiError {
   message: string;

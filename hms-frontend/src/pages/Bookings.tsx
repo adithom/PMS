@@ -11,24 +11,23 @@ import RescheduleModal from '../components/Reservation/RescheduleModal';
 import BookingForm from '../components/Booking/BookingForm';
 import AddRoomModal from '../components/Booking/AddRoomModal';
 import BookingsList from '../components/Booking/BookingsList';
-import GroupBookingModal from '../components/Booking/GroupBookingModal';
 import EarlyCheckoutModal from '../components/Booking/EarlyCheckoutModal';
 import RoomShiftModal from '../components/Booking/RoomShiftModal';
 import TaskListModal from '../components/Booking/TaskListModal';
 import BookingFoliosModal from '../components/Booking/BookingFoliosModal';
 import MasterFolioModal from '../components/Billing/MasterFolioModal';
-import BookingDetailModal from '../components/Booking/BookingDetailModal';
+import ReservationDetailModal from '../components/Reservation/ReservationDetailModal';
 import AssignRoomModal from '../components/Booking/AssignRoomModal';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ModalShell from '../components/ModalShell';
 import ConfirmModal from '../components/ConfirmModal';
-import { PlaneLanding, FileText, List, Users, ChevronLeft, ChevronRight, BedSingle } from 'lucide-react';
+import { PlaneLanding, FileText, List, ChevronLeft, ChevronRight, BedSingle } from 'lucide-react';
 import type { Property, Room, Booking, RoomAssignmentDto, GhostAssignmentDto } from '../types';
-import { toDS, addDays, diffDays, shortDate, dayLabel, dateStr, fmtDate } from '../utils/dateHelpers';
+import { toDS, addDays, diffDays, shortDate, dayLabel, dateStr, fmtDate, todayIST } from '../utils/dateHelpers';
 import { getRoomId } from '../utils/roomHelpers';
 import {
   CELL_W, CELL_H, LABEL_W, MIN_CHART_ROWS,
-  STATUS_COLORS, cn, btnPrimary, btnSecondary, tintForReservation,
+  STATUS_COLORS, cn, btnSecondary, tintForReservation,
 } from '../components/Booking/TapeChartConstants';
 
 //todo: fix occupancy rate status bars
@@ -48,13 +47,12 @@ type PendingAction = {
 /* Context Menu                                                  */
 /* ────────────────────────────────────────────────────────────── */
 
-function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout, onEditBooking, onShiftRoom, onShowFolio, onViewBooking, onAssignRoom, onAddRoom, onReschedule }: {
+function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout, onShiftRoom, onShowFolio, onViewBooking, onAssignRoom, onAddRoom, onReschedule }: {
   state: { x: number; y: number; booking: Booking; hasAssignment?: boolean } | null;
   propertyId: string;
   onClose: () => void;
   onAction: () => void;
   onEarlyCheckout: (bookingId: string) => void;
-  onEditBooking: (booking: Booking) => void;
   onShiftRoom: (booking: Booking) => void;
   onShowFolio: (bookingId: string, guestName: string, reservationId?: string) => void;
   onViewBooking: (booking: Booking) => void;
@@ -72,7 +70,7 @@ function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout, onEdit
 
   if (!state) return null;
   const { x, y, booking } = state;
-  const sc = STATUS_COLORS[booking.status] ?? STATUS_COLORS.PENDING;
+  const sc = STATUS_COLORS[booking.cancelled ? 'CANCELLED_BOOKING' : booking.reservationStatus] ?? STATUS_COLORS.PENDING;
   const guestName = booking.guestName || 'Guest';
 
   type Act = {
@@ -82,75 +80,59 @@ function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout, onEdit
     confirm?: { title: string; message: string; confirmLabel: string };
   };
   const acts: Act[] = [];
-  
+
   if (booking.id) {
     acts.push({ label: '◉ View Details', doFn: async () => { onViewBooking(booking); onClose(); } });
 
-    const editableStatuses: Booking['status'][] = ['PENDING', 'CONFIRMED', 'CHECKED_IN'];
-    if (editableStatuses.includes(booking.status)) {
-      acts.push({ label: '✎ Edit Booking', doFn: async () => { onEditBooking(booking); onClose(); } });
-    }
-
     acts.push({ label: '⊞ Show Folio', doFn: async () => { onShowFolio(booking.id!, guestName, booking.reservationId); onClose(); } });
 
-    // Assign Room — surfaced when the booking has no specific room pinned (ghost bar
-    // on the chart, or unassigned booking opened from elsewhere). Pins via PATCH.
-    const assignableStatuses: Booking['status'][] = ['PENDING', 'CONFIRMED'];
-    if (!state.hasAssignment && booking.unitId && assignableStatuses.includes(booking.status)) {
+    // Assign Room — surfaced when the booking has no specific room pinned
+    const isAssignable = !booking.cancelled && (booking.reservationStatus === 'PENDING' || booking.reservationStatus === 'CONFIRMED');
+    if (!state.hasAssignment && booking.unitId && isAssignable) {
       acts.push({ label: '⊕ Assign Room…', doFn: async () => { onAssignRoom(booking); onClose(); } });
     }
 
-    if (booking.reservationId && assignableStatuses.includes(booking.status)) {
+    if (booking.reservationId && isAssignable) {
       acts.push({ label: '⊞ Add Room to Reservation', doFn: async () => { onAddRoom(booking); onClose(); } });
       acts.push({ label: '⟳ Reschedule Reservation', doFn: async () => { onReschedule(booking); onClose(); } });
     }
 
-    switch (booking.status) {
-      case 'PENDING':
-        acts.push({
-          label: '✓ Confirm Booking',
-          doFn: async () => { await bookingApi.updateStatus(propertyId, booking.id!, 'CONFIRMED'); onAction(); },
-          confirm: { title: 'Confirm Booking', message: `Are you sure you want to confirm the booking for ${guestName}?`, confirmLabel: 'Confirm Booking' },
-        });
-        acts.push({
-          label: '✕ Cancel Booking',
-          doFn: async () => { await bookingApi.updateStatus(propertyId, booking.id!, 'CANCELLED'); onAction(); },
-          danger: true,
-          confirm: { title: 'Cancel Booking', message: `Are you sure you want to cancel the booking for ${guestName}? This action cannot be undone.`, confirmLabel: 'Cancel Booking' },
-        });
-        break;
-      case 'CONFIRMED':
-        acts.push({
-          label: '✓ Check-in Guest',
-          doFn: async () => { await bookingApi.checkIn(propertyId, booking.id!); onAction(); },
-          confirm: { title: 'Confirm Check-in', message: `Are you sure you want to check in ${guestName}?`, confirmLabel: 'Check In' },
-        });
-        acts.push({
-          label: '⊘ Mark No Show',
-          doFn: async () => { await bookingApi.updateStatus(propertyId, booking.id!, 'NO_SHOW'); onAction(); },
-          danger: true,
-          confirm: { title: 'Mark as No Show', message: `Are you sure you want to mark ${guestName} as a no-show?`, confirmLabel: 'Mark No Show' },
-        });
-        break;
-      case 'CHECKED_IN': {
-        const outDate = dateStr(booking.checkOut);
-        const today = toDS(new Date());
-
-        acts.push({ label: '⇄ Shift Room', doFn: async () => { onShiftRoom(booking); onClose(); } });
-
-        if (today < outDate) {
+    if (!booking.cancelled) {
+      switch (booking.reservationStatus) {
+        case 'PENDING':
+        case 'CONFIRMED':
           acts.push({
-            label: '⏱ Early Checkout',
-            doFn: async () => { onEarlyCheckout(booking.id!); onClose(); }
+            label: '✓ Check-in All Rooms',
+            doFn: async () => { await bookingApi.checkIn(propertyId, booking.id!); onAction(); },
+            confirm: { title: 'Confirm Check-in', message: `Check in all rooms for this reservation (${guestName})?`, confirmLabel: 'Check In' },
           });
-        } else {
           acts.push({
-            label: '⏎ Check-out Guest',
-            doFn: async () => { await bookingApi.checkOut(propertyId, booking.id!); onAction(); },
-            confirm: { title: 'Confirm Check-out', message: `Are you sure you want to check out ${guestName}?`, confirmLabel: 'Check Out' },
+            label: '✕ Cancel This Room',
+            doFn: async () => { await bookingApi.cancelBooking(propertyId, booking.id!); onAction(); },
+            danger: true,
+            confirm: { title: 'Cancel Room', message: `Are you sure you want to cancel the room for ${guestName}? This cannot be undone.`, confirmLabel: 'Cancel Room' },
           });
+          break;
+        case 'CHECKED_IN': {
+          const outDate = dateStr(booking.checkOut);
+          const today = toDS(new Date());
+
+          acts.push({ label: '⇄ Shift Room', doFn: async () => { onShiftRoom(booking); onClose(); } });
+
+          if (today < outDate) {
+            acts.push({
+              label: '⏱ Early Checkout',
+              doFn: async () => { onEarlyCheckout(booking.id!); onClose(); }
+            });
+          } else {
+            acts.push({
+              label: '⏎ Check-out All Rooms',
+              doFn: async () => { await bookingApi.checkOut(propertyId, booking.id!); onAction(); },
+              confirm: { title: 'Confirm Check-out', message: `Check out all rooms for this reservation (${guestName})?`, confirmLabel: 'Check Out' },
+            });
+          }
+          break;
         }
-        break;
       }
     }
   }
@@ -162,7 +144,7 @@ function CtxMenu({ state, propertyId, onClose, onAction, onEarlyCheckout, onEdit
       <div className="border-b border-slate-100 bg-slate-50/80 px-4 py-3">
         <p className="text-sm font-bold text-slate-900 truncate">{guestName}</p>
         <div className="mt-1 flex items-center gap-2">
-          <span className={cn('rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase', sc.bar, sc.text)}>{booking.status.replace('_', ' ')}</span>
+          <span className={cn('rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase', sc.bar, sc.text)}>{booking.cancelled ? 'ROOM CANCELLED' : booking.reservationStatus.replace('_', ' ')}</span>
           <span className="text-[11px] text-slate-400">Room {booking.roomNumber || '—'}</span>
         </div>
         <p className="mt-1.5 text-[11px] text-slate-500">
@@ -257,8 +239,8 @@ export default function Bookings() {
   const [winStart, setWinStart] = useState<Date>(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; });
   const dateCols = useMemo(() => Array.from({ length: numDays }, (_, i) => addDays(winStart, i)), [winStart, numDays]);
   const winStartStr = useMemo(() => toDS(winStart), [winStart]);
-  const winEndStr = useMemo(() => toDS(addDays(winStart, numDays - 1)), [winStart, numDays]);
-  const todayStr = useMemo(() => toDS(new Date()), []);
+  const winEndStr = useMemo(() => toDS(addDays(winStart, numDays)), [winStart, numDays]);
+  const todayStr = todayIST();
 
   const [bookingBuffer, setBookingBuffer] = useState<Booking[]>([]);
   const [bufferRange, setBufferRange] = useState<{ from: string; to: string } | null>(null);
@@ -280,11 +262,12 @@ export default function Bookings() {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [ctx, setCtx] = useState<{ x: number; y: number; booking: Booking } | null>(null);
   
-  const [viewBooking, setViewBooking] = useState<Booking | null>(null);
-  const [editBooking, setEditBooking] = useState<Booking | null>(null);
+  const [openReservationId, setOpenReservationId] = useState<string | null>(null);
+  const goToReservation = useCallback((booking: Booking) => {
+    if (booking.reservationId) setOpenReservationId(booking.reservationId);
+  }, []);
   const [shiftRoomBooking, setShiftRoomBooking] = useState<Booking | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [showGroupModal, setShowGroupModal] = useState(false);
   const [earlyCheckoutBookingId, setEarlyCheckoutBookingId] = useState<string | null>(null);
   const [viewFolioBooking, setViewFolioBooking] = useState<{ id: string; guestName: string } | null>(null);
   const [viewMasterFolioReservationId, setViewMasterFolioReservationId] = useState<string | null>(null);
@@ -429,9 +412,9 @@ export default function Bookings() {
       try {
         const bks = await bookingApi.getByDate(selectedPropId, ds, true);
         setDayBookings(bks || []);
-        const active = (b: Booking) => b.status !== 'CANCELLED' && b.status !== 'NO_SHOW';
+        const active = (b: Booking) => !b.cancelled && b.reservationStatus !== 'CANCELLED';
         setInCount(bks.filter(b => dateStr(b.checkIn) === ds && active(b)).length);
-        setHouseCount(bks.filter(b => active(b) && b.status !== 'CHECKED_OUT' && ds >= dateStr(b.checkIn) && ds < dateStr(b.checkOut)).length);
+        setHouseCount(bks.filter(b => active(b) && b.reservationStatus !== 'CHECKED_OUT' && ds >= dateStr(b.checkIn) && ds < dateStr(b.checkOut)).length);
         setOutCount(bks.filter(b => dateStr(b.checkOut) === ds && active(b)).length);
       } catch { setDayBookings([]); setInCount(0); setHouseCount(0); setOutCount(0); }
     })();
@@ -483,7 +466,8 @@ export default function Bookings() {
           guestName: g.guestName,
           unitId: g.unitId,
           unitName: g.unitName,
-          status: g.bookingStatus,
+          cancelled: g.bookingCancelled,
+          reservationStatus: g.reservationStatus,
           checkIn: g.startDate,
           checkOut: g.endDate,
           adults: 0,
@@ -570,10 +554,10 @@ export default function Bookings() {
 
   const getFiltered = useCallback((): Booking[] => {
     const ds = toDS(selectedDate);
-    const active = (b: Booking) => b.status !== 'CANCELLED' && b.status !== 'NO_SHOW';
+    const active = (b: Booking) => !b.cancelled && b.reservationStatus !== 'CANCELLED';
     switch (listType) {
       case 'incoming': return dayBookings.filter(b => dateStr(b.checkIn) === ds && active(b));
-      case 'inhouse': return dayBookings.filter(b => active(b) && b.status !== 'CHECKED_OUT' && ds >= dateStr(b.checkIn) && ds < dateStr(b.checkOut));
+      case 'inhouse': return dayBookings.filter(b => active(b) && b.reservationStatus !== 'CHECKED_OUT' && ds >= dateStr(b.checkIn) && ds < dateStr(b.checkOut));
       case 'checkouts': return dayBookings.filter(b => dateStr(b.checkOut) === ds && active(b));
       default: return dayBookings;
     }
@@ -605,7 +589,7 @@ export default function Bookings() {
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Property</span>
-              <select value={selectedPropId ?? ''} onChange={e => setSelectedPropId(e.target.value || null)}
+              <select value={selectedPropId ?? ''} onChange={e => setSelectedPropId(e.target.value)}
                 className="border-none bg-transparent text-sm font-semibold text-slate-900 outline-none">
                 {properties.map(p => <option key={p.id} value={p.id}>{p.name} ({p.code})</option>)}
               </select>
@@ -622,13 +606,6 @@ export default function Bookings() {
             <button type="button" className={btnSecondary} onClick={() => setShowTasksModal(true)}>
               <List className="h-4 w-4 text-emerald-500" />
               Daily Tasks
-            </button>
-            <button type="button" className={btnSecondary} onClick={() => setShowGroupModal(true)}>
-              <Users className="h-4 w-4 text-indigo-500" />
-              New Group Booking
-            </button>
-            <button type="button" className={btnPrimary} onClick={() => openForm(null, '', '')}>
-              + New Booking
             </button>
           </div>
         </div>
@@ -770,7 +747,6 @@ export default function Bookings() {
                               const { booking: bk, assignment, isGhost } = slot;
                               const ci = dateStr(assignment.startDate);
                               const co = dateStr(assignment.endDate);
-                              const isNoShow = bk.status === 'NO_SHOW';
                               const allAssignments = assignmentMap.get(bk.id!) || [];
                               const isShifted = allAssignments.filter(a => a.status !== 'CANCELLED').length > 1;
                               const isCompleted = assignment.status === 'COMPLETED';
@@ -778,14 +754,12 @@ export default function Bookings() {
 
                               const unClampedStartOff = diffDays(winStartStr, ci);
                               const unClampedEndOff = diffDays(winStartStr, co);
-                              
+
                               const unClampedTotalEndOff = unClampedEndOff;
 
                               // Visual start/end constrained to the visible 0..numDays window
                               const visStartOff = Math.max(0, unClampedStartOff);
-                              
-                              // NO_SHOW is forced to exactly 0.5 cells wide.
-                              const visEndOff = Math.min(numDays, isNoShow ? unClampedStartOff + 0.5 : unClampedTotalEndOff);
+                              const visEndOff = Math.min(numDays, unClampedTotalEndOff);
 
                               if (visEndOff <= 0 || visStartOff >= numDays) return null;
 
@@ -794,10 +768,10 @@ export default function Bookings() {
                               if (widthPx <= 0) return null;
 
                               const bleedsLeft = unClampedStartOff < 0;
-                              const bleedsRight = isNoShow ? false : (unClampedTotalEndOff > numDays);
+                              const bleedsRight = unClampedTotalEndOff > numDays;
                               const bookingBleedsRight = unClampedEndOff > numDays;
 
-                              const sc = STATUS_COLORS[bk.status] ?? STATUS_COLORS.PENDING;
+                              const sc = STATUS_COLORS[bk.cancelled ? 'CANCELLED_BOOKING' : bk.reservationStatus] ?? STATUS_COLORS.PENDING;
                               const guestName = bk.guestName || 'Guest';
                               const tint = tintForReservation(bk.reservationId);
                               const isHighlighted = !!hoverGroup && bk.reservationId === hoverGroup;
@@ -809,11 +783,12 @@ export default function Bookings() {
                                   className={cn(
                                     'absolute flex overflow-hidden shadow-sm cursor-pointer transition-all hover:shadow-md hover:brightness-95',
                                     isGhost ? 'border-2 border-dashed opacity-80' : 'border',
-                                    isNoShow ? 'bg-rose-100 border-rose-300' : 'bg-white',
-                                    bk.status === 'CHECKED_IN' ? 'border-green-300' :
-                                    bk.status === 'CONFIRMED'  ? 'border-blue-300'  :
-                                    bk.status === 'PENDING'    ? 'border-amber-300' :
-                                    bk.status === 'CANCELLED'  ? 'border-gray-300'  :
+                                    'bg-white',
+                                    bk.cancelled              ? 'border-rose-300'  :
+                                    bk.reservationStatus === 'CHECKED_IN' ? 'border-green-300' :
+                                    bk.reservationStatus === 'CONFIRMED'  ? 'border-blue-300'  :
+                                    bk.reservationStatus === 'PENDING'    ? 'border-amber-300' :
+                                    bk.reservationStatus === 'CANCELLED'  ? 'border-gray-300'  :
                                     'border-slate-300',
                                     bleedsLeft && bleedsRight ? 'rounded-none' :
                                     bleedsLeft  ? 'rounded-r-md rounded-l-none' :
@@ -825,12 +800,12 @@ export default function Bookings() {
                                   style={{
                                     left: leftPx,
                                     width: widthPx,
-                                    height: isNoShow ? CELL_H - 16 : CELL_H - 8,
-                                    top: isNoShow ? 8 : 4,
-                                    zIndex: isNoShow ? 4 : 5,
+                                    height: CELL_H - 8,
+                                    top: 4,
+                                    zIndex: 5,
                                   }}
                                   title={(() => {
-                                    const base = `${guestName} • ${bk.status.replace('_', ' ')} • ${ci} → ${co}`;
+                                    const base = `${guestName} • ${bk.cancelled ? 'ROOM CANCELLED' : bk.reservationStatus.replace('_', ' ')} • ${ci} → ${co}`;
                                     const allA = assignmentMap.get(bk.id!) || [];
                                     if (isCompleted) {
                                       const next = allA.find(a => a.status !== 'COMPLETED' && a.status !== 'CANCELLED');
@@ -842,40 +817,31 @@ export default function Bookings() {
                                     }
                                     return base;
                                   })()}
-                                  onClick={e => { e.stopPropagation(); setCtx({ x: e.clientX, y: e.clientY, booking: bk, hasAssignment: !isGhost }); }}
-                                  onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtx({ x: e.clientX, y: e.clientY, booking: bk, hasAssignment: !isGhost }); }}>
-
-                                  {/* NO SHOW View */}
-                                  {isNoShow && (
-                                    <div className={cn('flex w-full items-center justify-center h-full', sc.text, sc.bar)}>
-                                      <span className="text-[9px] font-bold">NO SHOW</span>
-                                    </div>
-                                  )}
+                                  onClick={e => { e.stopPropagation(); setCtx({ x: e.clientX, y: e.clientY, booking: bk }); }}
+                                  onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtx({ x: e.clientX, y: e.clientY, booking: bk }); }}>
 
                                   {/* Guest Stay */}
-                                  {!isNoShow && (
-                                    <div style={{ width: widthPx }}
+                                  <div style={{ width: widthPx }}
                                          className={cn("h-full flex items-center px-2 gap-0.5 relative shrink-0", sc.bar, sc.text)}>
                                       {bleedsLeft
                                         ? <span className="text-[10px] opacity-70 shrink-0">◂</span>
-                                        : <PlaneLanding className="w-[11px] h-[11px] shrink-0 opacity-80" title="Arrival" />
+                                        : <span title="Arrival"><PlaneLanding className="w-[11px] h-[11px] shrink-0 opacity-80" /></span>
                                       }
                                       {isShiftedIn && !bleedsLeft && (
                                         <span className="text-[10px] opacity-75 shrink-0" title="Moved from another room">↩</span>
                                       )}
                                       <span className="text-[11px] font-bold truncate flex-1 min-w-0">{guestName}</span>
                                       {bk.specialRequests && (
-                                        <FileText className="w-[10px] h-[10px] shrink-0 opacity-75" title={bk.specialRequests} />
+                                        <span title={bk.specialRequests}><FileText className="w-[10px] h-[10px] shrink-0 opacity-75" /></span>
                                       )}
                                       {bk.isTwinBed && (
-                                        <BedSingle className="w-[10px] h-[10px] shrink-0 opacity-75" title="Twin Bed" />
+                                        <span title="Twin Bed"><BedSingle className="w-[10px] h-[10px] shrink-0 opacity-75" /></span>
                                       )}
                                       {bookingBleedsRight && <span className="text-[10px] opacity-70 shrink-0">▸</span>}
                                       {isShifted && isCompleted && !bookingBleedsRight && (
                                         <span className="text-[10px] opacity-75 shrink-0" title="Continued in another room">▶</span>
                                       )}
                                     </div>
-                                  )}
                                 </div>
                               );
                             })}
@@ -934,16 +900,6 @@ export default function Bookings() {
         </div>
       </div>
 
-      {editBooking && selectedPropId && (
-        <ModalShell title={`Edit Booking — ${editBooking.guestName}`} size="wide" onClose={() => setEditBooking(null)}>
-          <BookingForm
-            propertyId={selectedPropId}
-            booking={editBooking}
-            onSuccess={async () => { setEditBooking(null); await refresh(); }}
-            onCancel={() => setEditBooking(null)}
-          />
-        </ModalShell>
-      )}
       {showForm && (
         <ModalShell title="Create Booking" subtitle={pfRoom ? `Room ${pfRoom.number}` : undefined} size="wide" onClose={() => setShowForm(false)}>
           <BookingForm 
@@ -952,10 +908,6 @@ export default function Bookings() {
             onSuccess={async () => { setShowForm(false); await refresh(); }} onCancel={() => setShowForm(false)} 
           />
         </ModalShell>
-      )}
-      {showGroupModal && selectedPropId && (
-        <GroupBookingModal propertyId={selectedPropId} onClose={() => setShowGroupModal(false)}
-          onSuccess={async () => { setShowGroupModal(false); await refresh(); }} />
       )}
       {showTasksModal && selectedPropId && (
         <TaskListModal 
@@ -994,14 +946,14 @@ export default function Bookings() {
       {showList && selectedPropId && (
         <BookingsList bookings={getFiltered()} propertyId={selectedPropId} listType={listType}
           onClose={() => setShowList(false)} onUpdate={refresh}
-          onViewBooking={(b) => { setShowList(false); setViewBooking(b); }} />
+          onViewBooking={(b) => { setShowList(false); goToReservation(b); }} />
       )}
       {selectedPropId && (
         <CtxMenu state={ctx} propertyId={selectedPropId} onClose={() => setCtx(null)}
           onAction={refresh} onEarlyCheckout={setEarlyCheckoutBookingId}
-          onEditBooking={setEditBooking} onShiftRoom={setShiftRoomBooking}
+          onShiftRoom={setShiftRoomBooking}
           onShowFolio={handleShowFolio}
-          onViewBooking={setViewBooking}
+          onViewBooking={goToReservation}
           onAssignRoom={setAssignRoomBooking}
           onAddRoom={async (booking) => {
             setAddRoomBooking(booking);
@@ -1016,13 +968,12 @@ export default function Bookings() {
             setRescheduleReservation(res);
           }} />
       )}
-      {viewBooking && selectedPropId && (
-        <BookingDetailModal
-          booking={viewBooking}
+      {openReservationId && selectedPropId && (
+        <ReservationDetailModal
           propertyId={selectedPropId}
-          onClose={() => setViewBooking(null)}
-          onEditBooking={(b) => { setViewBooking(null); setEditBooking(b); }}
-          onOpenFolio={(id, name, resId) => { setViewBooking(null); handleShowFolio(id, name, resId); }}
+          reservationId={openReservationId}
+          onClose={() => setOpenReservationId(null)}
+          onUpdated={refresh}
         />
       )}
       {assignRoomBooking && selectedPropId && assignRoomBooking.id && assignRoomBooking.unitId && (

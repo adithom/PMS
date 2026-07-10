@@ -52,6 +52,14 @@ public class RoomAssignment {
     @Column(name = "nightly_rate_ex_tax", precision = 10, scale = 2)
     private BigDecimal nightlyRateExTax;
 
+    /**
+     * GST rate (5.00 or 18.00) decided together with nightlyRateExTax from the same slab
+     * check, so night audit never has to re-derive the rate from the ex-tax amount alone —
+     * doing so can pick the wrong slab near the ₹7500 threshold (see ChargeCode.computeRoomRentBreakdown).
+     */
+    @Column(name = "tax_rate", precision = 5, scale = 2)
+    private BigDecimal taxRate;
+
     public RoomAssignment() {
     }
 
@@ -153,6 +161,14 @@ public class RoomAssignment {
 
     public void setNightlyRateExTax(BigDecimal nightlyRateExTax) {
         this.nightlyRateExTax = nightlyRateExTax;
+    }
+
+    public BigDecimal getTaxRate() {
+        return taxRate;
+    }
+
+    public void setTaxRate(BigDecimal taxRate) {
+        this.taxRate = taxRate;
     }
 
     @Override

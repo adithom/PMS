@@ -12,6 +12,8 @@ public record PosOrderCreationDto(
         BigDecimal discountRate) {
     public record PosOrderItemCreationDto(
             @NotNull UUID posProductId,
-            @NotNull Integer quantity) {
+            @NotNull Integer quantity,
+            BigDecimal priceOverride,
+            String itemName) {
     }
 }

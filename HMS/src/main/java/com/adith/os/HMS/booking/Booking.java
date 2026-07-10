@@ -2,6 +2,7 @@ package com.adith.os.HMS.booking;
 
 import com.adith.os.HMS.billing.folio.ChargeCode;
 import com.adith.os.HMS.billing.folio.Folio;
+import com.adith.os.HMS.reservation.ReservationStatus;
 import com.adith.os.HMS.guest.Guest;
 import com.adith.os.HMS.property.Property;
 import com.adith.os.HMS.property.mealplan.MealPlanType;
@@ -57,9 +58,8 @@ public class Booking {
     @JoinColumn(name = "unit_id")
     private Unit unit;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private BookingStatus status = BookingStatus.PENDING;
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean cancelled = false;
 
     @NotNull(message = "Check-in date is required")
     @Column(name = "check_in", nullable = false)
@@ -132,12 +132,6 @@ public class Booking {
     @Column(name = "meal_plan_type")
     private MealPlanType mealPlanType;
 
-    @Column(name = "meal_plan_price_per_night", precision = 10, scale = 2)
-    private BigDecimal mealPlanPricePerNight;
-
-    @Column(name = "meal_plan_children_price_per_night", precision = 10, scale = 2)
-    private BigDecimal mealPlanChildrenPricePerNight;
-
     @Column(name = "extra_beds", nullable = false, columnDefinition = "integer default 0")
     private Integer extraBeds = 0;
 
@@ -148,7 +142,7 @@ public class Booking {
     @Column(name = "extra_bed_charge_code")
     private ChargeCode extraBedChargeCode;
 
-    // Audit fields populated when status flips to CANCELLED / on a future reschedule.
+    // Audit fields populated when cancelled=true or a reschedule happens.
     @Column(name = "booking_source", length = 200)
     private String bookingSource;
 
@@ -169,9 +163,6 @@ public class Booking {
         if (createdAt == null) {
             createdAt = OffsetDateTime.now();
         }
-        if (status == null) {
-            status = BookingStatus.PENDING;
-        }
         if (paidAmount == null) {
             paidAmount = BigDecimal.ZERO;
         }
@@ -185,7 +176,7 @@ public class Booking {
     public Booking(Property property, Room room, Guest guest, Unit unit,
                    LocalDate checkIn, LocalDate checkOut, Integer adults,
                    Integer children, String currency, BigDecimal totalPrice,
-                   String specialRequests, BookingStatus status, BigDecimal paidAmount, Boolean isTwinBed) {
+                   String specialRequests, BigDecimal paidAmount, Boolean isTwinBed) {
         this.property = property;
         this.room = room;
         this.guest = guest;
@@ -197,7 +188,6 @@ public class Booking {
         this.currency = currency != null ? currency : "INR";
         this.totalPrice = totalPrice != null ? totalPrice : BigDecimal.ZERO;
         this.specialRequests = specialRequests;
-        this.status = status != null ? status : BookingStatus.PENDING;
         this.paidAmount = paidAmount != null ? paidAmount : BigDecimal.ZERO;
         this.isTwinBed = isTwinBed != null ? isTwinBed : false;
     }
@@ -254,12 +244,16 @@ public class Booking {
     public List<Guest> getAdditionalGuests() { return additionalGuests; }
     public void setAdditionalGuests(List<Guest> additionalGuests) { this.additionalGuests = additionalGuests != null ? additionalGuests : new ArrayList<>(); }
 
-    public BookingStatus getStatus() {
-        return status;
+    public boolean isCancelled() {
+        return cancelled;
     }
 
-    public void setStatus(BookingStatus status) {
-        this.status = status;
+    public void setCancelled(boolean cancelled) {
+        this.cancelled = cancelled;
+    }
+
+    public ReservationStatus getReservationStatus() {
+        return reservation != null ? reservation.getStatus() : null;
     }
 
     public LocalDate getCheckIn() {
@@ -359,11 +353,6 @@ public class Booking {
 
     public MealPlanType getMealPlanType() { return mealPlanType; }
     public void setMealPlanType(MealPlanType mealPlanType) { this.mealPlanType = mealPlanType; }
-    public BigDecimal getMealPlanPricePerNight() { return mealPlanPricePerNight; }
-    public void setMealPlanPricePerNight(BigDecimal mealPlanPricePerNight) { this.mealPlanPricePerNight = mealPlanPricePerNight; }
-
-    public BigDecimal getMealPlanChildrenPricePerNight() { return mealPlanChildrenPricePerNight; }
-    public void setMealPlanChildrenPricePerNight(BigDecimal mealPlanChildrenPricePerNight) { this.mealPlanChildrenPricePerNight = mealPlanChildrenPricePerNight; }
 
     public Integer getExtraBeds() { return extraBeds; }
     public void setExtraBeds(Integer extraBeds) { this.extraBeds = extraBeds; }
@@ -457,7 +446,7 @@ public class Booking {
                 ", room=" + (room != null ? room.getNumber() : "null") +
                 ", guest=" + (guest != null ? guest.getId() : "null") +
                 ", unit=" + (unit != null ? unit.getName() : "null") +
-                ", status=" + status +
+                ", cancelled=" + cancelled +
                 ", checkIn=" + checkIn +
                 ", checkOut=" + checkOut +
                 ", adults=" + adults +

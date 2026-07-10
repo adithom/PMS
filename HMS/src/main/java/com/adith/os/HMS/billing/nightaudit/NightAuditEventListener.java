@@ -27,7 +27,6 @@ public class NightAuditEventListener {
                 r.totalAssignments(), r.chargesPosted(),
                 r.skippedAlreadyPosted() + r.skippedFolioNotOpen() + r.skippedNoFolio(),
                 r.errors(),
-                r.mealPlanChargesPosted(), r.mealPlanChargesSkipped(),
                 r.extraBedChargesPosted(), r.extraBedChargesSkipped(),
                 event.errorSummary()
         ));

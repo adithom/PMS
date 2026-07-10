@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
-import { Calendar, List } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Calendar, List, Plus } from 'lucide-react';
 import reservationApi from '../../api/reservationApi';
 import type { GroupBookingSummaryDto } from '../../api/reservationApi';
 import MobileListView from './MobileListView';
 import MobileCalendarView from './MobileCalendarView';
+import QuickHoldForm from './QuickHoldForm';
 
 function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(' ');
@@ -14,13 +15,14 @@ type MobileMode = 'list' | 'calendar';
 interface Props {
   propertyId: string;
   onOpen: (reservationId: string) => void;
-  onNewBooking: () => void;
 }
 
-export default function MobileReservationsView({ propertyId, onOpen, onNewBooking }: Props) {
+export default function MobileReservationsView({ propertyId, onOpen }: Props) {
   const [mode, setMode] = useState<MobileMode>('calendar');
   const [reservations, setReservations] = useState<GroupBookingSummaryDto[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showQuickHold, setShowQuickHold] = useState(false);
+  const quickHoldBtnRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,13 +52,26 @@ export default function MobileReservationsView({ propertyId, onOpen, onNewBookin
             <List className="h-3.5 w-3.5" />List
           </button>
         </div>
-        <button
-          type="button"
-          onClick={onNewBooking}
-          className="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-indigo-700"
-        >
-          + New
-        </button>
+        <div ref={quickHoldBtnRef} className="relative">
+          <button
+            type="button"
+            onClick={() => setShowQuickHold(v => !v)}
+            className="inline-flex items-center justify-center gap-1 rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-indigo-700"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Quick Hold
+          </button>
+          {showQuickHold && (
+            <QuickHoldForm
+              propertyId={propertyId}
+              onClose={() => setShowQuickHold(false)}
+              onSuccess={id => {
+                setShowQuickHold(false);
+                onOpen(id);
+              }}
+            />
+          )}
+        </div>
       </div>
 
       {mode === 'list' && (

@@ -33,6 +33,6 @@ public interface GuestRepository extends JpaRepository<Guest, UUID> {
             "ORDER BY g.lastName ASC, g.firstName ASC")
     List<Guest> searchGuests(@Param("search") String search);
 
-    @Query("SELECT DISTINCT g FROM Guest g JOIN g.bookings b WHERE b.property.id = :propertyId AND b.status = com.adith.os.HMS.booking.BookingStatus.CHECKED_IN AND EXTRACT(MONTH FROM g.dateOfBirth) = :month AND EXTRACT(DAY FROM g.dateOfBirth) = :day")
+    @Query("SELECT DISTINCT g FROM Guest g JOIN g.bookings b WHERE b.property.id = :propertyId AND b.cancelled = false AND b.reservation.status = com.adith.os.HMS.reservation.ReservationStatus.CHECKED_IN AND EXTRACT(MONTH FROM g.dateOfBirth) = :month AND EXTRACT(DAY FROM g.dateOfBirth) = :day")
     List<Guest> findInHouseGuestsWithBirthday(@Param("propertyId") UUID propertyId, @Param("month") int month, @Param("day") int day);
 }

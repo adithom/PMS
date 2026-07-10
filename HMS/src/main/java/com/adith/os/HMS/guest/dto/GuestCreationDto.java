@@ -8,7 +8,6 @@ public record GuestCreationDto(
         @NotBlank(message = "First name is required")
         String firstName,
 
-        @NotBlank(message = "Last name is required")
         String lastName,
 
         @Email(message = "Invalid email format")

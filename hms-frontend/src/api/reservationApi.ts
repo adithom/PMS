@@ -1,5 +1,5 @@
 import fetchClient from './fetchClient';
-import type { BookingStatus } from '../types';
+import type { ReservationStatus } from '../types';
 
 /* ────────────────────────────────────────────────────────────── */
 /* Types & DTOs                                                   */
@@ -26,10 +26,8 @@ export interface GroupBookingCreationDto {
   currency?: string;
   billingMode?: 'SEPARATE' | 'CONSOLIDATED';
   travelAgentId?: string;
-  // Meal plan applied to all rooms
+  // Meal plan applied to all rooms — a non-priced trigger only
   mealPlanType?: string;
-  mealPlanPricePerNight?: number;
-  mealPlanChildrenPricePerNight?: number;
   // Booking source
   bookingSource?: string;
   // Advance payment on organizer's folio
@@ -45,7 +43,7 @@ export interface BookingSummaryDto {
   unitId: string;
   unitName: string;
   roomNumber: string | null;
-  status: BookingStatus;
+  cancelled: boolean;
   adults: number;
   children: number;
   totalPrice: number;
@@ -55,7 +53,9 @@ export interface BookingSummaryDto {
   specialRequests: string | null;
   isTwinBed: boolean;
   unitBaseRate: number | null;
-  mealPlanPricePerNight: number | null;
+  mealPlanType: 'CP' | 'MAP' | 'AP' | null;
+  extraBeds: number | null;
+  nightlyRate: number | null;
 }
 
 // Reservation = the group container (also wraps single bookings as 1-member reservations).
@@ -68,12 +68,16 @@ export interface GroupBookingSummaryDto {
   checkIn: string;
   checkOut: string;
   specialRequests: string | null;
-  overallStatus: BookingStatus;
+  overallStatus: ReservationStatus;
   totalRooms: number;
   totalGroupPrice: number;
   currency: string;
   createdAt: string;
   billingMode: 'SEPARATE' | 'CONSOLIDATED';
+  travelAgentId: string | null;
+  travelAgentName: string | null;
+  bookingSource: string | null;
+  reservationLevelPaidAmount: number;
   bookings: BookingSummaryDto[];
 }
 
@@ -83,13 +87,32 @@ export interface BookingOccupancyUpdateDto {
   adults: number;
   children: number;
   nightlyRate?: number;
+  isTwinBed?: boolean;
+  mealPlanType?: 'CP' | 'MAP' | 'AP' | null;
+  extraBeds?: number;
+  extraBedRatePerNight?: number;
+}
+
+export interface QuickHoldRoomRequestDto {
+  unitId: string;
+  count: number;
+}
+
+export interface QuickHoldDto {
+  checkIn: string;
+  checkOut: string;
+  roomRequests: QuickHoldRoomRequestDto[];
+  notes?: string;
 }
 
 export interface ReservationUpdateDto {
-  organizerGuestId: string;
+  organizerGuestId?: string;
   groupReference?: string;
   specialRequests?: string;
-  bookingUpdates: BookingOccupancyUpdateDto[];
+  bookingUpdates?: BookingOccupancyUpdateDto[];
+  mealPlanType?: 'CP' | 'MAP' | 'AP' | null;
+  bookingSource?: string;
+  travelAgentId?: string;
 }
 
 /* ────────────────────────────────────────────────────────────── */
@@ -100,6 +123,10 @@ const reservationApi = {
   // CREATE
   createReservation: async (propertyId: string, data: GroupBookingCreationDto): Promise<GroupBookingSummaryDto> => {
     return fetchClient.post(`/properties/${propertyId}/reservations`, data);
+  },
+
+  quickHold: async (propertyId: string, data: QuickHoldDto): Promise<GroupBookingSummaryDto> => {
+    return fetchClient.post(`/properties/${propertyId}/reservations/quick-hold`, data);
   },
 
   // READ

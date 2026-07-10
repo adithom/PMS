@@ -37,6 +37,7 @@ public class PosService {
     private final FolioRepository folioRepository;
     private final GuestRepository guestRepository;
     private final PaymentService paymentService;
+    private final PosSeeder posSeeder;
 
     public PosService(PosLocationRepository posLocationRepository,
             PosProductRepository posProductRepository,
@@ -46,7 +47,8 @@ public class PosService {
             FolioService folioService,
             FolioRepository folioRepository,
             GuestRepository guestRepository,
-            PaymentService paymentService) {
+            PaymentService paymentService,
+            PosSeeder posSeeder) {
         this.posLocationRepository = posLocationRepository;
         this.posProductRepository = posProductRepository;
         this.posOrderRepository = posOrderRepository;
@@ -56,6 +58,7 @@ public class PosService {
         this.folioRepository = folioRepository;
         this.guestRepository = guestRepository;
         this.paymentService = paymentService;
+        this.posSeeder = posSeeder;
     }
 
     // ──────────────── Location methods ────────────────
@@ -82,7 +85,9 @@ public class PosService {
         location.setClosingTime(dto.closingTime());
         location.setActive(true);
 
-        return toDto(posLocationRepository.save(location));
+        PosLocation saved = posLocationRepository.save(location);
+        posSeeder.createChefsSpecialForLocation(saved);
+        return toDto(saved);
     }
 
     @Transactional
@@ -294,7 +299,8 @@ public class PosService {
                 entity.getDiscountRate(),
                 entity.isAvailable(),
                 entity.getPreparationTime(),
-                entity.getImageUrl());
+                entity.getImageUrl(),
+                entity.isPriceOverridable());
     }
 
     PosOrderDto toOrderDto(PosOrder entity) {

@@ -11,7 +11,7 @@ import java.util.UUID;
 public record GuestDto(
         @NotNull UUID id,
         @NotBlank String firstName,
-        @NotBlank String lastName,
+        String lastName,
 
         @NotBlank String fullName,
 

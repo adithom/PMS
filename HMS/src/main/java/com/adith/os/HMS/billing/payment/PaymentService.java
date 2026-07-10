@@ -233,6 +233,15 @@ public class PaymentService {
     }
 
     /**
+     * Sum of completed reservation-level (master) payments — i.e. payments recorded
+     * against the reservation directly rather than against any individual booking's folio.
+     */
+    public java.math.BigDecimal getReservationLevelPaidAmount(UUID reservationId) {
+        java.math.BigDecimal sum = paymentRepository.sumCompletedByReservationId(reservationId);
+        return sum != null ? sum : java.math.BigDecimal.ZERO;
+    }
+
+    /**
      * Get ALL payments for a reservation — both reservation-level (master) and
      * booking-level (tagged via bookingId for each member booking).
      */

@@ -27,7 +27,7 @@ export default function GuestSearchModal({ isOpen, onClose, onSelectBooking, pro
         setError(null);
         try {
             const allBookings = await bookingApi.getByProperty(propertyId);
-            const active = allBookings.filter(b => b.status === 'CHECKED_IN');
+            const active = allBookings.filter(b => !b.cancelled && b.reservationStatus === 'CHECKED_IN');
             setBookings(active);
         } catch {
             setError('Failed to load bookings');
@@ -98,11 +98,11 @@ export default function GuestSearchModal({ isOpen, onClose, onSelectBooking, pro
                                         </div>
                                     </div>
                                     <span className={`px-2.5 py-1 rounded-full text-xs font-semibold shrink-0 ${
-                                        booking.status === 'CHECKED_IN'
+                                        booking.reservationStatus === 'CHECKED_IN'
                                             ? 'bg-emerald-100 text-emerald-700'
                                             : 'bg-amber-100 text-amber-700'
                                     }`}>
-                                        {booking.status === 'CHECKED_IN' ? 'Checked In' : 'Confirmed'}
+                                        {booking.reservationStatus === 'CHECKED_IN' ? 'Checked In' : 'Confirmed'}
                                     </span>
                                 </div>
                             ))}

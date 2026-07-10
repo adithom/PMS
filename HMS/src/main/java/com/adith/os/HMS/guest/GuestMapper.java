@@ -19,10 +19,9 @@ public class GuestMapper {
             throw new IllegalArgumentException("First name cannot be blank");
         }
 
-        String lastName = guestCreationDto.lastName() != null ? guestCreationDto.lastName().trim() : null;
-        if (lastName == null || lastName.isEmpty()) {
-            throw new IllegalArgumentException("Last name cannot be blank");
-        }
+        String lastName = guestCreationDto.lastName() != null && !guestCreationDto.lastName().isBlank()
+                ? guestCreationDto.lastName().trim()
+                : null;
 
         Guest guest = new Guest();
         guest.setFirstName(firstName);

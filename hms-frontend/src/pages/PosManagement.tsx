@@ -423,7 +423,7 @@ function CategoriesItemsTab({ locations }: { locations: PosLocation[] }) {
                     onChange={e => setProdForm(f => ({ ...f, description: e.target.value }))} />
                 </div>
                 <div className="flex gap-2 justify-end pt-1">
-                  <button onClick={() => { setAddingProduct(false); setError(null); }} className="px-3 py-1.5 text-sm font-medium border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
+                  <button onClick={() => { setAddingProduct(false); setError(null); setProdForm({ isAvailable: true }); }} className="px-3 py-1.5 text-sm font-medium border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
                   <button onClick={handleAddProduct} className="px-3 py-1.5 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm">Add Item</button>
                 </div>
               </div>

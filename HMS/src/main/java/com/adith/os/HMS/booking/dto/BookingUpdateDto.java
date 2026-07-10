@@ -1,7 +1,6 @@
 package com.adith.os.HMS.booking.dto;
 
 import com.adith.os.HMS.billing.folio.ChargeCode;
-import com.adith.os.HMS.booking.BookingStatus;
 import com.adith.os.HMS.property.mealplan.MealPlanType;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
@@ -41,8 +40,6 @@ public record BookingUpdateDto(
 
         BigDecimal paidAmount,
 
-        BookingStatus status,
-
         String specialRequests,
 
         Boolean isTwinBed,
@@ -58,12 +55,6 @@ public record BookingUpdateDto(
         MealPlanType mealPlanType,  // null = no change (PATCH)
 
         Boolean clearMealPlan,      // PATCH only: if true, explicitly removes meal plan
-
-        @PositiveOrZero(message = "Meal plan price cannot be negative")
-        BigDecimal mealPlanPricePerNight,  // Optional — overrides property default adult price per person
-
-        @PositiveOrZero(message = "Children meal plan price cannot be negative")
-        BigDecimal mealPlanChildrenPricePerNight,  // Optional — overrides property default children price per person
 
         @PositiveOrZero(message = "Extra beds cannot be negative")
         Integer extraBeds,

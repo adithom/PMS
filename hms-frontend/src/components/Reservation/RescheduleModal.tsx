@@ -23,9 +23,8 @@ export default function RescheduleModal({ reservation, propertyId, onClose, onRe
   const datesValid = newCheckIn >= today && newCheckOut > newCheckIn && newNights > 0;
 
   const estimatedTotal = reservation.bookings.reduce((sum: number, b: BookingSummaryDto) => {
-    const roomRate = b.unitBaseRate ?? 0;
-    const mealRate = b.mealPlanPricePerNight ?? 0;
-    return sum + (roomRate + mealRate) * newNights;
+    const roomRate = b.nightlyRate ?? b.unitBaseRate ?? 0;
+    return sum + roomRate * newNights;
   }, 0);
 
   const handleConfirm = async () => {
@@ -112,7 +111,7 @@ export default function RescheduleModal({ reservation, propertyId, onClose, onRe
         {datesValid && (
           <div>
             <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">
-              Estimated Total (room + meal plan)
+              Estimated Total (room rate)
             </p>
             <div className="rounded-xl border border-slate-200 overflow-hidden">
               <table className="w-full text-xs">
@@ -125,9 +124,8 @@ export default function RescheduleModal({ reservation, propertyId, onClose, onRe
                 </thead>
                 <tbody>
                   {reservation.bookings.map((b: BookingSummaryDto) => {
-                    const roomRate = b.unitBaseRate ?? 0;
-                    const mealRate = b.mealPlanPricePerNight ?? 0;
-                    const ratePerNight = roomRate + mealRate;
+                    const roomRate = b.nightlyRate ?? b.unitBaseRate ?? 0;
+                    const ratePerNight = roomRate;
                     const total = ratePerNight * newNights;
                     return (
                       <tr key={b.bookingId} className="border-t border-slate-100">

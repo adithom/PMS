@@ -15,16 +15,20 @@ import com.adith.os.HMS.billing.pos.dto.PosTicketHistoryDto;
 import com.adith.os.HMS.booking.Booking;
 import com.adith.os.HMS.booking.BookingRepository;
 import com.adith.os.HMS.storage.R2StorageService;
+import com.adith.os.HMS.storage.R2UploadException;
 import com.adith.os.HMS.property.mealplan.MealPlanType;
 import com.adith.os.HMS.roomassignment.RoomAssignment;
 import com.adith.os.HMS.roomassignment.RoomAssignmentStatus;
 import jakarta.transaction.Transactional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -33,6 +37,8 @@ import java.util.stream.Collectors;
 
 @Service
 public class PosTicketService {
+
+    private static final Logger log = LoggerFactory.getLogger(PosTicketService.class);
 
     private final PosTicketRepository ticketRepository;
     private final PosOrderRepository orderRepository;
@@ -135,14 +141,24 @@ public class PosTicketService {
                     PosOrderItem item = new PosOrderItem();
                     item.setPosOrder(order);
                     item.setPosProduct(product);
-                    item.setItemName(product.getName());
+                    if (product.isPriceOverridable() && itemDto.itemName() != null && !itemDto.itemName().isBlank()) {
+                        item.setItemName(itemDto.itemName());
+                    } else {
+                        item.setItemName(product.getName());
+                    }
                     item.setQuantity(itemDto.quantity());
 
-                    BigDecimal unitPrice = product.getPrice();
-                    if (product.getDiscountRate() != null && product.getDiscountRate().compareTo(BigDecimal.ZERO) > 0) {
-                        BigDecimal multiplier = BigDecimal.ONE.subtract(
-                                product.getDiscountRate().divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP));
-                        unitPrice = unitPrice.multiply(multiplier).setScale(2, RoundingMode.HALF_UP);
+                    BigDecimal unitPrice;
+                    if (product.isPriceOverridable() && itemDto.priceOverride() != null
+                            && itemDto.priceOverride().compareTo(BigDecimal.ZERO) > 0) {
+                        unitPrice = itemDto.priceOverride().setScale(2, RoundingMode.HALF_UP);
+                    } else {
+                        unitPrice = product.getPrice();
+                        if (product.getDiscountRate() != null && product.getDiscountRate().compareTo(BigDecimal.ZERO) > 0) {
+                            BigDecimal multiplier = BigDecimal.ONE.subtract(
+                                    product.getDiscountRate().divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP));
+                            unitPrice = unitPrice.multiply(multiplier).setScale(2, RoundingMode.HALF_UP);
+                        }
                     }
                     item.setUnitPrice(unitPrice);
 
@@ -229,7 +245,7 @@ public class PosTicketService {
             saved.setOrders(orders);
 
             String receiptPath = receiptService.generateReceipt(saved);
-            saved.setReceiptUrl(receiptPath);
+            saved.setReceiptUrl(uploadReceiptToR2(receiptPath, invoiceNumber));
             ticketRepository.save(saved);
 
             return toDto(saved, orders);
@@ -280,7 +296,7 @@ public class PosTicketService {
             saved.setOrders(orders);
 
             String receiptPath = receiptService.generateReceipt(saved);
-            saved.setReceiptUrl(receiptPath);
+            saved.setReceiptUrl(uploadReceiptToR2(receiptPath, invoiceNumber));
             ticketRepository.save(saved);
 
             return toDto(saved, orders);
@@ -414,6 +430,44 @@ public class PosTicketService {
 
     // ──────────────── Booking-linked ticket queries ────────────────
 
+    public List<PosTicketHistoryDto> getTicketsByReservationId(UUID reservationId) {
+        return ticketRepository.findClosedByReservationId(reservationId)
+                .stream()
+                .map(ticket -> {
+                    List<PosOrder> orders = orderRepository.findByTicketIdWithItems(ticket.getId());
+                    BigDecimal subtotal    = orders.stream().map(PosOrder::getSubtotal).reduce(BigDecimal.ZERO, BigDecimal::add);
+                    BigDecimal taxAmount   = orders.stream().map(PosOrder::getTaxAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+                    BigDecimal totalAmount = orders.stream().map(PosOrder::getTotalAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+                    List<PosOrderItemDto> items = orders.stream()
+                            .flatMap(o -> o.getItems().stream())
+                            .map(i -> new PosOrderItemDto(
+                                    i.getId(), i.getPosProduct().getId(), i.getItemName(),
+                                    i.getQuantity(), i.getUnitPrice(), i.getSubtotal(),
+                                    i.getTaxRate(), i.getTaxAmount(), i.getTotalAmount(),
+                                    null, null))
+                            .collect(Collectors.toList());
+                    String locName = ticket.getPosLocation() != null ? ticket.getPosLocation().getName() : null;
+                    return new PosTicketHistoryDto(
+                            ticket.getId(),
+                            ticket.getInvoiceNumber(),
+                            locName,
+                            ticket.getGuestName(),
+                            ticket.getRoomNumber(),
+                            ticket.getMealType(),
+                            ticket.isMealPlanCovered(),
+                            ticket.getClosedAt(),
+                            subtotal,
+                            taxAmount,
+                            totalAmount,
+                            ticket.getCreatedBy(),
+                            items,
+                            ticket.getPaymentMethod(),
+                            ticket.getTransactionReference()
+                    );
+                })
+                .collect(Collectors.toList());
+    }
+
     public List<PosTicketHistoryDto> getTicketsByBookingId(UUID bookingId) {
         return ticketRepository.findByBookingIdAndStatus(bookingId, PosTicketStatus.CLOSED)
                 .stream()
@@ -450,6 +504,20 @@ public class PosTicketService {
                     );
                 })
                 .collect(Collectors.toList());
+    }
+
+    private String uploadReceiptToR2(String localPath, String invoiceNumber) {
+        if (!r2StorageService.isConfigured()) {
+            return localPath;
+        }
+        String objectKey = "pos-receipts/" + invoiceNumber + ".pdf";
+        try {
+            r2StorageService.uploadPdf(Path.of(localPath), objectKey);
+            return objectKey;
+        } catch (R2UploadException e) {
+            log.error("R2 upload failed for POS receipt key={}. PDF is saved locally at {}.", objectKey, localPath, e);
+            return localPath;
+        }
     }
 
     public String getReceiptUrl(UUID ticketId) {

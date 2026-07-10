@@ -47,7 +47,6 @@ public class BookingController {
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'POS')")
     public ResponseEntity<List<BookingDto>> getAllBookingsForProperty(
             @PathVariable UUID propertyId,
-            @RequestParam(required = false) String status,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate checkInFrom,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate checkInTo) {
 
@@ -57,9 +56,7 @@ public class BookingController {
 
         List<BookingDto> bookings;
 
-        if (status != null && !status.isBlank()) {
-            bookings = bookingService.getBookingsByPropertyAndStatus(propertyId, status);
-        } else if (checkInFrom != null && checkInTo != null) {
+        if (checkInFrom != null && checkInTo != null) {
             bookings = bookingService.getBookingsByPropertyAndCheckInRange(propertyId, checkInFrom, checkInTo);
         } else {
             bookings = bookingService.getBookingsByProperty(propertyId);
@@ -151,14 +148,13 @@ public class BookingController {
         return ResponseEntity.ok(updatedBooking);
     }
 
-    @PatchMapping("/{id}/status/{status}")
+    @PatchMapping("/{id}/cancel")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
-    public ResponseEntity<BookingDto> updateBookingStatus(
+    public ResponseEntity<BookingDto> cancelBooking(
             @PathVariable UUID propertyId,
             @PathVariable UUID id,
-            @PathVariable BookingStatus status,
             @RequestParam(required = false) String reason) {
-        BookingDto updatedBooking = bookingService.updateBookingStatus(propertyId, id, status, reason);
+        BookingDto updatedBooking = bookingService.cancelBooking(propertyId, id, reason);
         return ResponseEntity.ok(updatedBooking);
     }
 

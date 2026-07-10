@@ -5,6 +5,8 @@ import com.adith.os.HMS.billing.folio.FolioDiscountCalculator;
 import com.adith.os.HMS.billing.folio.dto.ChargeDto;
 import com.adith.os.HMS.billing.bills.dto.*;
 import com.adith.os.HMS.billing.payment.PaymentRepository;
+import com.adith.os.HMS.billing.pos.PosTicket;
+import com.adith.os.HMS.billing.pos.PosTicketRepository;
 import com.adith.os.HMS.booking.Booking;
 import com.adith.os.HMS.booking.BookingRepository;
 import com.adith.os.HMS.property.Property;
@@ -52,6 +54,7 @@ public class BillService {
     private final PaymentRepository paymentRepository;
     private final BookingRepository bookingRepository;
     private final BillMapper billMapper;
+    private final PosTicketRepository posTicketRepository;
 
     public BillService(FolioRepository folioRepository,
                        FolioChargeRepository folioChargeRepository,
@@ -62,7 +65,8 @@ public class BillService {
                        R2StorageService r2StorageService,
                        PaymentRepository paymentRepository,
                        BookingRepository bookingRepository,
-                       BillMapper billMapper) {
+                       BillMapper billMapper,
+                       PosTicketRepository posTicketRepository) {
         this.folioRepository = folioRepository;
         this.folioChargeRepository = folioChargeRepository;
         this.billRepository = billRepository;
@@ -73,6 +77,7 @@ public class BillService {
         this.paymentRepository = paymentRepository;
         this.bookingRepository = bookingRepository;
         this.billMapper = billMapper;
+        this.posTicketRepository = posTicketRepository;
     }
 
     /**
@@ -189,6 +194,59 @@ public class BillService {
                 .toList();
     }
 
+    /**
+     * SEPARATE-billing reservations don't route charges to a master folio, so the group-bill
+     * mechanism (which only bills routeToMaster charges) has nothing to consolidate. This
+     * generates an individual bill per folio instead — one per room — skipping folios that
+     * have no unbilled charges or already have an active bill, so it's safe to re-run.
+     */
+    @Transactional
+    public MultiBillDto generateBillsForReservation(UUID propertyId, UUID reservationId, String guestGstNumber) {
+        List<Booking> bookings = bookingRepository.findByReservationId(reservationId);
+        if (bookings.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No bookings found for this reservation");
+        }
+        Reservation reservation = bookings.get(0).getReservation();
+        if (reservation == null || !reservation.getProperty().getId().equals(propertyId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Reservation does not belong to this property");
+        }
+
+        List<BillDto> allBills = new ArrayList<>();
+        for (Booking booking : bookings) {
+            Folio folio = booking.getFolio();
+            if (folio == null) continue;
+
+            long activeBills = billRepository.countByFolioIdAndIsVoidedFalse(folio.getId());
+            if (activeBills > 0) continue;
+
+            List<FolioCharge> unbilled = folio.getCharges() == null ? List.of()
+                    : folio.getCharges().stream()
+                            .filter(c -> c.getBill() == null && c.getGroupBill() == null)
+                            .toList();
+            if (unbilled.isEmpty()) continue;
+
+            // "Generate Bills" claims every unbilled charge for its own room, superseding any
+            // pending master-routing — this is the one-click alternative to a master group bill,
+            // not a supplement to it.
+            unbilled.stream().filter(FolioCharge::isRouteToMaster).forEach(c -> c.setRouteToMaster(false));
+            folioChargeRepository.saveAll(unbilled);
+
+            allBills.addAll(generateMultiBill(folio.getId(), guestGstNumber, false).bills());
+        }
+
+        if (allBills.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "No unbilled charges available across any folio in this reservation.");
+        }
+        return new MultiBillDto(allBills);
+    }
+
+    public List<BillDto> getBillsForReservation(UUID reservationId) {
+        return billRepository.findByReservationId(reservationId).stream()
+                .map(billMapper::toLedgerRowDto)
+                .toList();
+    }
+
     public String generateDownloadUrl(UUID billId) {
         Bill bill = billRepository.findById(billId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Bill not found"));
@@ -266,20 +324,31 @@ public class BillService {
         return new BillBatchPageDto(batchRows, batchRows.size(), grandTotalSum);
     }
 
-    public void downloadBillsAsZip(List<UUID> billIds, OutputStream out) throws IOException {
-        List<Bill> bills = billRepository.findActiveByIds(billIds);
+    public void downloadBillsAsZip(List<UUID> billIds, List<UUID> reservationIds, OutputStream out) throws IOException {
+        List<Bill> bills = billIds.isEmpty() ? List.of() : billRepository.findActiveByIds(billIds);
 
-        // Group bills into batches; the folder name is the lexicographically smallest invoice
-        // number in each batch (the base number without a suffix letter).
         Map<UUID, List<Bill>> byBatch = bills.stream()
                 .collect(Collectors.groupingBy(b ->
                         b.getGenerationBatchId() != null ? b.getGenerationBatchId() : b.getId()));
 
+        List<PosTicket> posTickets = reservationIds.isEmpty() ? List.of()
+                : posTicketRepository.findClosedByReservationIds(reservationIds);
+
         try (ZipOutputStream zip = new ZipOutputStream(new BufferedOutputStream(out))) {
             for (List<Bill> batch : byBatch.values()) {
-                String folderName = batch.stream()
+                String guestName = batch.stream()
+                        .map(b -> b.getFolio().getEffectiveGuest())
+                        .filter(g -> g != null)
+                        .findFirst()
+                        .map(g -> sanitizeName(g.getFirstName() + " " + g.getLastName()))
+                        .orElse("Unknown");
+
+                // "FO/2627/00003/A" → "00003"
+                String sequence = batch.stream()
                         .map(Bill::getInvoiceNumber)
-                        .min(Comparator.naturalOrder())
+                        .filter(inv -> inv != null)
+                        .findFirst()
+                        .map(BillService::extractSequence)
                         .orElse("UNKNOWN");
 
                 for (Bill bill : batch) {
@@ -288,7 +357,9 @@ public class BillService {
                         continue;
                     }
                     byte[] pdf = r2StorageService.downloadObjectAsBytes(bill.getPdfFilePath());
-                    String entryName = folderName + "/INV_" + bill.getInvoiceNumber() + ".pdf";
+                    String sanitizedInv = bill.getInvoiceNumber() != null
+                            ? bill.getInvoiceNumber().replace("/", "") : "INVOICE";
+                    String entryName = guestName + "/" + sequence + "/INV_" + sanitizedInv + ".pdf";
                     ZipEntry entry = new ZipEntry(entryName);
                     entry.setSize(pdf.length);
                     zip.putNextEntry(entry);
@@ -296,7 +367,42 @@ public class BillService {
                     zip.closeEntry();
                 }
             }
+
+            for (PosTicket ticket : posTickets) {
+                if (ticket.getReceiptUrl() == null || ticket.getReceiptUrl().isBlank()) {
+                    log.warn("POS ticket {} has no receiptUrl, skipping from ZIP", ticket.getId());
+                    continue;
+                }
+                try {
+                    byte[] pdf = r2StorageService.downloadObjectAsBytes(ticket.getReceiptUrl());
+                    String guestName = sanitizeName(
+                            ticket.getGuestName() != null ? ticket.getGuestName() : "Unknown");
+                    String receiptNum = ticket.getInvoiceNumber() != null
+                            ? ticket.getInvoiceNumber() : ticket.getTicketNumber();
+                    String entryName = guestName + "/" + receiptNum + "/REC_" + receiptNum + ".pdf";
+                    ZipEntry entry = new ZipEntry(entryName);
+                    entry.setSize(pdf.length);
+                    zip.putNextEntry(entry);
+                    zip.write(pdf);
+                    zip.closeEntry();
+                } catch (Exception e) {
+                    log.warn("Could not fetch POS receipt for ticket {}, skipping: {}", ticket.getId(), e.getMessage());
+                }
+            }
         }
+    }
+
+    /** "FO/2627/00003/A" → "00003" (the zero-padded sequence segment) */
+    private static String extractSequence(String invoiceNumber) {
+        String[] parts = invoiceNumber.split("/");
+        if (parts.length >= 3) return parts[2];
+        // fallback: strip everything that isn't a digit
+        return invoiceNumber.replaceAll("[^0-9]", "");
+    }
+
+    /** Strip characters that are unsafe in ZIP entry paths */
+    private static String sanitizeName(String name) {
+        return name.replaceAll("[/\\\\:*?\"<>|]", "").trim();
     }
 
     private Bill createAndSaveBill(Folio folio, List<FolioCharge> charges, BillType billType,

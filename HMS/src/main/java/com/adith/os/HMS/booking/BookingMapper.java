@@ -3,10 +3,9 @@ package com.adith.os.HMS.booking;
 import com.adith.os.HMS.booking.dto.BookingCreationDto;
 import com.adith.os.HMS.booking.dto.BookingDto;
 import com.adith.os.HMS.booking.dto.GuestSummaryDto;
+import com.adith.os.HMS.reservation.ReservationStatus;
 import com.adith.os.HMS.guest.Guest;
 import com.adith.os.HMS.property.Property;
-import com.adith.os.HMS.property.mealplan.PropertyMealPlan;
-import com.adith.os.HMS.property.mealplan.PropertyMealPlanRepository;
 import com.adith.os.HMS.room.Room;
 import com.adith.os.HMS.roomassignment.RoomAssignment;
 import com.adith.os.HMS.roomassignment.RoomAssignmentStatus;
@@ -22,12 +21,6 @@ import java.util.stream.Collectors;
 
 @Component
 public class BookingMapper {
-
-    private final PropertyMealPlanRepository mealPlanRepository;
-
-    public BookingMapper(PropertyMealPlanRepository mealPlanRepository) {
-        this.mealPlanRepository = mealPlanRepository;
-    }
 
     public Booking toEntity(@Valid BookingCreationDto bookingCreationDto, Property property,
                             Room room, Guest guest, Unit unit) {
@@ -57,15 +50,12 @@ public class BookingMapper {
                 bookingCreationDto.currency(),
                 computedTotalPrice,
                 bookingCreationDto.specialRequests(),
-                bookingCreationDto.status(),
                 bookingCreationDto.paidAmount(),
                 bookingCreationDto.isTwinBed()
         );
         booking.setReferenceNumber(bookingCreationDto.referenceNumber());
         booking.setBookingSource(bookingCreationDto.bookingSource());
         booking.setMealPlanType(bookingCreationDto.mealPlanType());
-        booking.setMealPlanPricePerNight(bookingCreationDto.mealPlanPricePerNight());
-        booking.setMealPlanChildrenPricePerNight(bookingCreationDto.mealPlanChildrenPricePerNight());
         if (bookingCreationDto.extraBeds() != null) booking.setExtraBeds(bookingCreationDto.extraBeds());
         booking.setExtraBedRatePerNight(bookingCreationDto.extraBedRatePerNight());
         booking.setExtraBedChargeCode(bookingCreationDto.extraBedChargeCode());
@@ -83,7 +73,8 @@ public class BookingMapper {
                 booking.getGuest().getFullName(),
                 booking.getUnit() != null ? booking.getUnit().getId() : null,
                 booking.getUnit() != null ? booking.getUnit().getName() : null,
-                booking.getStatus(),          // CHANGED: Returns BookingStatus enum directly
+                booking.isCancelled(),
+                booking.getReservationStatus(),
                 booking.getCheckIn(),
                 booking.getCheckOut(),
                 booking.getStayDuration(),
@@ -107,8 +98,6 @@ public class BookingMapper {
                 booking.getContactPerson() != null ? booking.getContactPerson().getName() : null,
                 booking.getMealPlanType(),
                 booking.getMealPlanType() != null ? booking.getMealPlanType().getDisplayName() : null,
-                resolveMealPlanPrice(booking),
-                resolveMealPlanChildrenPrice(booking),
                 booking.getExtraBeds(),
                 booking.getExtraBedRatePerNight(),
                 booking.getExtraBedChargeCode(),
@@ -134,30 +123,13 @@ public class BookingMapper {
 
     private BigDecimal resolveNightlyRate(Booking booking) {
         RoomAssignment a = resolveActiveAssignment(booking);
-        return a != null ? a.getNightlyRate() : null;
+        if (a != null) return a.getNightlyRate();
+        return booking.getExpectedNightlyRate();
     }
 
     private BigDecimal resolveNightlyRateExTax(Booking booking) {
         RoomAssignment a = resolveActiveAssignment(booking);
         return a != null ? a.getNightlyRateExTax() : null;
-    }
-
-    private BigDecimal resolveMealPlanPrice(Booking booking) {
-        if (booking.getMealPlanType() == null || booking.getProperty() == null) return null;
-        if (booking.getMealPlanPricePerNight() != null) return booking.getMealPlanPricePerNight();
-        return mealPlanRepository
-                .findByPropertyIdAndMealPlanType(booking.getProperty().getId(), booking.getMealPlanType())
-                .map(PropertyMealPlan::getPricePerNight)
-                .orElse(null);
-    }
-
-    private BigDecimal resolveMealPlanChildrenPrice(Booking booking) {
-        if (booking.getMealPlanType() == null || booking.getProperty() == null) return null;
-        if (booking.getMealPlanChildrenPricePerNight() != null) return booking.getMealPlanChildrenPricePerNight();
-        return mealPlanRepository
-                .findByPropertyIdAndMealPlanType(booking.getProperty().getId(), booking.getMealPlanType())
-                .map(PropertyMealPlan::getChildrenPricePerNight)
-                .orElse(null);
     }
 
     private List<GuestSummaryDto> mapAdditionalGuests(Booking booking) {

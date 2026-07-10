@@ -60,6 +60,9 @@ public class PosProduct {
     @Column(name = "image_url", length = 500)
     private String imageUrl;
 
+    @Column(name = "is_price_overridable")
+    private Boolean isPriceOverridable = false;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
@@ -186,6 +189,14 @@ public class PosProduct {
 
     public void setImageUrl(String imageUrl) {
         this.imageUrl = imageUrl;
+    }
+
+    public boolean isPriceOverridable() {
+        return Boolean.TRUE.equals(isPriceOverridable);
+    }
+
+    public void setPriceOverridable(boolean priceOverridable) {
+        isPriceOverridable = priceOverridable;
     }
 
     public OffsetDateTime getCreatedAt() {

@@ -51,7 +51,7 @@ export default function GroupBookingModal({ propertyId, onClose, onSuccess }: Gr
   const [checkIn, setCheckIn] = useState('');
   const [checkOut, setCheckOut] = useState('');
   const [groupReference, setGroupReference] = useState('');
-  const [billingMode, setBillingMode] = useState<'SEPARATE' | 'CONSOLIDATED'>('SEPARATE');
+  const [billingMode, setBillingMode] = useState<'SEPARATE' | 'CONSOLIDATED'>('CONSOLIDATED');
 
   // ── Step 2: Rooms & Pricing ──
   const [unitBlocks, setUnitBlocks] = useState<UnitBlock[]>([
@@ -71,6 +71,14 @@ export default function GroupBookingModal({ propertyId, onClose, onSuccess }: Gr
   const [bookingSource, setBookingSource] = useState('');
   const [advanceAmount, setAdvanceAmount] = useState('');
   const [advanceMethod, setAdvanceMethod] = useState('CASH');
+  const [advanceTransactionId, setAdvanceTransactionId] = useState('');
+  const [advanceCardLastFour, setAdvanceCardLastFour] = useState('');
+  const [advanceCardType, setAdvanceCardType] = useState('');
+  const [advanceBankName, setAdvanceBankName] = useState('');
+  const [advanceAccountNumber, setAdvanceAccountNumber] = useState('');
+  const [advanceReferenceNumber, setAdvanceReferenceNumber] = useState('');
+  const [advanceUpiId, setAdvanceUpiId] = useState('');
+  const [advanceNotes, setAdvanceNotes] = useState('');
 
   /* ────────────────── Load initial data ────────────────── */
   useEffect(() => {
@@ -149,12 +157,12 @@ export default function GroupBookingModal({ propertyId, onClose, onSuccess }: Gr
 
   /* ────────────────── Inline guest create ────────────────── */
   const saveNewGuest = async () => {
-    if (!newFirstName.trim() || !newLastName.trim()) { setError('First and last name are required.'); return; }
+    if (!newFirstName.trim()) { setError('First name is required.'); return; }
     setLoading(true); setError('');
     try {
       const created = await guestApi.create({
         firstName: newFirstName.trim(),
-        lastName: newLastName.trim(),
+        ...(newLastName.trim() && { lastName: newLastName.trim() }),
         ...(newEmail && { email: newEmail.trim() }),
         ...(newPhone && { phone: newPhone.trim() }),
       }) as any;
@@ -234,6 +242,14 @@ export default function GroupBookingModal({ propertyId, onClose, onSuccess }: Gr
         ...(advanceAmount && Number(advanceAmount) > 0 ? {
           advancePaymentAmount: Number(advanceAmount),
           advancePaymentMethod: advanceMethod,
+          ...(advanceTransactionId ? { advanceTransactionId } : {}),
+          ...(advanceCardLastFour ? { advanceCardLastFour } : {}),
+          ...(advanceCardType ? { advanceCardType } : {}),
+          ...(advanceBankName ? { advanceBankName } : {}),
+          ...(advanceAccountNumber ? { advanceAccountNumber } : {}),
+          ...(advanceReferenceNumber ? { advanceReferenceNumber } : {}),
+          ...(advanceUpiId ? { advanceUpiId } : {}),
+          ...(advanceNotes ? { advanceNotes } : {}),
         } : {}),
       };
 
@@ -313,7 +329,7 @@ export default function GroupBookingModal({ propertyId, onClose, onSuccess }: Gr
                       <div className="space-y-3">
                         <div className="grid gap-3 sm:grid-cols-2">
                           <div><label className={labelCls}>First Name *</label><input className={inputCls} value={newFirstName} onChange={e => setNewFirstName(e.target.value)} placeholder="First name" /></div>
-                          <div><label className={labelCls}>Last Name *</label><input className={inputCls} value={newLastName} onChange={e => setNewLastName(e.target.value)} placeholder="Last name" /></div>
+                          <div><label className={labelCls}>Last Name</label><input className={inputCls} value={newLastName} onChange={e => setNewLastName(e.target.value)} placeholder="Last name" /></div>
                         </div>
                         <div className="grid gap-3 sm:grid-cols-2">
                           <div><label className={labelCls}>Email</label><input type="email" className={inputCls} value={newEmail} onChange={e => setNewEmail(e.target.value)} /></div>
@@ -428,22 +444,19 @@ export default function GroupBookingModal({ propertyId, onClose, onSuccess }: Gr
                             <label className={labelCls}># Rooms</label>
                             <input type="number" min={1} className={inputCls}
                               value={block.roomCount === 0 ? '' : block.roomCount}
-                              onChange={e => updateBlock(i, { roomCount: parseInt(e.target.value) || 0 })}
-                              onBlur={e => { if (!e.target.value || Number(e.target.value) < 1) updateBlock(i, { roomCount: 1 }); }} />
+                              onChange={e => updateBlock(i, { roomCount: e.target.value === '' ? 0 : parseInt(e.target.value) })} />
                           </div>
                           <div>
                             <label className={labelCls}>Adults/room</label>
                             <input type="number" min={1} className={inputCls}
                               value={block.adults === 0 ? '' : block.adults}
-                              onChange={e => updateBlock(i, { adults: parseInt(e.target.value) || 0 })}
-                              onBlur={e => { if (!e.target.value || Number(e.target.value) < 1) updateBlock(i, { adults: 1 }); }} />
+                              onChange={e => updateBlock(i, { adults: e.target.value === '' ? 0 : parseInt(e.target.value) })} />
                           </div>
                           <div>
                             <label className={labelCls}>Children/room</label>
                             <input type="number" min={0} className={inputCls}
                               value={block.children === 0 ? '' : block.children}
-                              onChange={e => updateBlock(i, { children: parseInt(e.target.value) || 0 })}
-                              onBlur={e => { if (!e.target.value) updateBlock(i, { children: 0 }); }} />
+                              onChange={e => updateBlock(i, { children: e.target.value === '' ? 0 : parseInt(e.target.value) })} />
                           </div>
                         </div>
 
@@ -452,8 +465,7 @@ export default function GroupBookingModal({ propertyId, onClose, onSuccess }: Gr
                             <label className={labelCls}>Nightly Rate (room only)</label>
                             <input type="number" min={0} step={0.01} className={inputCls}
                               value={block.nightlyRate === 0 ? '' : block.nightlyRate}
-                              onChange={e => updateBlock(i, { nightlyRate: parseFloat(e.target.value) || 0 })}
-                              onBlur={e => { if (!e.target.value) updateBlock(i, { nightlyRate: 0 }); }} />
+                              onChange={e => updateBlock(i, { nightlyRate: e.target.value === '' ? 0 : parseFloat(e.target.value) })} />
                             {block.unitId && roomsByUnit[block.unitId]?.[0] && (
                               <p className="mt-1 text-[10px] text-slate-400">
                                 Base rate: ₹{roomsByUnit[block.unitId][0].baseRate.toLocaleString()}/night
@@ -570,7 +582,7 @@ export default function GroupBookingModal({ propertyId, onClose, onSuccess }: Gr
                         </div>
 
                         {/* Advance payment */}
-                        <div>
+                        <div className="space-y-3">
                           <label className={labelCls}>Advance Payment <span className="normal-case font-normal text-slate-400">(applied to organizer's folio)</span></label>
                           <div className="grid gap-3 sm:grid-cols-2">
                             <input type="number" min={0} className={inputCls} placeholder="Amount (₹)"
@@ -586,6 +598,67 @@ export default function GroupBookingModal({ propertyId, onClose, onSuccess }: Gr
                               <option value="DIGITAL_WALLET">Digital Wallet</option>
                             </select>
                           </div>
+
+                          {advanceAmount && Number(advanceAmount) > 0 && (
+                            <div className="space-y-3">
+                              {/* UPI */}
+                              {advanceMethod === 'UPI' && (
+                                <div>
+                                  <label className={labelCls}>UPI Reference ID <span className="font-normal text-slate-400">(optional)</span></label>
+                                  <input type="text" className={inputCls} placeholder="e.g. 9876543210@upi" value={advanceUpiId} onChange={e => setAdvanceUpiId(e.target.value)} />
+                                </div>
+                              )}
+
+                              {/* Card */}
+                              {(advanceMethod === 'CREDIT_CARD' || advanceMethod === 'DEBIT_CARD') && (
+                                <div className="grid gap-3 sm:grid-cols-3">
+                                  <div>
+                                    <label className={labelCls}>Transaction ID <span className="font-normal text-slate-400">(optional)</span></label>
+                                    <input type="text" className={inputCls} placeholder="Auth / txn ID" value={advanceTransactionId} onChange={e => setAdvanceTransactionId(e.target.value)} />
+                                  </div>
+                                  <div>
+                                    <label className={labelCls}>Last 4 Digits <span className="font-normal text-slate-400">(optional)</span></label>
+                                    <input type="text" className={inputCls} maxLength={4} placeholder="e.g. 4242" value={advanceCardLastFour} onChange={e => setAdvanceCardLastFour(e.target.value.replace(/\D/g, '').slice(0, 4))} />
+                                  </div>
+                                  <div>
+                                    <label className={labelCls}>Card Type <span className="font-normal text-slate-400">(optional)</span></label>
+                                    <input type="text" className={inputCls} placeholder="Visa / Mastercard" value={advanceCardType} onChange={e => setAdvanceCardType(e.target.value)} />
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Bank Transfer / Cheque */}
+                              {(advanceMethod === 'BANK_TRANSFER' || advanceMethod === 'CHEQUE') && (
+                                <div className="grid gap-3 sm:grid-cols-3">
+                                  <div>
+                                    <label className={labelCls}>Bank Name <span className="font-normal text-slate-400">(optional)</span></label>
+                                    <input type="text" className={inputCls} placeholder="e.g. HDFC" value={advanceBankName} onChange={e => setAdvanceBankName(e.target.value)} />
+                                  </div>
+                                  <div>
+                                    <label className={labelCls}>Account / Cheque No. <span className="font-normal text-slate-400">(optional)</span></label>
+                                    <input type="text" className={inputCls} value={advanceAccountNumber} onChange={e => setAdvanceAccountNumber(e.target.value)} />
+                                  </div>
+                                  <div>
+                                    <label className={labelCls}>Reference No. <span className="font-normal text-slate-400">(optional)</span></label>
+                                    <input type="text" className={inputCls} value={advanceReferenceNumber} onChange={e => setAdvanceReferenceNumber(e.target.value)} />
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Digital Wallet */}
+                              {advanceMethod === 'DIGITAL_WALLET' && (
+                                <div>
+                                  <label className={labelCls}>Transaction ID <span className="font-normal text-slate-400">(optional)</span></label>
+                                  <input type="text" className={inputCls} placeholder="Wallet txn ID" value={advanceTransactionId} onChange={e => setAdvanceTransactionId(e.target.value)} />
+                                </div>
+                              )}
+
+                              <div>
+                                <label className={labelCls}>Payment Notes <span className="font-normal text-slate-400">(optional)</span></label>
+                                <input type="text" className={inputCls} placeholder="e.g. Collected at front desk" value={advanceNotes} onChange={e => setAdvanceNotes(e.target.value)} />
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}

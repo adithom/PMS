@@ -1,6 +1,6 @@
 package com.adith.os.HMS.availability;
 
-import com.adith.os.HMS.booking.BookingStatus;
+import com.adith.os.HMS.reservation.ReservationStatus;
 import com.adith.os.HMS.roomassignment.RoomAssignmentStatus;
 import com.adith.os.HMS.roomassignment.dto.RoomAssignmentDto;
 
@@ -47,7 +47,8 @@ public record TapeChartDto(
             String unitName,
             UUID reservationId,
             String groupReference,
-            BookingStatus bookingStatus,
+            ReservationStatus reservationStatus,
+            boolean bookingCancelled,
             LocalDate startDate,
             LocalDate endDate,
             // Mirrors RoomAssignmentDto.status for rendering uniformity (always SCHEDULED for ghosts).
